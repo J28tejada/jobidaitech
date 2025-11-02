@@ -121,7 +121,7 @@ function ReportsContent() {
   if (monthlyReports.length === 0) {
     return (
       <div className="space-y-6 w-full max-w-full overflow-x-hidden">
-        <div>
+        <div className="pl-14 lg:pl-0">
           <h1 className="text-3xl font-bold text-gray-900">Reportes</h1>
           <p className="text-gray-600 mt-2">
             Análisis detallado de ingresos, gastos y ganancias por mes
@@ -136,15 +136,15 @@ function ReportsContent() {
     );
   }
 
-  return (
-    <div className="space-y-6 w-full max-w-full overflow-x-hidden">
-      {/* Header */}
-      <div>
-        <h1 className="text-3xl font-bold text-gray-900">Reportes</h1>
-        <p className="text-gray-600 mt-2">
-          Análisis detallado de ingresos, gastos y ganancias por mes
-        </p>
-      </div>
+    return (
+      <div className="space-y-6 w-full max-w-full overflow-x-hidden">
+        {/* Header */}
+        <div className="pl-14 lg:pl-0">
+          <h1 className="text-3xl font-bold text-gray-900">Reportes</h1>
+          <p className="text-gray-600 mt-2">
+            Análisis detallado de ingresos, gastos y ganancias por mes
+          </p>
+        </div>
 
       {/* Summary Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-6">

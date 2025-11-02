@@ -67,7 +67,7 @@ export default function ConfigurationPage() {
   return (
     <Layout>
       <div className="space-y-6">
-        <div>
+        <div className="pl-14 lg:pl-0">
           <h1 className="text-3xl font-bold text-gray-900">Configuración</h1>
           <p className="text-gray-600 mt-2">
             Personaliza el sistema según las necesidades de tu taller.

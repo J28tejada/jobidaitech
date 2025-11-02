@@ -252,13 +252,13 @@ export default function ProjectDetail({ projectId }: ProjectDetailProps) {
     <div className="space-y-6 w-full max-w-full overflow-x-hidden">
       {/* Header */}
       <div className="flex items-start justify-between">
-        <div className="flex items-center space-x-4">
-          <button
-            onClick={() => router.push('/proyectos')}
-            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-          >
-            <ArrowLeft className="h-5 w-5 text-gray-600" />
-          </button>
+          <div className="flex items-center space-x-4 pl-14 lg:pl-0">
+            <button
+              onClick={() => router.push('/proyectos')}
+              className="p-2 hover:bg-gray-100 rounded-lg transition-colors -ml-14 lg:ml-0"
+            >
+              <ArrowLeft className="h-5 w-5 text-gray-600" />
+            </button>
           <div>
             <h1 className="text-3xl font-bold text-gray-900">{project.name}</h1>
             <p className="text-gray-600 mt-1">{project.description || 'Sin descripción'}</p>

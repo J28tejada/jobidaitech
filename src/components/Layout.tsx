@@ -39,8 +39,13 @@ export default function Layout({ children }: LayoutProps) {
       <Sidebar />
       <div className="lg:ml-64 flex flex-col min-w-0 max-w-full">
         <TopBar />
-        <main className="flex-1 overflow-auto pb-24 lg:pb-0 min-w-0 max-w-full">
-          <div className="p-4 lg:p-6 min-w-0 max-w-full">{children}</div>
+        <main 
+          className="flex-1 overflow-auto lg:pb-0 min-w-0 max-w-full"
+          style={{ 
+            paddingBottom: 'calc(5rem + env(safe-area-inset-bottom, 0px))'
+          }}
+        >
+          <div className="p-4 lg:p-6 min-w-0 max-w-full pt-16 lg:pt-0">{children}</div>
         </main>
       </div>
       <MobileNavBar onQuickAction={() => router.push('/proyectos?new=true')} />

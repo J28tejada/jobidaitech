@@ -42,7 +42,11 @@ export default function Sidebar() {
   return (
     <>
       <div className="lg:hidden fixed top-4 left-4 z-50">
-        <button onClick={() => setIsOpen(!isOpen)} className="btn btn-secondary p-2">
+        <button 
+          onClick={() => setIsOpen(!isOpen)} 
+          className="btn btn-secondary p-2 shadow-md"
+          aria-label="Menú de navegación"
+        >
           {isOpen ? <X size={20} /> : <Menu size={20} />}
         </button>
       </div>

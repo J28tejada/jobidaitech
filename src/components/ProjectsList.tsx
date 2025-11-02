@@ -197,7 +197,7 @@ export default function ProjectsList() {
   return (
     <div className="space-y-6 w-full max-w-full overflow-x-hidden">
       <div className="flex justify-between items-center">
-        <div>
+        <div className="pl-14 lg:pl-0">
           <h1 className="text-3xl font-bold text-gray-900">Proyectos</h1>
           <p className="text-gray-600 mt-2">
             Gestiona todos tus proyectos y pedidos del taller

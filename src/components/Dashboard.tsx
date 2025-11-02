@@ -142,7 +142,7 @@ export default function Dashboard() {
   return (
     <div className="space-y-6 w-full max-w-full overflow-x-hidden">
       {/* Header */}
-      <div className="mb-6">
+      <div className="mb-6 pl-14 lg:pl-0">
         <h1 className="text-3xl font-bold text-gray-900 mb-2">Panel de control</h1>
         <p className="text-gray-600 text-sm">
           Resumen general de tus proyectos y trabajos en el taller

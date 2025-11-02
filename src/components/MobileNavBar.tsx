@@ -21,8 +21,14 @@ export default function MobileNavBar({ onQuickAction }: MobileNavBarProps) {
 
   return (
     <div className="lg:hidden">
-      <div className="fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-gray-200 shadow-lg">
-        <div className="flex items-center justify-between px-4 py-2 text-xs">
+      <div 
+        className="fixed left-0 right-0 z-40 bg-white border-t border-gray-200 shadow-lg"
+        style={{ 
+          bottom: 0,
+          paddingBottom: 'env(safe-area-inset-bottom, 0px)'
+        }}
+      >
+        <div className="flex items-center justify-between px-4 py-3 text-xs">
           {links.map(({ href, label, icon: Icon }) => {
             const isActive = pathname === href;
             return (
@@ -45,7 +51,8 @@ export default function MobileNavBar({ onQuickAction }: MobileNavBarProps) {
         onClick={() => {
           onQuickAction?.();
         }}
-        className="fixed bottom-14 right-4 z-50 inline-flex items-center justify-center w-14 h-14 rounded-full bg-primary-600 text-white shadow-xl hover:bg-primary-700 transition-colors"
+        className="fixed right-4 z-50 inline-flex items-center justify-center w-14 h-14 rounded-full bg-primary-600 text-white shadow-xl hover:bg-primary-700 transition-colors"
+        style={{ bottom: 'calc(5rem + env(safe-area-inset-bottom, 0px))' }}
         aria-label="Registrar proyecto nuevo"
       >
         <Plus className="h-6 w-6" />
