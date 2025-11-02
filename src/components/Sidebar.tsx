@@ -16,7 +16,7 @@ import {
 import { useSessionContext, useSupabaseClient } from '@supabase/auth-helpers-react'
 
 const navigation = [
-  { name: 'Dashboard', href: '/', icon: Home },
+  { name: 'Panel de control', href: '/', icon: Home },
   { name: 'Proyectos', href: '/proyectos', icon: FolderOpen },
   { name: 'Transacciones', href: '/transacciones', icon: DollarSign },
   { name: 'Reportes', href: '/reportes', icon: BarChart3 },
