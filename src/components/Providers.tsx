@@ -2,7 +2,7 @@
 
 import { useState, type ReactNode } from 'react'
 import { SessionContextProvider } from '@supabase/auth-helpers-react'
-import { createBrowserSupabaseClient } from '@supabase/auth-helpers-nextjs'
+import { createPagesBrowserClient } from '@supabase/auth-helpers-nextjs'
 
 interface ProvidersProps {
   children: ReactNode
@@ -17,7 +17,7 @@ export default function Providers({ children }: ProvidersProps) {
       throw new Error('NEXT_PUBLIC_SUPABASE_URL y NEXT_PUBLIC_SUPABASE_ANON_KEY deben estar definidos')
     }
 
-    return createBrowserSupabaseClient({
+    return createPagesBrowserClient({
       supabaseUrl: url,
       supabaseKey: anonKey,
     })
