@@ -14,13 +14,28 @@ Cuando los usuarios inician sesión con Google, ven la URL de Supabase (`fsqqspr
 
 **Nota:** Esto requiere tener un dominio propio y acceso para configurar registros DNS.
 
-### Opción 2: Cambiar el nombre del proyecto (Más simple)
+### Opción 2: Cambiar el nombre del proyecto en Google OAuth
 
-1. Ve al dashboard de Supabase: https://supabase.com/dashboard
-2. Selecciona tu proyecto
-3. Ve a **Settings** → **General**
-4. Cambia el **Project Name** a algo más descriptivo como "ContaTaller" o "ContaTaller Auth"
-5. Esto cambiará la subdomain del proyecto (requiere actualizar variables de entorno)
+**IMPORTANTE:** Cambiar el nombre del proyecto en Supabase NO cambia la URL que aparece en el login. La URL `fsqqspreiopzwecwknvu.supabase.co` está ligada al ID del proyecto y no puede cambiarse sin un dominio personalizado.
+
+Sin embargo, puedes cambiar el nombre que aparece en la pantalla de login de Google:
+
+1. Ve a Google Cloud Console: https://console.cloud.google.com
+2. Selecciona tu proyecto OAuth
+3. Ve a **APIs & Services** → **Credentials**
+4. Edita tu **OAuth 2.0 Client ID**
+5. Cambia el campo **Application name** (por ejemplo: "ContaTaller" o "ContaTaller - Sistema de Contabilidad")
+6. Guarda los cambios
+
+Esto cambiará el nombre que aparece cuando Google muestra "para ir a [URL]", pero la URL seguirá siendo `fsqqspreiopzwecwknvu.supabase.co`
+
+**Nota sobre variables de entorno:** Las variables de entorno que usa tu aplicación son:
+- `NEXT_PUBLIC_SUPABASE_URL` - Ya configurada con tu URL actual
+- `SUPABASE_SERVICE_ROLE_KEY` - Ya configurada
+
+Estas NO necesitan cambiarse a menos que:
+- Creas un nuevo proyecto de Supabase (lo cual no es recomendable)
+- Configures un dominio personalizado (Opción 1) - entonces SÍ necesitarías actualizarlas
 
 ### Opción 3: Configurar Site URL y Redirect URLs
 
@@ -37,27 +52,39 @@ Aunque no cambia la URL visible directamente, asegúrate de tener configurado:
    https://jobidaitech-*.vercel.app/api/auth/callback
    ```
 
-## Configuración en Google Cloud Console
+## Variables de Entorno Actuales
 
-Si quieres personalizar aún más el texto del login:
+Tu aplicación usa las siguientes variables de entorno configuradas en Vercel:
 
-1. Ve a Google Cloud Console: https://console.cloud.google.com
-2. Selecciona tu proyecto OAuth
-3. Ve a **APIs & Services** → **Credentials**
-4. Edita tu OAuth 2.0 Client ID
-5. En **Application name** puedes cambiar el nombre que aparece
-6. En **Authorized redirect URIs** asegúrate de tener:
-   ```
-   https://fsqqspreiopzwecwknvu.supabase.co/auth/v1/callback
-   ```
+- `NEXT_PUBLIC_SUPABASE_URL` = `https://fsqqspreiopzwecwknvu.supabase.co`
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY` = (tu clave pública)
+- `SUPABASE_URL` = `https://fsqqspreiopzwecwknvu.supabase.co`
+- `SUPABASE_SERVICE_ROLE_KEY` = (tu clave de servicio)
+
+**¿Cuándo necesitas actualizarlas?**
+
+- **Si configuras un dominio personalizado (Opción 1):** SÍ necesitas actualizar `NEXT_PUBLIC_SUPABASE_URL` y `SUPABASE_URL` con tu nuevo dominio personalizado (ej: `https://auth.contataller.com`)
+
+- **Si solo cambias el Application name en Google (Opción 2):** NO necesitas cambiar las variables de entorno
 
 ## Recomendación
 
-La mejor solución a largo plazo es usar la **Opción 1** (dominio personalizado)** ya que:
+La mejor solución a largo plazo es usar la **Opción 1** (dominio personalizado) ya que:
 - Da una apariencia más profesional
 - Mejora la confianza del usuario
 - Es más fácil de recordar
 - Permite branding consistente
+- Cambia completamente la URL visible (`auth.contataller.com` en lugar de `fsqqspreiopzwecwknvu.supabase.co`)
 
-Si no tienes un dominio propio, la **Opción 2** es la más simple aunque requiere actualizar las variables de entorno en Vercel.
+**Si usas la Opción 1, necesitarás actualizar las variables de entorno:**
+
+1. Ve a Vercel Dashboard: https://vercel.com/dashboard
+2. Selecciona tu proyecto `jobidaitech`
+3. Ve a **Settings** → **Environment Variables**
+4. Actualiza:
+   - `NEXT_PUBLIC_SUPABASE_URL` → tu nuevo dominio personalizado (ej: `https://auth.contataller.com`)
+   - `SUPABASE_URL` → tu nuevo dominio personalizado (ej: `https://auth.contataller.com`)
+5. Haz un nuevo deploy
+
+Si no tienes un dominio propio, la **Opción 2** (cambiar Application name en Google) es la más simple y NO requiere cambiar variables de entorno. Solo cambia el texto visible, pero la URL seguirá siendo `fsqqspreiopzwecwknvu.supabase.co`.
 

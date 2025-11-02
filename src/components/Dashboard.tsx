@@ -250,23 +250,23 @@ export default function Dashboard() {
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <button 
                 onClick={() => setShowProjectForm(true)}
-                className="btn btn-primary flex items-center justify-center py-3 hover:shadow-md transition-all"
+                className="btn btn-primary flex items-center justify-center"
               >
-                <FolderOpen className="h-5 w-5 mr-2" />
+                <FolderOpen className="h-4 w-4 mr-1.5" />
                 Nuevo Proyecto
               </button>
               <button 
                 onClick={() => setShowIncomeForm(true)}
-                className="btn btn-success flex items-center justify-center py-3 hover:shadow-md transition-all"
+                className="btn btn-success flex items-center justify-center"
               >
-                <TrendingUp className="h-5 w-5 mr-2" />
+                <TrendingUp className="h-4 w-4 mr-1.5" />
                 Registrar Ingreso
               </button>
               <button 
                 onClick={() => setShowExpenseForm(true)}
-                className="btn btn-danger flex items-center justify-center py-3 hover:shadow-md transition-all"
+                className="btn btn-danger flex items-center justify-center"
               >
-                <TrendingDown className="h-5 w-5 mr-2" />
+                <TrendingDown className="h-4 w-4 mr-1.5" />
                 Registrar Gasto
               </button>
             </div>

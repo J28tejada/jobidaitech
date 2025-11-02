@@ -64,9 +64,9 @@ export default function TopBar() {
         </div>
         <button
           onClick={handleSignOut}
-          className="inline-flex items-center px-3 py-2 text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 rounded-lg shadow-sm transition-colors"
+          className="btn btn-primary flex items-center"
         >
-          <LogOut className="h-4 w-4 mr-2" />
+          <LogOut className="h-4 w-4 mr-1.5" />
           Cerrar sesión
         </button>
       </div>

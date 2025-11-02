@@ -210,7 +210,7 @@ export default function ProjectsList() {
           }}
           className="btn btn-primary flex items-center"
         >
-          <Plus className="h-5 w-5 mr-2" />
+          <Plus className="h-4 w-4 mr-1.5" />
           Nuevo Proyecto
         </button>
       </div>
@@ -292,30 +292,30 @@ export default function ProjectsList() {
               </div>
             </div>
 
-            <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <div className="mt-4 grid grid-cols-2 gap-2">
               <button
                 onClick={() => handleOpenTransactionForm(project, 'income')}
-                className="btn btn-success text-sm flex items-center justify-center"
+                className="btn btn-success flex items-center justify-center text-xs"
               >
-                <ArrowUpRight className="h-4 w-4 mr-1" />
-                Registrar Ingreso
+                <ArrowUpRight className="h-3.5 w-3.5 mr-1" />
+                Ingreso
               </button>
               <button
                 onClick={() => handleOpenTransactionForm(project, 'expense')}
-                className="btn btn-danger text-sm flex items-center justify-center"
+                className="btn btn-danger flex items-center justify-center text-xs"
               >
-                <ArrowDownLeft className="h-4 w-4 mr-1" />
-                Registrar Gasto
+                <ArrowDownLeft className="h-3.5 w-3.5 mr-1" />
+                Gasto
               </button>
             </div>
 
-            <div className="mt-4 pt-4 border-t border-gray-200" onClick={(e) => e.stopPropagation()}>
-              <div className="flex space-x-2">
+            <div className="mt-3 pt-3 border-t border-gray-200" onClick={(e) => e.stopPropagation()}>
+              <div className="flex items-center space-x-2">
                 <button
                   onClick={() => router.push(`/proyectos/${project.id}`)}
-                  className="btn btn-primary flex-1 text-sm"
+                  className="btn btn-primary flex-1 flex items-center justify-center"
                 >
-                  <Eye className="h-4 w-4 mr-1" />
+                  <Eye className="h-3.5 w-3.5 mr-1.5" />
                   Ver Detalles
                 </button>
                 <button 
@@ -323,7 +323,8 @@ export default function ProjectsList() {
                     e.stopPropagation();
                     handleEditProject(project);
                   }}
-                  className="btn btn-secondary text-sm"
+                  className="btn-icon bg-gray-100 text-gray-700 hover:bg-gray-200"
+                  title="Editar proyecto"
                 >
                   <Edit className="h-4 w-4" />
                 </button>
@@ -332,7 +333,8 @@ export default function ProjectsList() {
                     e.stopPropagation();
                     handleDeleteProject(project.id);
                   }}
-                  className="btn btn-danger text-sm"
+                  className="btn-icon bg-danger-100 text-danger-700 hover:bg-danger-200"
+                  title="Eliminar proyecto"
                 >
                   <Trash2 className="h-4 w-4" />
                 </button>

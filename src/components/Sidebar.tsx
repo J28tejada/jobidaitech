@@ -91,9 +91,9 @@ export default function Sidebar() {
         <div className="mt-auto px-4 pb-6">
           <button
             onClick={handleSignOut}
-            className="w-full flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 rounded-lg transition-colors"
+            className="btn btn-primary w-full flex items-center justify-center"
           >
-            <LogOut className="h-4 w-4" />
+            <LogOut className="h-4 w-4 mr-1.5" />
             Cerrar sesión
           </button>
           {userEmail && <p className="mt-2 text-xs text-center text-gray-400">{userEmail}</p>}

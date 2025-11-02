@@ -373,9 +373,9 @@ export default function ProjectDetail({ projectId }: ProjectDetailProps) {
                     setEditingTransaction(null);
                     setShowIncomeForm(true);
                   }}
-                  className="btn btn-success text-sm flex items-center"
+                  className="btn btn-success flex items-center"
                 >
-                  <ArrowUpRight className="h-4 w-4 mr-1" />
+                  <ArrowUpRight className="h-3.5 w-3.5 mr-1" />
                   Ingreso
                 </button>
                 <button
@@ -383,9 +383,9 @@ export default function ProjectDetail({ projectId }: ProjectDetailProps) {
                     setEditingTransaction(null);
                     setShowExpenseForm(true);
                   }}
-                  className="btn btn-danger text-sm flex items-center"
+                  className="btn btn-danger flex items-center"
                 >
-                  <ArrowDownLeft className="h-4 w-4 mr-1" />
+                  <ArrowDownLeft className="h-3.5 w-3.5 mr-1" />
                   Gasto
                 </button>
               </div>
@@ -399,13 +399,13 @@ export default function ProjectDetail({ projectId }: ProjectDetailProps) {
                 <div className="flex justify-center space-x-2">
                   <button
                     onClick={() => setShowIncomeForm(true)}
-                    className="btn btn-success text-sm"
+                    className="btn btn-success"
                   >
                     Registrar Ingreso
                   </button>
                   <button
                     onClick={() => setShowExpenseForm(true)}
-                    className="btn btn-danger text-sm"
+                    className="btn btn-danger"
                   >
                     Registrar Gasto
                   </button>

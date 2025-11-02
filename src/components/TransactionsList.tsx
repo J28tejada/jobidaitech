@@ -180,7 +180,7 @@ export default function TransactionsList() {
             }}
             className="btn btn-success flex items-center"
           >
-            <ArrowUpRight className="h-5 w-5 mr-2" />
+            <ArrowUpRight className="h-4 w-4 mr-1.5" />
             Nuevo Ingreso
           </button>
           <button 
@@ -190,7 +190,7 @@ export default function TransactionsList() {
             }}
             className="btn btn-danger flex items-center"
           >
-            <ArrowDownLeft className="h-5 w-5 mr-2" />
+            <ArrowDownLeft className="h-4 w-4 mr-1.5" />
             Nuevo Gasto
           </button>
         </div>
