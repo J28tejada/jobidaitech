@@ -16,6 +16,7 @@ import TransactionForm from './TransactionForm';
 export default function Dashboard() {
   const router = useRouter();
   const [stats, setStats] = useState<DashboardStats | null>(null);
+  const [recentProjects, setRecentProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [showProjectForm, setShowProjectForm] = useState(false);
   const [showIncomeForm, setShowIncomeForm] = useState(false);
@@ -23,6 +24,7 @@ export default function Dashboard() {
 
   useEffect(() => {
     fetchStats();
+    fetchRecentProjects();
   }, []);
 
   const fetchStats = async () => {
@@ -42,6 +44,29 @@ export default function Dashboard() {
     }
   };
 
+  const fetchRecentProjects = async () => {
+    try {
+      const response = await fetch('/api/projects', { credentials: 'include' });
+      const data = await response.json();
+      if (!Array.isArray(data)) {
+        console.error('Respuesta inesperada de /api/projects', data);
+        setRecentProjects([]);
+        return;
+      }
+      // Ordenar por fecha de actualización (más reciente primero), luego por fecha de creación
+      const sortedProjects = [...data].sort((a, b) => {
+        const dateA = a.updatedAt?.getTime() || a.createdAt?.getTime() || 0;
+        const dateB = b.updatedAt?.getTime() || b.createdAt?.getTime() || 0;
+        return dateB - dateA;
+      });
+      // Tomar los últimos 5 proyectos
+      setRecentProjects(sortedProjects.slice(0, 5));
+    } catch (error) {
+      console.error('Error fetching recent projects:', error);
+      setRecentProjects([]);
+    }
+  };
+
   const handleProjectSave = async (projectData: Omit<Project, 'id' | 'createdAt' | 'updatedAt'>) => {
     try {
       const response = await fetch('/api/projects', {
@@ -55,6 +80,7 @@ export default function Dashboard() {
 
       if (response.ok) {
         await fetchStats(); // Refresh stats
+        await fetchRecentProjects(); // Refresh recent projects
       }
     } catch (error) {
       console.error('Error creating project:', error);
@@ -276,39 +302,92 @@ export default function Dashboard() {
         <div className="flex items-center justify-between mb-4">
           <div>
             <h2 className="text-lg font-semibold text-gray-900">Actividad Reciente</h2>
-            <p className="text-sm text-gray-500 mt-1">Últimas transacciones registradas</p>
+            <p className="text-sm text-gray-500 mt-1">Últimos proyectos modificados o agregados</p>
           </div>
           <div className="flex items-center space-x-3">
             <button
-              onClick={() => router.push('/transacciones')}
+              onClick={() => router.push('/proyectos')}
               className="text-sm text-primary-600 hover:text-primary-700 font-medium"
             >
-              Ver todas →
+              Ver todos →
             </button>
             <Activity className="h-5 w-5 text-gray-400" />
           </div>
         </div>
-        <div className="text-center py-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gray-100 mb-4">
-            <Activity className="h-8 w-8 text-gray-400" />
-          </div>
-          <p className="text-gray-600 font-medium mb-1">No hay actividad reciente</p>
-          <p className="text-sm text-gray-500 mb-4">Las transacciones aparecerán aquí cuando las registres</p>
-          <div className="flex justify-center space-x-3">
+        {recentProjects.length === 0 ? (
+          <div className="text-center py-8">
+            <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gray-100 mb-4">
+              <FolderOpen className="h-8 w-8 text-gray-400" />
+            </div>
+            <p className="text-gray-600 font-medium mb-1">No hay proyectos recientes</p>
+            <p className="text-sm text-gray-500 mb-4">Los proyectos aparecerán aquí cuando los crees o modifiques</p>
             <button
-              onClick={() => setShowIncomeForm(true)}
-              className="btn btn-success text-sm"
+              onClick={() => setShowProjectForm(true)}
+              className="btn btn-primary text-sm"
             >
-              Registrar Ingreso
-            </button>
-            <button
-              onClick={() => setShowExpenseForm(true)}
-              className="btn btn-danger text-sm"
-            >
-              Registrar Gasto
+              Crear Proyecto
             </button>
           </div>
-        </div>
+        ) : (
+          <div className="space-y-3">
+            {recentProjects.map((project) => {
+              const statusConfig = {
+                active: { label: 'Activo', className: 'bg-success-100 text-success-700' },
+                completed: { label: 'Completado', className: 'bg-blue-100 text-blue-700' },
+                paused: { label: 'Pausado', className: 'bg-yellow-100 text-yellow-700' },
+                cancelled: { label: 'Cancelado', className: 'bg-danger-100 text-danger-700' },
+              };
+              const status = statusConfig[project.status] || statusConfig.active;
+              const lastModified = project.updatedAt || project.createdAt;
+              const formatDate = (date?: Date) => {
+                if (!date) return 'Sin fecha';
+                const now = new Date();
+                const diff = now.getTime() - date.getTime();
+                const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+                
+                if (days === 0) return 'Hoy';
+                if (days === 1) return 'Ayer';
+                if (days < 7) return `Hace ${days} días`;
+                return date.toLocaleDateString('es-ES', { day: 'numeric', month: 'short' });
+              };
+
+              return (
+                <div
+                  key={project.id}
+                  onClick={() => router.push(`/proyectos/${project.id}`)}
+                  className="flex items-center justify-between p-4 border border-gray-200 rounded-lg hover:border-primary-300 hover:shadow-md transition-all cursor-pointer group"
+                >
+                  <div className="flex items-center flex-1 min-w-0">
+                    <div className="p-2 bg-primary-100 rounded-lg group-hover:bg-primary-200 transition-colors">
+                      <FolderOpen className="h-5 w-5 text-primary-600" />
+                    </div>
+                    <div className="ml-4 flex-1 min-w-0">
+                      <div className="flex items-center space-x-2 mb-1">
+                        <h3 className="text-sm font-semibold text-gray-900 truncate group-hover:text-primary-600 transition-colors">
+                          {project.name}
+                        </h3>
+                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${status.className}`}>
+                          {status.label}
+                        </span>
+                      </div>
+                      <div className="flex items-center space-x-4 text-xs text-gray-500">
+                        <span className="truncate">Cliente: {project.client}</span>
+                        <span>•</span>
+                        <span>{formatDate(lastModified)}</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="ml-4 text-right">
+                    <p className="text-sm font-semibold text-gray-900">
+                      {formatCurrency(project.budget)}
+                    </p>
+                    <p className="text-xs text-gray-500">Presupuesto</p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* Forms */}
