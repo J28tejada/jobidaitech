@@ -11,11 +11,15 @@ if (!supabaseServiceKey) {
   throw new Error('SUPABASE_SERVICE_ROLE_KEY no está definido en las variables de entorno')
 }
 
+// TypeScript now knows these are strings after the checks above
+const url: string = supabaseUrl
+const key: string = supabaseServiceKey
+
 let cachedClient: SupabaseClient | null = null
 
 export function getSupabaseClient(): SupabaseClient {
   if (!cachedClient) {
-    cachedClient = createClient(supabaseUrl, supabaseServiceKey!, {
+    cachedClient = createClient(url, key, {
       auth: {
         autoRefreshToken: false,
         persistSession: false,

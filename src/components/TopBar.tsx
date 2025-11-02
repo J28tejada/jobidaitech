@@ -22,7 +22,7 @@ export default function TopBar() {
     user.email ||
     'Usuario'
 
-  const avatarUrl = (user.user_metadata?.avatar_url as string | undefined) || user.image
+  const avatarUrl = user.user_metadata?.avatar_url as string | undefined
   const email = (user.email as string | undefined) || (user.user_metadata?.email as string | undefined)
 
   const initials = fullName

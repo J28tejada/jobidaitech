@@ -34,7 +34,17 @@ export default function TransactionForm({
 
   const [projects, setProjects] = useState<Project[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<{
+    projectId: string;
+    type: 'income' | 'expense';
+    category: string;
+    subcategory: string;
+    description: string;
+    amount: string;
+    date: string;
+    paymentMethod: 'cash' | 'bank_transfer' | 'check' | 'credit_card';
+    reference: string;
+  }>({
     projectId: projectId || '',
     type: type,
     category: '',
@@ -42,7 +52,7 @@ export default function TransactionForm({
     description: '',
     amount: '',
     date: formatDateForInput(new Date()),
-    paymentMethod: 'cash' as const,
+    paymentMethod: 'cash',
     reference: '',
   });
 

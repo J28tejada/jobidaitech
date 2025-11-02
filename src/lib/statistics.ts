@@ -64,7 +64,7 @@ export function calculateDashboardStats(projects: ProjectRow[], transactions: Tr
 export function calculateProjectSummary(project: ProjectRow, transactions: TransactionRow[]): ProjectSummary {
   let totalIncome = 0
   let totalExpenses = 0
-  let lastTransactionDate: string | undefined
+  let lastTransactionDate: Date | undefined
 
   transactions.forEach(transaction => {
     const amount = Number(transaction.amount ?? 0)
@@ -74,8 +74,11 @@ export function calculateProjectSummary(project: ProjectRow, transactions: Trans
       totalExpenses += amount
     }
 
-    if (!lastTransactionDate || new Date(transaction.date) > new Date(lastTransactionDate)) {
-      lastTransactionDate = transaction.date
+    const transactionDate = new Date(transaction.date)
+    if (!Number.isNaN(transactionDate.getTime())) {
+      if (!lastTransactionDate || transactionDate > lastTransactionDate) {
+        lastTransactionDate = transactionDate
+      }
     }
   })
 
@@ -90,7 +93,7 @@ export function calculateProjectSummary(project: ProjectRow, transactions: Trans
     profit,
     profitMargin,
     transactionCount: transactions.length,
-    lastTransactionDate: lastTransactionDate ?? undefined,
+    lastTransactionDate,
   }
 }
 

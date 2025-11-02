@@ -13,13 +13,22 @@ interface ProjectFormProps {
 }
 
 export default function ProjectForm({ isOpen, onClose, onSave, project, title }: ProjectFormProps) {
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<{
+    name: string;
+    description: string;
+    client: string;
+    startDate: string;
+    endDate: string;
+    status: 'active' | 'completed' | 'paused' | 'cancelled';
+    budget: string;
+    initialPayment: string;
+  }>({
     name: '',
     description: '',
     client: '',
     startDate: '',
     endDate: '',
-    status: 'active' as const,
+    status: 'active',
     budget: '',
     initialPayment: '',
   });
