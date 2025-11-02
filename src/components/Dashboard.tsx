@@ -55,8 +55,13 @@ export default function Dashboard() {
       }
       // Ordenar por fecha de actualización (más reciente primero), luego por fecha de creación
       const sortedProjects = [...data].sort((a, b) => {
-        const dateA = a.updatedAt?.getTime() || a.createdAt?.getTime() || 0;
-        const dateB = b.updatedAt?.getTime() || b.createdAt?.getTime() || 0;
+        const getDateValue = (date: Date | string | undefined) => {
+          if (!date) return 0;
+          const dateObj = date instanceof Date ? date : new Date(date);
+          return isNaN(dateObj.getTime()) ? 0 : dateObj.getTime();
+        };
+        const dateA = getDateValue(a.updatedAt) || getDateValue(a.createdAt) || 0;
+        const dateB = getDateValue(b.updatedAt) || getDateValue(b.createdAt) || 0;
         return dateB - dateA;
       });
       // Tomar los últimos 5 proyectos
@@ -339,16 +344,19 @@ export default function Dashboard() {
               };
               const status = statusConfig[project.status] || statusConfig.active;
               const lastModified = project.updatedAt || project.createdAt;
-              const formatDate = (date?: Date) => {
+              const formatDate = (date?: Date | string) => {
                 if (!date) return 'Sin fecha';
+                const dateObj = date instanceof Date ? date : new Date(date);
+                if (isNaN(dateObj.getTime())) return 'Sin fecha';
+                
                 const now = new Date();
-                const diff = now.getTime() - date.getTime();
+                const diff = now.getTime() - dateObj.getTime();
                 const days = Math.floor(diff / (1000 * 60 * 60 * 24));
                 
                 if (days === 0) return 'Hoy';
                 if (days === 1) return 'Ayer';
                 if (days < 7) return `Hace ${days} días`;
-                return date.toLocaleDateString('es-ES', { day: 'numeric', month: 'short' });
+                return dateObj.toLocaleDateString('es-ES', { day: 'numeric', month: 'short' });
               };
 
               return (
