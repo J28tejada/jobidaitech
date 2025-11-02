@@ -50,7 +50,7 @@ export default function ProjectForm({ isOpen, onClose, onSave, project, title }:
         client: project.client,
         startDate: formatDateForInput(project.startDate),
         endDate: formatDateForInput(project.endDate),
-        status: project.status,
+        status: project.status as 'active' | 'completed' | 'paused' | 'cancelled',
         budget: project.budget.toString(),
         initialPayment: project.initialPayment?.toString() || '',
       });
