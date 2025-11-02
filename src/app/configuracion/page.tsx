@@ -1,11 +1,10 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Loader2, Smartphone } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import Layout from '@/components/Layout';
 import CategoryManager from '@/components/CategoryManager';
 import { BusinessType } from '@/types';
-import Link from 'next/link';
 
 const BUSINESS_OPTIONS: { value: BusinessType; label: string; description: string }[] = [
   {
@@ -116,29 +115,6 @@ export default function ConfigurationPage() {
         </div>
 
         <CategoryManager />
-
-        <div className="card">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h2 className="text-lg font-semibold text-gray-900">Registro rápido desde el taller</h2>
-              <p className="text-gray-600 text-sm">
-                Usa la vista móvil optimizada para registrar gastos o ingresos al momento desde tu teléfono.
-              </p>
-            </div>
-            <Smartphone className="h-6 w-6 text-primary-500" />
-          </div>
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-            <div className="text-sm text-gray-500">
-              Guarda el enlace como acceso directo o instala la aplicación web en tu dispositivo móvil.
-            </div>
-            <Link
-              href="/movil/registro"
-              className="btn btn-primary inline-flex items-center justify-center"
-            >
-              Abrir registro rápido
-            </Link>
-          </div>
-        </div>
       </div>
     </Layout>
   );
