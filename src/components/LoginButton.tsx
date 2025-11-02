@@ -10,11 +10,19 @@ export default function LoginButton() {
   const handleLogin = async () => {
     try {
       setIsLoading(true)
-      const origin = typeof window !== 'undefined' ? window.location.origin : ''
+      // Usar window.location.origin para obtener la URL actual (funciona en dev y producción)
+      const origin = typeof window !== 'undefined' 
+        ? window.location.origin 
+        : process.env.NEXT_PUBLIC_VERCEL_URL 
+          ? `https://${process.env.NEXT_PUBLIC_VERCEL_URL}`
+          : ''
+      
+      const redirectUrl = `${origin}/api/auth/callback`
+      
       await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: `${origin}/api/auth/callback`,
+          redirectTo: redirectUrl,
         },
       })
     } catch (error) {
