@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import ProjectForm from './ProjectForm';
 import TransactionForm from './TransactionForm';
+import Onboarding from './Onboarding';
 
 export default function Dashboard() {
   const router = useRouter();
@@ -420,6 +421,16 @@ export default function Dashboard() {
         onSave={handleTransactionSave}
         title="Registrar Gasto"
         type="expense"
+      />
+
+      {/* Onboarding */}
+      <Onboarding
+        hasProjects={(stats?.totalProjects ?? 0) > 0}
+        onComplete={() => {
+          // Refrescar datos después de completar el onboarding
+          fetchStats();
+          fetchRecentProjects();
+        }}
       />
     </div>
   );

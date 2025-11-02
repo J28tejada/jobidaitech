@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Loader2 } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { Loader2, HelpCircle, Sparkles } from 'lucide-react';
 import Layout from '@/components/Layout';
 import CategoryManager from '@/components/CategoryManager';
 import { BusinessType } from '@/types';
@@ -15,10 +16,18 @@ const BUSINESS_OPTIONS: { value: BusinessType; label: string; description: strin
 ];
 
 export default function ConfigurationPage() {
+  const router = useRouter();
   const [businessType, setBusinessType] = useState<BusinessType>('carpentry');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
+
+  const handleShowOnboarding = () => {
+    // Establecer una señal para que se muestre el onboarding
+    localStorage.setItem('contataller_show_onboarding', 'true');
+    // Redirigir al dashboard donde se mostrará el onboarding
+    router.push('/');
+  };
 
   const fetchSettings = async () => {
     try {
@@ -115,6 +124,26 @@ export default function ConfigurationPage() {
         </div>
 
         <CategoryManager />
+
+        {/* Ayuda y Tutorial */}
+        <div className="card">
+          <div className="flex items-center space-x-3 mb-4">
+            <div className="p-2 bg-primary-100 rounded-lg">
+              <HelpCircle className="h-5 w-5 text-primary-600" />
+            </div>
+            <h2 className="text-lg font-semibold text-gray-900">Ayuda y Tutorial</h2>
+          </div>
+          <p className="text-gray-600 mb-4">
+            Vuelve a ver el tutorial interactivo que explica cómo usar todas las funcionalidades de ContaTaller.
+          </p>
+          <button
+            onClick={handleShowOnboarding}
+            className="btn btn-primary flex items-center"
+          >
+            <Sparkles className="h-4 w-4 mr-1.5" />
+            Ver Tutorial de Inicio
+          </button>
+        </div>
       </div>
     </Layout>
   );
