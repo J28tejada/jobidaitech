@@ -44,7 +44,7 @@ export default function Sidebar() {
       <div className="lg:hidden fixed top-4 left-4 z-50">
         <button 
           onClick={() => setIsOpen(!isOpen)} 
-          className="btn btn-secondary p-2 shadow-md"
+          className="p-2 bg-primary-600 text-white rounded-lg shadow-md hover:bg-primary-700 transition-colors"
           aria-label="Menú de navegación"
         >
           {isOpen ? <X size={20} /> : <Menu size={20} />}
