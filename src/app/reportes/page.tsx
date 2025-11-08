@@ -49,22 +49,40 @@ function ReportsContent() {
   };
 
   const formatCurrency = (amount: number) => {
+    const value = Number.isFinite(amount) ? amount : 0;
+    const [, decimals] = value.toFixed(2).split('.');
+    const hasDecimals = Number(decimals) !== 0;
+
     return new Intl.NumberFormat('es-MX', {
       style: 'currency',
       currency: 'MXN',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(amount);
+      minimumFractionDigits: hasDecimals ? 2 : 0,
+      maximumFractionDigits: hasDecimals ? 2 : 0,
+    }).format(value);
   };
 
   const formatCurrencyCompact = (amount: number) => {
-    if (amount >= 1000000) {
-      return `$${(amount / 1000000).toFixed(1)}M`;
+    const value = Number.isFinite(amount) ? amount : 0;
+
+    const formatCompact = (divisor: number, suffix: string) => {
+      const compactValue = value / divisor;
+      const [, decimals] = compactValue.toFixed(1).split('.');
+      const hasDecimals = Number(decimals) !== 0;
+      const formatted = hasDecimals ? compactValue.toFixed(1) : Math.round(compactValue).toString();
+      return `$${formatted}${suffix}`;
+    };
+
+    if (Math.abs(value) >= 1000000) {
+      return formatCompact(1000000, 'M');
     }
-    if (amount >= 1000) {
-      return `$${(amount / 1000).toFixed(0)}K`;
+    if (Math.abs(value) >= 1000) {
+      const compactValue = value / 1000;
+      const [, decimals] = compactValue.toFixed(1).split('.');
+      const hasDecimals = Number(decimals) !== 0;
+      const formatted = hasDecimals ? compactValue.toFixed(1) : Math.round(compactValue).toString();
+      return `$${formatted}K`;
     }
-    return formatCurrency(amount);
+    return formatCurrency(value);
   };
 
   const summaryStats = useMemo(() => {

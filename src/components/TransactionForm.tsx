@@ -32,6 +32,41 @@ export default function TransactionForm({
     return date.toISOString().split('T')[0];
   };
 
+  const sanitizeNumericInput = (rawValue: string) => {
+    if (!rawValue) return '';
+    const withoutSpaces = rawValue.replace(/\s/g, '');
+    const normalized = withoutSpaces.replace(/,/g, '');
+    const validChars = normalized.replace(/[^0-9.]/g, '');
+    if (!validChars) return '';
+
+    const firstDotIndex = validChars.indexOf('.');
+    if (firstDotIndex === -1) {
+      return validChars;
+    }
+
+    const integerPart = validChars.slice(0, firstDotIndex);
+    const decimalPart = validChars.slice(firstDotIndex + 1).replace(/\./g, '');
+    return `${integerPart}.${decimalPart}`;
+  };
+
+  const formatNumberForDisplay = (value: string) => {
+    if (!value) return '';
+
+    const hasTrailingDot = value.endsWith('.');
+    const [rawInteger = '', rawDecimal] = value.split('.');
+    const integerPart = rawInteger || '0';
+    const formattedInteger = Number(integerPart).toLocaleString('es-MX');
+
+    if (rawDecimal !== undefined) {
+      if (hasTrailingDot && rawDecimal === '') {
+        return `${formattedInteger}.`;
+      }
+      return `${formattedInteger}.${rawDecimal}`;
+    }
+
+    return formattedInteger;
+  };
+
   const [projects, setProjects] = useState<Project[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [formData, setFormData] = useState<{
@@ -216,11 +251,14 @@ export default function TransactionForm({
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
-    
-    // Clear subcategory when category changes
-    if (name === 'category') {
-      setFormData(prev => ({ ...prev, subcategory: '' }));
+
+    if (name === 'amount') {
+      const sanitized = sanitizeNumericInput(value);
+      setFormData(prev => ({ ...prev, amount: sanitized }));
+    } else if (name === 'category') {
+      setFormData(prev => ({ ...prev, category: value, subcategory: '' }));
+    } else {
+      setFormData(prev => ({ ...prev, [name]: value }));
     }
     
     // Clear error when user starts typing
@@ -355,14 +393,13 @@ export default function TransactionForm({
                 Monto *
               </label>
               <input
-                type="number"
+                type="text"
                 name="amount"
-                value={formData.amount}
+                value={formatNumberForDisplay(formData.amount)}
                 onChange={handleChange}
+                inputMode="decimal"
                 className={`input ${errors.amount ? 'border-danger-500 focus:ring-danger-500' : ''}`}
                 placeholder="0.00"
-                min="0"
-                step="0.01"
               />
               {errors.amount && <p className="text-danger-500 text-sm mt-1">{errors.amount}</p>}
             </div>

@@ -152,10 +152,16 @@ export default function ProjectsList() {
   };
 
   const formatCurrency = (amount: number) => {
+    const value = Number.isFinite(amount) ? amount : 0;
+    const [, decimals] = value.toFixed(2).split('.');
+    const hasDecimals = Number(decimals) !== 0;
+
     return new Intl.NumberFormat('es-MX', {
       style: 'currency',
       currency: 'MXN',
-    }).format(amount);
+      minimumFractionDigits: hasDecimals ? 2 : 0,
+      maximumFractionDigits: hasDecimals ? 2 : 0,
+    }).format(value);
   };
 
   const formatDate = (value?: Date | string | null) => {

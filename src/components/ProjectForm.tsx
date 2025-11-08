@@ -42,6 +42,41 @@ export default function ProjectForm({ isOpen, onClose, onSave, project, title }:
     return date.toISOString().split('T')[0];
   };
 
+  const sanitizeNumericInput = (rawValue: string) => {
+    if (!rawValue) return '';
+    const withoutSpaces = rawValue.replace(/\s/g, '');
+    const normalized = withoutSpaces.replace(/,/g, '');
+    const validChars = normalized.replace(/[^0-9.]/g, '');
+    if (!validChars) return '';
+
+    const firstDotIndex = validChars.indexOf('.');
+    if (firstDotIndex === -1) {
+      return validChars;
+    }
+
+    const integerPart = validChars.slice(0, firstDotIndex);
+    const decimalPart = validChars.slice(firstDotIndex + 1).replace(/\./g, '');
+    return `${integerPart}.${decimalPart}`;
+  };
+
+  const formatNumberForDisplay = (value: string) => {
+    if (!value) return '';
+
+    const hasTrailingDot = value.endsWith('.');
+    const [rawInteger = '', rawDecimal] = value.split('.');
+    const integerPart = rawInteger || '0';
+    const formattedInteger = Number(integerPart).toLocaleString('es-MX');
+
+    if (rawDecimal !== undefined) {
+      if (hasTrailingDot && rawDecimal === '') {
+        return `${formattedInteger}.`;
+      }
+      return `${formattedInteger}.${rawDecimal}`;
+    }
+
+    return formattedInteger;
+  };
+
   useEffect(() => {
     if (project) {
       setFormData({
@@ -128,7 +163,13 @@ export default function ProjectForm({ isOpen, onClose, onSave, project, title }:
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
+
+    if (name === 'budget' || name === 'initialPayment') {
+      const sanitized = sanitizeNumericInput(value);
+      setFormData(prev => ({ ...prev, [name]: sanitized }));
+    } else {
+      setFormData(prev => ({ ...prev, [name]: value }));
+    }
     
     // Clear error when user starts typing
     if (errors[name]) {
@@ -255,14 +296,13 @@ export default function ProjectForm({ isOpen, onClose, onSave, project, title }:
                 Presupuesto *
               </label>
               <input
-                type="number"
+                type="text"
                 name="budget"
-                value={formData.budget}
+                value={formatNumberForDisplay(formData.budget)}
                 onChange={handleChange}
+                inputMode="decimal"
                 className={`input ${errors.budget ? 'border-danger-500 focus:ring-danger-500' : ''}`}
                 placeholder="0.00"
-                min="0"
-                step="0.01"
               />
               {errors.budget && <p className="text-danger-500 text-sm mt-1">{errors.budget}</p>}
             </div>
@@ -274,14 +314,13 @@ export default function ProjectForm({ isOpen, onClose, onSave, project, title }:
               Abono Inicial (Opcional)
             </label>
             <input
-              type="number"
+              type="text"
               name="initialPayment"
-              value={formData.initialPayment}
+              value={formatNumberForDisplay(formData.initialPayment)}
               onChange={handleChange}
+              inputMode="decimal"
               className={`input ${errors.initialPayment ? 'border-danger-500 focus:ring-danger-500' : ''}`}
               placeholder="0.00"
-              min="0"
-              step="0.01"
             />
             {errors.initialPayment && <p className="text-danger-500 text-sm mt-1">{errors.initialPayment}</p>}
             <p className="text-xs text-gray-500 mt-1">
