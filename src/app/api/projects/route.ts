@@ -1,33 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server'
 
 import { getSupabaseClient } from '@/lib/supabase'
-import { ensureUserAndCategories } from '@/lib/users'
+import { getWorkspaceContext } from '@/lib/workspaces'
 import { mapProjectRow, toDateOnly } from '@/lib/projects'
-import { createSupabaseRouteClient } from '@/lib/supabase-route'
 
 export async function GET() {
   try {
-    const supabaseAuth = createSupabaseRouteClient()
-    const {
-      data: { user },
-    } = await supabaseAuth.auth.getUser()
-
-    if (!user?.id) {
+    const ctx = await getWorkspaceContext()
+    if (!ctx) {
       return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
     }
-
-    await ensureUserAndCategories({
-      id: user.id,
-      email: user.email,
-      name: user.user_metadata?.full_name ?? user.user_metadata?.name ?? user.email,
-      image: user.user_metadata?.avatar_url,
-    })
 
     const supabase = getSupabaseClient()
     const { data, error } = await supabase
       .from('projects')
       .select('*')
-      .eq('user_id', user.id)
+      .eq('workspace_id', ctx.workspaceId)
       .order('created_at', { ascending: false })
 
     if (error) {
@@ -44,21 +32,10 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
-    const supabaseAuth = createSupabaseRouteClient()
-    const {
-      data: { user },
-    } = await supabaseAuth.auth.getUser()
-
-    if (!user?.id) {
+    const ctx = await getWorkspaceContext()
+    if (!ctx) {
       return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
     }
-
-    await ensureUserAndCategories({
-      id: user.id,
-      email: user.email,
-      name: user.user_metadata?.full_name ?? user.user_metadata?.name ?? user.email,
-      image: user.user_metadata?.avatar_url,
-    })
 
     const body = await request.json()
 
@@ -70,7 +47,8 @@ export async function POST(request: NextRequest) {
     const { data, error } = await supabase
       .from('projects')
       .insert({
-        user_id: user.id,
+        workspace_id: ctx.workspaceId,
+        user_id: ctx.user.id,
         name: body.name,
         description: body.description ?? '',
         client: body.client,
@@ -91,11 +69,11 @@ export async function POST(request: NextRequest) {
 
     // Si hay un abono inicial, crear automáticamente una transacción de ingreso
     if (body.initialPayment && Number(body.initialPayment) > 0) {
-      // Obtener la categoría "Anticipo" del usuario
+      // Obtener la categoría "Anticipo" del espacio activo
       const { data: categories } = await supabase
         .from('categories')
         .select('id, name')
-        .eq('user_id', user.id)
+        .eq('workspace_id', ctx.workspaceId)
         .eq('type', 'income')
         .ilike('name', '%anticipo%')
         .limit(1)
@@ -105,7 +83,8 @@ export async function POST(request: NextRequest) {
       if (advanceCategory) {
         // Crear la transacción de ingreso automáticamente
         await supabase.from('transactions').insert({
-          user_id: user.id,
+          workspace_id: ctx.workspaceId,
+          user_id: ctx.user.id,
           project_id: project.id,
           type: 'income',
           category_id: advanceCategory.id,
@@ -127,4 +106,3 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Error al crear proyecto' }, { status: 500 })
   }
 }
-

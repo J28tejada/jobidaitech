@@ -1,28 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server'
 
 import { getSupabaseClient } from '@/lib/supabase'
-import { ensureUserAndCategories } from '@/lib/users'
+import { getWorkspaceContext } from '@/lib/workspaces'
 import { mapTransactionRow } from '@/lib/transactions'
 import { toDateOnly } from '@/lib/projects'
-import { createSupabaseRouteClient } from '@/lib/supabase-route'
 
 export async function GET(request: NextRequest) {
   try {
-    const supabaseAuth = createSupabaseRouteClient()
-    const {
-      data: { user },
-    } = await supabaseAuth.auth.getUser()
-
-    if (!user?.id) {
+    const ctx = await getWorkspaceContext()
+    if (!ctx) {
       return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
     }
-
-    await ensureUserAndCategories({
-      id: user.id,
-      email: user.email,
-      name: user.user_metadata?.full_name ?? user.user_metadata?.name ?? user.email,
-      image: user.user_metadata?.avatar_url,
-    })
 
     const { searchParams } = new URL(request.url)
     const projectId = searchParams.get('projectId')
@@ -31,7 +19,7 @@ export async function GET(request: NextRequest) {
     const query = supabase
       .from('transactions')
       .select('*')
-      .eq('user_id', user.id)
+      .eq('workspace_id', ctx.workspaceId)
       .order('date', { ascending: false })
       .order('created_at', { ascending: false })
 
@@ -55,21 +43,10 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const supabaseAuth = createSupabaseRouteClient()
-    const {
-      data: { user },
-    } = await supabaseAuth.auth.getUser()
-
-    if (!user?.id) {
+    const ctx = await getWorkspaceContext()
+    if (!ctx) {
       return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
     }
-
-    await ensureUserAndCategories({
-      id: user.id,
-      email: user.email,
-      name: user.user_metadata?.full_name ?? user.user_metadata?.name ?? user.email,
-      image: user.user_metadata?.avatar_url,
-    })
 
     const body = await request.json()
 
@@ -83,7 +60,7 @@ export async function POST(request: NextRequest) {
       .from('projects')
       .select('id')
       .eq('id', body.projectId)
-      .eq('user_id', user.id)
+      .eq('workspace_id', ctx.workspaceId)
       .maybeSingle()
 
     if (projectError) {
@@ -97,13 +74,14 @@ export async function POST(request: NextRequest) {
     const { data: categoryRow } = await supabase
       .from('categories')
       .select('id, name, type')
-      .eq('user_id', user.id)
+      .eq('workspace_id', ctx.workspaceId)
       .eq('name', body.category)
       .eq('type', body.type)
       .maybeSingle()
 
     const payload = {
-      user_id: user.id,
+      workspace_id: ctx.workspaceId,
+      user_id: ctx.user.id,
       project_id: body.projectId,
       type: body.type,
       category_id: categoryRow?.id ?? null,
@@ -133,4 +111,3 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Error al crear transacción' }, { status: 500 })
   }
 }
-

@@ -1,0 +1,239 @@
+'use client'
+
+import { useEffect, useRef, useState } from 'react'
+import { Building2, User, Check, ChevronDown, Plus, Loader2 } from 'lucide-react'
+
+type WorkspaceType = 'personal' | 'business'
+
+interface Workspace {
+  id: string
+  name: string
+  type: WorkspaceType
+  businessType: string
+  role: string
+  isActive: boolean
+}
+
+export default function WorkspaceSwitcher() {
+  const [workspaces, setWorkspaces] = useState<Workspace[]>([])
+  const [loading, setLoading] = useState(true)
+  const [open, setOpen] = useState(false)
+  const [busy, setBusy] = useState(false)
+
+  const [showCreate, setShowCreate] = useState(false)
+  const [newName, setNewName] = useState('')
+  const [newType, setNewType] = useState<'carpentry' | 'construction'>('carpentry')
+  const [creating, setCreating] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const containerRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    let active = true
+    fetch('/api/workspaces')
+      .then(res => (res.ok ? res.json() : Promise.reject(res)))
+      .then(data => {
+        if (active) setWorkspaces(data.workspaces ?? [])
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (active) setLoading(false)
+      })
+    return () => {
+      active = false
+    }
+  }, [])
+
+  useEffect(() => {
+    const onClick = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', onClick)
+    return () => document.removeEventListener('mousedown', onClick)
+  }, [])
+
+  const active = workspaces.find(w => w.isActive)
+
+  const handleSwitch = async (workspaceId: string) => {
+    if (busy || workspaceId === active?.id) {
+      setOpen(false)
+      return
+    }
+    setBusy(true)
+    try {
+      const res = await fetch('/api/workspaces/active', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ workspaceId }),
+      })
+      if (!res.ok) throw new Error('No se pudo cambiar de espacio')
+      // Recargar para refrescar todos los datos con el nuevo espacio activo
+      window.location.reload()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error al cambiar de espacio')
+      setBusy(false)
+    }
+  }
+
+  const handleCreate = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!newName.trim() || creating) return
+    setCreating(true)
+    setError(null)
+    try {
+      const res = await fetch('/api/workspaces', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: newName.trim(), businessType: newType }),
+      })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        throw new Error(data.error ?? 'No se pudo crear el negocio')
+      }
+      // El nuevo negocio queda activo; recargar
+      window.location.reload()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error al crear el negocio')
+      setCreating(false)
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-200 bg-white text-sm text-gray-400">
+        <Loader2 className="h-4 w-4 animate-spin" />
+        <span>Cargando…</span>
+      </div>
+    )
+  }
+
+  const ActiveIcon = active?.type === 'business' ? Building2 : User
+
+  return (
+    <div className="relative" ref={containerRef}>
+      <button
+        type="button"
+        onClick={() => setOpen(v => !v)}
+        disabled={busy}
+        className="flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-200 bg-white text-sm font-medium text-gray-800 hover:border-gray-300 hover:bg-gray-50 transition-colors max-w-[220px] disabled:opacity-60"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+      >
+        <ActiveIcon className="h-4 w-4 text-primary-600 flex-shrink-0" />
+        <span className="truncate">{active?.name ?? 'Espacio'}</span>
+        {busy ? (
+          <Loader2 className="h-4 w-4 animate-spin text-gray-400 flex-shrink-0" />
+        ) : (
+          <ChevronDown className="h-4 w-4 text-gray-400 flex-shrink-0" />
+        )}
+      </button>
+
+      {open && (
+        <div className="absolute left-0 mt-2 w-64 bg-white rounded-xl shadow-lg border border-gray-200 py-1.5 z-50">
+          <p className="px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-gray-400">Espacios</p>
+          <ul className="max-h-64 overflow-y-auto">
+            {workspaces.map(ws => {
+              const Icon = ws.type === 'business' ? Building2 : User
+              return (
+                <li key={ws.id}>
+                  <button
+                    type="button"
+                    onClick={() => handleSwitch(ws.id)}
+                    className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors text-left"
+                  >
+                    <Icon className="h-4 w-4 text-gray-400 flex-shrink-0" />
+                    <span className="flex-1 truncate">{ws.name}</span>
+                    {ws.type === 'personal' && (
+                      <span className="text-[10px] uppercase tracking-wide text-gray-400">Personal</span>
+                    )}
+                    {ws.isActive && <Check className="h-4 w-4 text-primary-600 flex-shrink-0" />}
+                  </button>
+                </li>
+              )
+            })}
+          </ul>
+          <div className="border-t border-gray-100 mt-1 pt-1">
+            <button
+              type="button"
+              onClick={() => {
+                setOpen(false)
+                setShowCreate(true)
+                setError(null)
+              }}
+              className="w-full flex items-center gap-2.5 px-3 py-2 text-sm font-medium text-primary-700 hover:bg-primary-50 transition-colors text-left"
+            >
+              <Plus className="h-4 w-4 flex-shrink-0" />
+              Crear negocio
+            </button>
+          </div>
+        </div>
+      )}
+
+      {showCreate && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4" onClick={() => !creating && setShowCreate(false)}>
+          <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl p-6" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center gap-3 mb-4">
+              <div className="p-2 bg-primary-100 rounded-lg">
+                <Building2 className="h-5 w-5 text-primary-600" />
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900">Crear negocio</h3>
+                <p className="text-sm text-gray-500">Un espacio aparte para llevar sus registros</p>
+              </div>
+            </div>
+
+            <form onSubmit={handleCreate} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Nombre del negocio</label>
+                <input
+                  type="text"
+                  value={newName}
+                  onChange={e => setNewName(e.target.value)}
+                  placeholder="Ej. Carpintería Del Rey"
+                  autoFocus
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Tipo de negocio</label>
+                <select
+                  value={newType}
+                  onChange={e => setNewType(e.target.value as 'carpentry' | 'construction')}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white"
+                >
+                  <option value="carpentry">Carpintería</option>
+                  <option value="construction">Construcción</option>
+                </select>
+                <p className="mt-1 text-xs text-gray-500">Define las categorías iniciales del negocio.</p>
+              </div>
+
+              {error && <p className="text-sm text-red-600">{error}</p>}
+
+              <div className="flex items-center justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowCreate(false)}
+                  disabled={creating}
+                  className="px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-900 disabled:opacity-60"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={creating || !newName.trim()}
+                  className="btn btn-primary flex items-center gap-2 disabled:opacity-60"
+                >
+                  {creating && <Loader2 className="h-4 w-4 animate-spin" />}
+                  Crear negocio
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}

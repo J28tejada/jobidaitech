@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation'
 import { LogOut } from 'lucide-react'
 import { useSessionContext, useSupabaseClient } from '@supabase/auth-helpers-react'
 
+import WorkspaceSwitcher from './WorkspaceSwitcher'
+
 export default function TopBar() {
   const { session } = useSessionContext()
   const supabase = useSupabaseClient()
@@ -38,9 +40,12 @@ export default function TopBar() {
 
   return (
     <header className="hidden lg:flex items-center justify-between bg-white border-b border-gray-200 px-6 py-4 sticky top-0 z-30 w-full max-w-full overflow-x-hidden">
-      <div>
-        <h2 className="text-lg font-semibold text-gray-900">Panel financiero</h2>
-        <p className="text-sm text-gray-500">Gestiona los ingresos y egresos de tus proyectos</p>
+      <div className="flex items-center gap-4">
+        <div>
+          <h2 className="text-lg font-semibold text-gray-900">Panel financiero</h2>
+          <p className="text-sm text-gray-500">Gestiona los ingresos y egresos de tus proyectos</p>
+        </div>
+        <WorkspaceSwitcher />
       </div>
       <div className="flex items-center space-x-4">
         <div className="flex items-center space-x-3">

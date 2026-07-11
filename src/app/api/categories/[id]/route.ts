@@ -1,18 +1,14 @@
 import { NextResponse } from 'next/server'
 
 import { getSupabaseClient } from '@/lib/supabase'
-import { createSupabaseRouteClient } from '@/lib/supabase-route'
+import { getWorkspaceContext } from '@/lib/workspaces'
 
 export async function DELETE(
   request: Request,
   { params }: { params: { id: string } }
 ) {
-  const supabaseAuth = createSupabaseRouteClient()
-  const {
-    data: { user },
-  } = await supabaseAuth.auth.getUser()
-
-  if (!user?.id) {
+  const ctx = await getWorkspaceContext()
+  if (!ctx) {
     return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
   }
 
@@ -21,7 +17,7 @@ export async function DELETE(
     .from('categories')
     .delete()
     .eq('id', params.id)
-    .eq('user_id', user.id)
+    .eq('workspace_id', ctx.workspaceId)
 
   if (error) {
     console.error(`DELETE /api/categories/${params.id}`, error)

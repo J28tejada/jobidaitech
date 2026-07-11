@@ -1,22 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server'
 
 import { getSupabaseClient } from '@/lib/supabase'
-import { ensureUserAndCategories } from '@/lib/users'
+import { getWorkspaceContext } from '@/lib/workspaces'
 import { mapTransactionRow } from '@/lib/transactions'
 import { toDateOnly } from '@/lib/projects'
-import { createSupabaseRouteClient } from '@/lib/supabase-route'
 
 export async function GET(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
-    const supabaseAuth = createSupabaseRouteClient()
-    const {
-      data: { user },
-    } = await supabaseAuth.auth.getUser()
-
-    if (!user?.id) {
+    const ctx = await getWorkspaceContext()
+    if (!ctx) {
       return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
     }
 
@@ -25,7 +20,7 @@ export async function GET(
       .from('transactions')
       .select('*')
       .eq('id', params.id)
-      .eq('user_id', user.id)
+      .eq('workspace_id', ctx.workspaceId)
       .maybeSingle()
 
     if (error) {
@@ -48,21 +43,10 @@ export async function PUT(
   { params }: { params: { id: string } }
 ) {
   try {
-    const supabaseAuth = createSupabaseRouteClient()
-    const {
-      data: { user },
-    } = await supabaseAuth.auth.getUser()
-
-    if (!user?.id) {
+    const ctx = await getWorkspaceContext()
+    if (!ctx) {
       return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
     }
-
-    await ensureUserAndCategories({
-      id: user.id,
-      email: user.email,
-      name: user.user_metadata?.full_name ?? user.user_metadata?.name ?? user.email,
-      image: user.user_metadata?.avatar_url,
-    })
 
     const body = await request.json()
     const supabase = getSupabaseClient()
@@ -74,7 +58,7 @@ export async function PUT(
         .from('projects')
         .select('id')
         .eq('id', body.projectId)
-        .eq('user_id', user.id)
+        .eq('workspace_id', ctx.workspaceId)
         .maybeSingle()
 
       if (projectError) {
@@ -96,7 +80,7 @@ export async function PUT(
       const { data: categoryRow } = await supabase
         .from('categories')
         .select('id, name, type')
-        .eq('user_id', user.id)
+        .eq('workspace_id', ctx.workspaceId)
         .eq('name', body.category)
         .eq('type', body.type ?? updates.type)
         .maybeSingle()
@@ -120,7 +104,7 @@ export async function PUT(
       .from('transactions')
       .update(updates)
       .eq('id', params.id)
-      .eq('user_id', user.id)
+      .eq('workspace_id', ctx.workspaceId)
       .select()
       .single()
 
@@ -140,12 +124,8 @@ export async function DELETE(
   { params }: { params: { id: string } }
 ) {
   try {
-    const supabaseAuth = createSupabaseRouteClient()
-    const {
-      data: { user },
-    } = await supabaseAuth.auth.getUser()
-
-    if (!user?.id) {
+    const ctx = await getWorkspaceContext()
+    if (!ctx) {
       return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
     }
 
@@ -154,7 +134,7 @@ export async function DELETE(
       .from('transactions')
       .delete()
       .eq('id', params.id)
-      .eq('user_id', user.id)
+      .eq('workspace_id', ctx.workspaceId)
 
     if (error) {
       throw error
@@ -166,4 +146,3 @@ export async function DELETE(
     return NextResponse.json({ error: 'Error al eliminar transacción' }, { status: 500 })
   }
 }
-

@@ -1,29 +1,17 @@
 import { NextResponse } from 'next/server'
 
 import { getSupabaseClient } from '@/lib/supabase'
-import { ensureUserAndCategories } from '@/lib/users'
+import { getWorkspaceContext } from '@/lib/workspaces'
 import { calculateMonthlyReports } from '@/lib/statistics'
-import { createSupabaseRouteClient } from '@/lib/supabase-route'
 
 const MONTHS = 12
 
 export async function GET() {
   try {
-    const supabaseAuth = createSupabaseRouteClient()
-    const {
-      data: { user },
-    } = await supabaseAuth.auth.getUser()
-
-    if (!user?.id) {
+    const ctx = await getWorkspaceContext()
+    if (!ctx) {
       return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
     }
-
-    await ensureUserAndCategories({
-      id: user.id,
-      email: user.email,
-      name: user.user_metadata?.full_name ?? user.user_metadata?.name ?? user.email,
-      image: user.user_metadata?.avatar_url,
-    })
 
     const supabase = getSupabaseClient()
     const now = new Date()
@@ -33,12 +21,12 @@ export async function GET() {
       supabase
         .from('transactions')
         .select('type, amount, date, project_id')
-        .eq('user_id', user.id)
+        .eq('workspace_id', ctx.workspaceId)
         .gte('date', oldestMonth.toISOString().slice(0, 10)),
       supabase
         .from('projects')
         .select('id, start_date, end_date')
-        .eq('user_id', user.id),
+        .eq('workspace_id', ctx.workspaceId),
     ])
 
     if (transactionsError) {
@@ -86,4 +74,3 @@ export async function GET() {
     return NextResponse.json({ error: 'Error al obtener reportes mensuales' }, { status: 500 })
   }
 }
-

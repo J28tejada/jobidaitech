@@ -15,6 +15,8 @@ import {
 } from 'lucide-react'
 import { useSessionContext, useSupabaseClient } from '@supabase/auth-helpers-react'
 
+import WorkspaceSwitcher from './WorkspaceSwitcher'
+
 const navigation = [
   { name: 'Panel de control', href: '/', icon: Home },
   { name: 'Proyectos', href: '/proyectos', icon: FolderOpen },
@@ -67,7 +69,11 @@ export default function Sidebar() {
           <h1 className="text-xl font-bold text-white">ContaTaller</h1>
         </div>
 
-        <nav className="mt-8 px-4 flex-1 overflow-y-auto">
+        <div className="px-4 pt-4 lg:hidden">
+          <WorkspaceSwitcher />
+        </div>
+
+        <nav className="mt-4 lg:mt-8 px-4 flex-1 overflow-y-auto">
           <ul className="space-y-2">
             {navigation.map(item => {
               const isActive = pathname === item.href

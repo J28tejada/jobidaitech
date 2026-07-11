@@ -1,32 +1,20 @@
 import { NextResponse } from 'next/server'
 
 import { getSupabaseClient } from '@/lib/supabase'
-import { ensureUserAndCategories } from '@/lib/users'
+import { getWorkspaceContext } from '@/lib/workspaces'
 import { mapCategoryRow } from '@/lib/categories'
-import { createSupabaseRouteClient } from '@/lib/supabase-route'
 
 export async function GET() {
-  const supabaseAuth = createSupabaseRouteClient()
-  const {
-    data: { user },
-  } = await supabaseAuth.auth.getUser()
-
-  if (!user?.id) {
+  const ctx = await getWorkspaceContext()
+  if (!ctx) {
     return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
   }
-
-  await ensureUserAndCategories({
-    id: user.id,
-    email: user.email,
-    name: user.user_metadata?.full_name ?? user.user_metadata?.name ?? user.email,
-    image: user.user_metadata?.avatar_url,
-  })
 
   const supabase = getSupabaseClient()
   const { data, error } = await supabase
     .from('categories')
     .select('*')
-    .eq('user_id', user.id)
+    .eq('workspace_id', ctx.workspaceId)
     .order('type', { ascending: true })
     .order('name', { ascending: true })
 
@@ -38,23 +26,12 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  const supabaseAuth = createSupabaseRouteClient()
-  const {
-    data: { user },
-  } = await supabaseAuth.auth.getUser()
-
-  if (!user?.id) {
+  const ctx = await getWorkspaceContext()
+  if (!ctx) {
     return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
   }
 
   try {
-    await ensureUserAndCategories({
-      id: user.id,
-      email: user.email,
-      name: user.user_metadata?.full_name ?? user.user_metadata?.name ?? user.email,
-      image: user.user_metadata?.avatar_url,
-    })
-
     const body = await request.json()
     const { name, type, subcategories, color } = body
 
@@ -66,7 +43,8 @@ export async function POST(request: Request) {
     const { data, error } = await supabase
       .from('categories')
       .insert({
-        user_id: user.id,
+        workspace_id: ctx.workspaceId,
+        user_id: ctx.user.id,
         name,
         type,
         color: color ?? null,

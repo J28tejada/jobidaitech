@@ -1,27 +1,22 @@
 import { NextResponse } from 'next/server'
 
 import { getSupabaseClient } from '@/lib/supabase'
-import { seedCategoriesForUser } from '@/lib/users'
+import { getWorkspaceContext, seedCategoriesForWorkspace } from '@/lib/workspaces'
 import { BusinessType } from '@/types'
-import { createSupabaseRouteClient } from '@/lib/supabase-route'
 
-const ALLOWED_TYPES: BusinessType[] = ['carpentry']
+const ALLOWED_TYPES: BusinessType[] = ['carpentry', 'construction']
 
 export async function GET() {
-  const supabaseAuth = createSupabaseRouteClient()
-  const {
-    data: { user },
-  } = await supabaseAuth.auth.getUser()
-
-  if (!user?.id) {
+  const ctx = await getWorkspaceContext()
+  if (!ctx) {
     return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
   }
 
   const supabase = getSupabaseClient()
   const { data, error } = await supabase
-    .from('users')
+    .from('workspaces')
     .select('business_type')
-    .eq('id', user.id)
+    .eq('id', ctx.workspaceId)
     .maybeSingle()
 
   if (error) {
@@ -34,12 +29,8 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  const supabaseAuth = createSupabaseRouteClient()
-  const {
-    data: { user },
-  } = await supabaseAuth.auth.getUser()
-
-  if (!user?.id) {
+  const ctx = await getWorkspaceContext()
+  if (!ctx) {
     return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
   }
 
@@ -54,24 +45,29 @@ export async function POST(request: Request) {
     const supabase = getSupabaseClient()
 
     const { error: updateError } = await supabase
-      .from('users')
+      .from('workspaces')
       .update({ business_type: businessType })
-      .eq('id', user.id)
+      .eq('id', ctx.workspaceId)
 
     if (updateError) {
       throw updateError
     }
 
+    // Si es el espacio personal, mantener también users.business_type sincronizado.
+    if (ctx.isPersonal) {
+      await supabase.from('users').update({ business_type: businessType }).eq('id', ctx.user.id)
+    }
+
     const { error: deleteError } = await supabase
       .from('categories')
       .delete()
-      .eq('user_id', user.id)
+      .eq('workspace_id', ctx.workspaceId)
 
     if (deleteError) {
       throw deleteError
     }
 
-    await seedCategoriesForUser(user.id, businessType)
+    await seedCategoriesForWorkspace(ctx.workspaceId, ctx.user.id, businessType)
 
     return NextResponse.json({ businessType })
   } catch (error) {
