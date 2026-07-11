@@ -67,6 +67,10 @@ export interface WorkspaceContext {
   personalWorkspaceId: string
   role: WorkspaceRole
   isPersonal: boolean
+  membershipId: string | null
+  scope: 'all' | 'specific'
+  /** IDs de proyectos visibles cuando scope='specific'; null = todos. */
+  allowedProjectIds: string[] | null
 }
 
 function profileFromAuthUser(user: {
@@ -185,6 +189,9 @@ export async function getWorkspaceContext(): Promise<WorkspaceContext | null> {
   let workspaceId = personalWorkspaceId
   let role: WorkspaceRole = 'owner'
   let isPersonal = true
+  let membershipId: string | null = null
+  let scope: 'all' | 'specific' = 'all'
+  let allowedProjectIds: string[] | null = null
 
   const requested = cookies().get(ACTIVE_WORKSPACE_COOKIE)?.value
 
@@ -192,7 +199,7 @@ export async function getWorkspaceContext(): Promise<WorkspaceContext | null> {
     const supabase = getSupabaseClient()
     const { data: membership } = await supabase
       .from('workspace_members')
-      .select('role')
+      .select('id, role, scope')
       .eq('user_id', user.id)
       .eq('workspace_id', requested)
       .maybeSingle()
@@ -201,10 +208,20 @@ export async function getWorkspaceContext(): Promise<WorkspaceContext | null> {
       workspaceId = requested
       role = (membership.role as WorkspaceRole) ?? 'member'
       isPersonal = false
+      membershipId = membership.id
+      scope = (membership.scope as 'all' | 'specific') ?? 'all'
+
+      if (scope === 'specific') {
+        const { data: mp } = await supabase
+          .from('member_projects')
+          .select('project_id')
+          .eq('member_id', membership.id)
+        allowedProjectIds = (mp ?? []).map((r: { project_id: string }) => r.project_id)
+      }
     }
   }
 
-  return { user: profile, workspaceId, personalWorkspaceId, role, isPersonal }
+  return { user: profile, workspaceId, personalWorkspaceId, role, isPersonal, membershipId, scope, allowedProjectIds }
 }
 
 /**

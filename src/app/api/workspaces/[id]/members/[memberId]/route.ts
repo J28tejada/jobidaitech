@@ -26,14 +26,9 @@ export async function PATCH(
 
   try {
     const body = await request.json()
-    const newRole: WorkspaceRole = body.role
-    if (!ASSIGNABLE_ROLES.includes(newRole)) {
-      return NextResponse.json({ error: 'Rol inválido' }, { status: 400 })
-    }
-
     const supabase = getSupabaseClient()
 
-    // No se puede cambiar el rol del Dueño
+    // No se puede modificar al Dueño
     const { data: target } = await supabase
       .from('workspace_members')
       .select('id, role')
@@ -45,18 +40,59 @@ export async function PATCH(
       return NextResponse.json({ error: 'Miembro no encontrado' }, { status: 404 })
     }
     if (target.role === 'owner') {
-      return NextResponse.json({ error: 'No se puede cambiar el rol del Dueño' }, { status: 400 })
+      return NextResponse.json({ error: 'No se puede modificar al Dueño' }, { status: 400 })
     }
 
-    const { error } = await supabase
-      .from('workspace_members')
-      .update({ role: newRole })
-      .eq('id', params.memberId)
-      .eq('workspace_id', params.id)
+    const updates: { role?: WorkspaceRole; scope?: 'all' | 'specific' } = {}
 
-    if (error) throw error
+    if (body.role !== undefined) {
+      if (!ASSIGNABLE_ROLES.includes(body.role)) {
+        return NextResponse.json({ error: 'Rol inválido' }, { status: 400 })
+      }
+      updates.role = body.role
+    }
 
-    return NextResponse.json({ success: true, role: newRole })
+    // Alcance por proyecto
+    if (body.scope !== undefined) {
+      if (body.scope !== 'all' && body.scope !== 'specific') {
+        return NextResponse.json({ error: 'Alcance inválido' }, { status: 400 })
+      }
+      updates.scope = body.scope
+
+      if (body.scope === 'all') {
+        // Sin restricción: limpiar asignaciones
+        await supabase.from('member_projects').delete().eq('member_id', params.memberId)
+      } else {
+        const projectIds: string[] = Array.isArray(body.projectIds) ? body.projectIds : []
+        // Validar que los proyectos pertenezcan al negocio
+        const { data: validProjects } = await supabase
+          .from('projects')
+          .select('id')
+          .eq('workspace_id', params.id)
+          .in('id', projectIds.length > 0 ? projectIds : ['00000000-0000-0000-0000-000000000000'])
+        const validIds = new Set((validProjects ?? []).map((p: any) => p.id))
+        const toAssign = projectIds.filter(id => validIds.has(id))
+
+        // Reemplazar asignaciones
+        await supabase.from('member_projects').delete().eq('member_id', params.memberId)
+        if (toAssign.length > 0) {
+          await supabase
+            .from('member_projects')
+            .insert(toAssign.map(pid => ({ member_id: params.memberId, project_id: pid })))
+        }
+      }
+    }
+
+    if (Object.keys(updates).length > 0) {
+      const { error } = await supabase
+        .from('workspace_members')
+        .update(updates)
+        .eq('id', params.memberId)
+        .eq('workspace_id', params.id)
+      if (error) throw error
+    }
+
+    return NextResponse.json({ success: true })
   } catch (error) {
     console.error('PATCH /api/workspaces/[id]/members/[memberId]', error)
     return NextResponse.json({ error: 'Error al actualizar el rol' }, { status: 500 })

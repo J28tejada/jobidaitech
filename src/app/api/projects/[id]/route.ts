@@ -14,6 +14,10 @@ export async function GET(
       return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
     }
 
+    if (ctx.allowedProjectIds && !ctx.allowedProjectIds.includes(params.id)) {
+      return NextResponse.json({ error: 'Proyecto no encontrado' }, { status: 404 })
+    }
+
     const supabase = getSupabaseClient()
     const { data, error } = await supabase
       .from('projects')
@@ -50,6 +54,10 @@ export async function PUT(
     const access = getWriteAccess(ctx.role)
     if (!access.allowed) {
       return NextResponse.json({ error: 'No tienes permiso para editar en este espacio' }, { status: 403 })
+    }
+
+    if (ctx.allowedProjectIds && !ctx.allowedProjectIds.includes(params.id)) {
+      return NextResponse.json({ error: 'Proyecto no encontrado o sin permiso' }, { status: 404 })
     }
 
     const body = await request.json()
@@ -107,6 +115,10 @@ export async function DELETE(
     const access = getWriteAccess(ctx.role)
     if (!access.allowed) {
       return NextResponse.json({ error: 'No tienes permiso para eliminar en este espacio' }, { status: 403 })
+    }
+
+    if (ctx.allowedProjectIds && !ctx.allowedProjectIds.includes(params.id)) {
+      return NextResponse.json({ error: 'Proyecto no encontrado o sin permiso' }, { status: 404 })
     }
 
     const supabase = getSupabaseClient()

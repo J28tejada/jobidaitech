@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 
 import { getSupabaseClient } from '@/lib/supabase'
+import { sendInviteEmail } from '@/lib/email'
 import {
   ASSIGNABLE_ROLES,
   canManageMembers,
@@ -65,6 +66,16 @@ export async function POST(request: Request, { params }: { params: { id: string 
     const origin = new URL(request.url).origin
     const link = `${origin}/unirse?token=${invitation.token}`
 
+    // Intentar enviar el correo (si Resend está configurado); si no, se comparte el enlace.
+    const { data: ws } = await supabase.from('workspaces').select('name').eq('id', params.id).maybeSingle()
+    const emailSent = await sendInviteEmail({
+      to: invitation.email,
+      workspaceName: ws?.name ?? 'un negocio',
+      inviterName: ctx.user.name ?? null,
+      role: invitation.role,
+      link,
+    })
+
     return NextResponse.json(
       {
         id: invitation.id,
@@ -72,6 +83,7 @@ export async function POST(request: Request, { params }: { params: { id: string 
         role: invitation.role,
         token: invitation.token,
         link,
+        emailSent,
       },
       { status: 201 }
     )

@@ -12,11 +12,18 @@ export async function GET() {
     }
 
     const supabase = getSupabaseClient()
-    const { data, error } = await supabase
+    const query = supabase
       .from('projects')
       .select('*')
       .eq('workspace_id', ctx.workspaceId)
       .order('created_at', { ascending: false })
+
+    // Alcance por proyecto: el colaborador restringido solo ve los asignados
+    if (ctx.allowedProjectIds) {
+      query.in('id', ctx.allowedProjectIds)
+    }
+
+    const { data, error } = await query
 
     if (error) {
       throw error
@@ -70,6 +77,11 @@ export async function POST(request: NextRequest) {
     }
 
     const project = mapProjectRow(data)
+
+    // Si el colaborador tiene alcance restringido, auto-asignarle el proyecto que acaba de crear
+    if (ctx.scope === 'specific' && ctx.membershipId) {
+      await supabase.from('member_projects').insert({ member_id: ctx.membershipId, project_id: project.id })
+    }
 
     // Si hay un abono inicial, crear automáticamente una transacción de ingreso
     if (body.initialPayment && Number(body.initialPayment) > 0) {

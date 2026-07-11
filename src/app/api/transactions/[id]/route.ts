@@ -16,12 +16,17 @@ export async function GET(
     }
 
     const supabase = getSupabaseClient()
-    const { data, error } = await supabase
+    const getQuery = supabase
       .from('transactions')
       .select('*')
       .eq('id', params.id)
       .eq('workspace_id', ctx.workspaceId)
-      .maybeSingle()
+
+    if (ctx.allowedProjectIds) {
+      getQuery.in('project_id', ctx.allowedProjectIds)
+    }
+
+    const { data, error } = await getQuery.maybeSingle()
 
     if (error) {
       throw error
@@ -59,6 +64,10 @@ export async function PUT(
     const updates: Record<string, unknown> = {}
 
     if (body.projectId !== undefined) {
+      if (ctx.allowedProjectIds && !ctx.allowedProjectIds.includes(body.projectId)) {
+        return NextResponse.json({ error: 'No tienes acceso a ese proyecto' }, { status: 403 })
+      }
+
       const { data: project, error: projectError } = await supabase
         .from('projects')
         .select('id')
@@ -115,6 +124,10 @@ export async function PUT(
       updateQuery.eq('user_id', ctx.user.id)
     }
 
+    if (ctx.allowedProjectIds) {
+      updateQuery.in('project_id', ctx.allowedProjectIds)
+    }
+
     const { data, error } = await updateQuery.select().maybeSingle()
 
     if (error) {
@@ -156,6 +169,10 @@ export async function DELETE(
 
     if (access.ownOnly) {
       deleteQuery.eq('user_id', ctx.user.id)
+    }
+
+    if (ctx.allowedProjectIds) {
+      deleteQuery.in('project_id', ctx.allowedProjectIds)
     }
 
     const { error } = await deleteQuery

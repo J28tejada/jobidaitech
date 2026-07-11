@@ -27,6 +27,11 @@ export async function GET(request: NextRequest) {
       query.eq('project_id', projectId)
     }
 
+    // Alcance por proyecto
+    if (ctx.allowedProjectIds) {
+      query.in('project_id', ctx.allowedProjectIds)
+    }
+
     const { data, error } = await query
 
     if (error) {
@@ -59,6 +64,10 @@ export async function POST(request: NextRequest) {
     }
 
     const supabase = getSupabaseClient()
+
+    if (ctx.allowedProjectIds && !ctx.allowedProjectIds.includes(body.projectId)) {
+      return NextResponse.json({ error: 'No tienes acceso a ese proyecto' }, { status: 403 })
+    }
 
     const { data: project, error: projectError } = await supabase
       .from('projects')

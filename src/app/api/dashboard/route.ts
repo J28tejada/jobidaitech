@@ -16,6 +16,10 @@ export async function GET(request: NextRequest) {
     const supabase = getSupabaseClient()
 
     if (projectId) {
+      if (ctx.allowedProjectIds && !ctx.allowedProjectIds.includes(projectId)) {
+        return NextResponse.json({ error: 'Proyecto no encontrado' }, { status: 404 })
+      }
+
       const { data: project, error: projectError } = await supabase
         .from('projects')
         .select('id, name, status, start_date, end_date')
@@ -45,15 +49,24 @@ export async function GET(request: NextRequest) {
       return NextResponse.json(summary)
     }
 
+    const projectsQuery = supabase
+      .from('projects')
+      .select('id, name, status, start_date, end_date')
+      .eq('workspace_id', ctx.workspaceId)
+
+    const txQuery = supabase
+      .from('transactions')
+      .select('type, amount, date')
+      .eq('workspace_id', ctx.workspaceId)
+
+    if (ctx.allowedProjectIds) {
+      projectsQuery.in('id', ctx.allowedProjectIds)
+      txQuery.in('project_id', ctx.allowedProjectIds)
+    }
+
     const [{ data: projects, error: projectsError }, { data: transactions, error: transactionsError }] = await Promise.all([
-      supabase
-        .from('projects')
-        .select('id, name, status, start_date, end_date')
-        .eq('workspace_id', ctx.workspaceId),
-      supabase
-        .from('transactions')
-        .select('type, amount, date')
-        .eq('workspace_id', ctx.workspaceId),
+      projectsQuery,
+      txQuery,
     ])
 
     if (projectsError) {

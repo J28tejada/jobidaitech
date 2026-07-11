@@ -17,16 +17,25 @@ export async function GET() {
     const now = new Date()
     const oldestMonth = new Date(now.getFullYear(), now.getMonth() - (MONTHS - 1), 1)
 
+    const txQuery = supabase
+      .from('transactions')
+      .select('type, amount, date, project_id')
+      .eq('workspace_id', ctx.workspaceId)
+      .gte('date', oldestMonth.toISOString().slice(0, 10))
+
+    const projectsQuery = supabase
+      .from('projects')
+      .select('id, start_date, end_date')
+      .eq('workspace_id', ctx.workspaceId)
+
+    if (ctx.allowedProjectIds) {
+      txQuery.in('project_id', ctx.allowedProjectIds)
+      projectsQuery.in('id', ctx.allowedProjectIds)
+    }
+
     const [{ data: transactions, error: transactionsError }, { data: projects, error: projectsError }] = await Promise.all([
-      supabase
-        .from('transactions')
-        .select('type, amount, date, project_id')
-        .eq('workspace_id', ctx.workspaceId)
-        .gte('date', oldestMonth.toISOString().slice(0, 10)),
-      supabase
-        .from('projects')
-        .select('id, start_date, end_date')
-        .eq('workspace_id', ctx.workspaceId),
+      txQuery,
+      projectsQuery,
     ])
 
     if (transactionsError) {

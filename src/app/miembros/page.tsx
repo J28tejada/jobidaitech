@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
-import { Loader2, UserPlus, Building2, Copy, Check, Trash2, Mail, ShieldCheck } from 'lucide-react'
+import { Loader2, UserPlus, Building2, Copy, Check, Trash2, Mail, ShieldCheck, FolderCog, ChevronDown } from 'lucide-react'
 
 import Layout from '@/components/Layout'
 import {
@@ -19,7 +19,14 @@ interface Member {
   email: string | null
   imageUrl: string | null
   role: WorkspaceRole
+  scope: 'all' | 'specific'
+  assignedProjectIds: string[]
   isYou: boolean
+}
+
+interface WorkspaceProject {
+  id: string
+  name: string
 }
 
 interface Invitation {
@@ -39,13 +46,16 @@ export default function MembersPage() {
   const [workspace, setWorkspace] = useState<ActiveWorkspace | null>(null)
   const [members, setMembers] = useState<Member[]>([])
   const [invitations, setInvitations] = useState<Invitation[]>([])
+  const [projects, setProjects] = useState<WorkspaceProject[]>([])
   const [myRole, setMyRole] = useState<WorkspaceRole>('viewer')
   const [loading, setLoading] = useState(true)
+  const [expandedMember, setExpandedMember] = useState<string | null>(null)
 
   const [inviteEmail, setInviteEmail] = useState('')
   const [inviteRole, setInviteRole] = useState<WorkspaceRole>('member')
   const [inviting, setInviting] = useState(false)
   const [newLink, setNewLink] = useState<string | null>(null)
+  const [newEmailSent, setNewEmailSent] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [copied, setCopied] = useState<string | null>(null)
 
@@ -72,6 +82,11 @@ export default function MembersPage() {
           setWorkspace({ id: current.id, name: current.name, type: current.type })
           if (current.type === 'business') {
             await loadMembers(current.id)
+            const projRes = await fetch('/api/projects')
+            if (projRes.ok) {
+              const projData = await projRes.json()
+              if (active) setProjects((projData ?? []).map((p: any) => ({ id: p.id, name: p.name })))
+            }
           }
         }
       } finally {
@@ -105,6 +120,7 @@ export default function MembersPage() {
       const data = await res.json()
       if (!res.ok) throw new Error(data.error ?? 'No se pudo invitar')
       setNewLink(data.link)
+      setNewEmailSent(Boolean(data.emailSent))
       setInviteEmail('')
       await loadMembers(workspace.id)
     } catch (err) {
@@ -134,6 +150,17 @@ export default function MembersPage() {
     if (!workspace) return
     await fetch(`/api/workspaces/${workspace.id}/invitations/${invId}`, { method: 'DELETE' })
     await loadMembers(workspace.id)
+  }
+
+  const saveAccess = async (memberId: string, scope: 'all' | 'specific', projectIds: string[]) => {
+    if (!workspace) return
+    await fetch(`/api/workspaces/${workspace.id}/members/${memberId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ scope, projectIds }),
+    })
+    await loadMembers(workspace.id)
+    setExpandedMember(null)
   }
 
   const inviteLinkFor = (token: string) =>
@@ -211,7 +238,9 @@ export default function MembersPage() {
                 {newLink && (
                   <div className="mt-4 p-3 bg-primary-50 border border-primary-200 rounded-lg">
                     <p className="text-sm font-medium text-gray-800 mb-2">
-                      ✅ Invitación creada. Comparte este enlace con la persona:
+                      {newEmailSent
+                        ? '✅ Invitación enviada por correo. También puedes compartir este enlace:'
+                        : '✅ Invitación creada. Comparte este enlace con la persona:'}
                     </p>
                     <div className="flex items-center gap-2">
                       <input readOnly value={newLink} className="flex-1 px-2 py-1.5 text-sm border border-gray-300 rounded bg-white" />
@@ -229,47 +258,74 @@ export default function MembersPage() {
             <div className="card">
               <h2 className="text-lg font-semibold text-gray-900 mb-4">Miembros ({members.length})</h2>
               <ul className="divide-y divide-gray-100">
-                {members.map(m => (
-                  <li key={m.memberId} className="flex items-center gap-3 py-3">
-                    <div className="w-9 h-9 rounded-full bg-primary-100 text-primary-700 flex items-center justify-center font-semibold flex-shrink-0">
-                      {(m.name ?? m.email ?? 'U').charAt(0).toUpperCase()}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium text-gray-900 truncate">
-                        {m.name ?? m.email}
-                        {m.isYou && <span className="ml-2 text-xs text-gray-400">(tú)</span>}
-                      </p>
-                      <p className="text-xs text-gray-500 truncate">{m.email}</p>
-                    </div>
-                    {iCanManage && m.role !== 'owner' && !m.isYou ? (
-                      <div className="flex items-center gap-2">
-                        <select
-                          value={m.role}
-                          onChange={e => changeRole(m.memberId, e.target.value as WorkspaceRole)}
-                          className="text-sm px-2 py-1 border border-gray-300 rounded bg-white"
-                        >
-                          {ASSIGNABLE_ROLES.map(r => (
-                            <option key={r} value={r}>
-                              {ROLE_LABELS[r]}
-                            </option>
-                          ))}
-                        </select>
-                        <button
-                          onClick={() => removeMember(m.memberId)}
-                          className="p-1.5 text-gray-400 hover:text-red-600 transition-colors"
-                          title="Quitar"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
+                {members.map(m => {
+                  const manageable = iCanManage && m.role !== 'owner' && !m.isYou
+                  return (
+                    <li key={m.memberId} className="py-3">
+                      <div className="flex items-center gap-3">
+                        <div className="w-9 h-9 rounded-full bg-primary-100 text-primary-700 flex items-center justify-center font-semibold flex-shrink-0">
+                          {(m.name ?? m.email ?? 'U').charAt(0).toUpperCase()}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-medium text-gray-900 truncate">
+                            {m.name ?? m.email}
+                            {m.isYou && <span className="ml-2 text-xs text-gray-400">(tú)</span>}
+                          </p>
+                          <p className="text-xs text-gray-500 truncate">
+                            {m.email}
+                            {m.scope === 'specific' && (
+                              <span className="ml-2 text-primary-600">· {m.assignedProjectIds.length} proyecto(s)</span>
+                            )}
+                          </p>
+                        </div>
+                        {manageable ? (
+                          <div className="flex items-center gap-2">
+                            <select
+                              value={m.role}
+                              onChange={e => changeRole(m.memberId, e.target.value as WorkspaceRole)}
+                              className="text-sm px-2 py-1 border border-gray-300 rounded bg-white"
+                            >
+                              {ASSIGNABLE_ROLES.map(r => (
+                                <option key={r} value={r}>
+                                  {ROLE_LABELS[r]}
+                                </option>
+                              ))}
+                            </select>
+                            <button
+                              onClick={() => setExpandedMember(expandedMember === m.memberId ? null : m.memberId)}
+                              className={`p-1.5 rounded transition-colors ${
+                                expandedMember === m.memberId ? 'bg-primary-100 text-primary-700' : 'text-gray-400 hover:text-primary-600'
+                              }`}
+                              title="Acceso a proyectos"
+                            >
+                              <FolderCog className="h-4 w-4" />
+                            </button>
+                            <button
+                              onClick={() => removeMember(m.memberId)}
+                              className="p-1.5 text-gray-400 hover:text-red-600 transition-colors"
+                              title="Quitar"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </div>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 text-xs font-medium text-gray-600 bg-gray-100 px-2 py-1 rounded-full">
+                            {m.role === 'owner' && <ShieldCheck className="h-3 w-3" />}
+                            {ROLE_LABELS[m.role]}
+                          </span>
+                        )}
                       </div>
-                    ) : (
-                      <span className="inline-flex items-center gap-1 text-xs font-medium text-gray-600 bg-gray-100 px-2 py-1 rounded-full">
-                        {m.role === 'owner' && <ShieldCheck className="h-3 w-3" />}
-                        {ROLE_LABELS[m.role]}
-                      </span>
-                    )}
-                  </li>
-                ))}
+                      {manageable && expandedMember === m.memberId && (
+                        <MemberAccessEditor
+                          member={m}
+                          projects={projects}
+                          onSave={(scope, ids) => saveAccess(m.memberId, scope, ids)}
+                          onCancel={() => setExpandedMember(null)}
+                        />
+                      )}
+                    </li>
+                  )
+                })}
               </ul>
             </div>
 
@@ -310,5 +366,73 @@ export default function MembersPage() {
         )}
       </div>
     </Layout>
+  )
+}
+
+function MemberAccessEditor({
+  member,
+  projects,
+  onSave,
+  onCancel,
+}: {
+  member: Member
+  projects: WorkspaceProject[]
+  onSave: (scope: 'all' | 'specific', projectIds: string[]) => void
+  onCancel: () => void
+}) {
+  const [scope, setScope] = useState<'all' | 'specific'>(member.scope)
+  const [selected, setSelected] = useState<string[]>(member.assignedProjectIds)
+  const [saving, setSaving] = useState(false)
+
+  const toggle = (id: string) => {
+    setSelected(prev => (prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]))
+  }
+
+  return (
+    <div className="mt-3 ml-12 rounded-lg border border-gray-200 bg-gray-50 p-4 space-y-3">
+      <p className="text-sm font-medium text-gray-800">Acceso a proyectos</p>
+
+      <div className="space-y-2">
+        <label className="flex items-center gap-2 text-sm text-gray-700">
+          <input type="radio" checked={scope === 'all'} onChange={() => setScope('all')} />
+          Todo el negocio
+        </label>
+        <label className="flex items-center gap-2 text-sm text-gray-700">
+          <input type="radio" checked={scope === 'specific'} onChange={() => setScope('specific')} />
+          Solo proyectos específicos
+        </label>
+      </div>
+
+      {scope === 'specific' && (
+        <div className="max-h-48 overflow-y-auto rounded border border-gray-200 bg-white p-2 space-y-1">
+          {projects.length === 0 ? (
+            <p className="text-xs text-gray-400 p-2">Aún no hay proyectos en este negocio.</p>
+          ) : (
+            projects.map(p => (
+              <label key={p.id} className="flex items-center gap-2 text-sm text-gray-700 px-1 py-1 hover:bg-gray-50 rounded">
+                <input type="checkbox" checked={selected.includes(p.id)} onChange={() => toggle(p.id)} />
+                <span className="truncate">{p.name}</span>
+              </label>
+            ))
+          )}
+        </div>
+      )}
+
+      <div className="flex items-center justify-end gap-2">
+        <button onClick={onCancel} className="text-sm text-gray-600 hover:text-gray-900 px-3 py-1.5">
+          Cancelar
+        </button>
+        <button
+          onClick={() => {
+            setSaving(true)
+            onSave(scope, scope === 'specific' ? selected : [])
+          }}
+          disabled={saving}
+          className="btn btn-primary text-sm disabled:opacity-60"
+        >
+          {saving ? 'Guardando…' : 'Guardar acceso'}
+        </button>
+      </div>
+    </div>
   )
 }

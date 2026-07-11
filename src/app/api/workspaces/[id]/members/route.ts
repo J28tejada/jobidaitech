@@ -20,7 +20,7 @@ export async function GET(request: Request, { params }: { params: { id: string }
     const [{ data: memberRows, error: membersError }, { data: inviteRows, error: invitesError }] = await Promise.all([
       supabase
         .from('workspace_members')
-        .select('id, role, user_id, created_at, users:user_id ( name, email, image_url )')
+        .select('id, role, scope, user_id, created_at, users:user_id ( name, email, image_url )')
         .eq('workspace_id', params.id),
       supabase
         .from('invitations')
@@ -33,6 +33,19 @@ export async function GET(request: Request, { params }: { params: { id: string }
     if (membersError) throw membersError
     if (invitesError) throw invitesError
 
+    // Proyectos asignados por miembro (para alcance 'specific')
+    const memberIds = (memberRows ?? []).map((m: any) => m.id)
+    const assignedByMember: Record<string, string[]> = {}
+    if (memberIds.length > 0) {
+      const { data: mp } = await supabase
+        .from('member_projects')
+        .select('member_id, project_id')
+        .in('member_id', memberIds)
+      for (const row of mp ?? []) {
+        ;(assignedByMember[row.member_id] ??= []).push(row.project_id)
+      }
+    }
+
     const members = (memberRows ?? []).map((m: any) => {
       const u = Array.isArray(m.users) ? m.users[0] : m.users
       return {
@@ -42,6 +55,8 @@ export async function GET(request: Request, { params }: { params: { id: string }
         email: u?.email ?? null,
         imageUrl: u?.image_url ?? null,
         role: m.role,
+        scope: m.scope ?? 'all',
+        assignedProjectIds: assignedByMember[m.id] ?? [],
         isYou: m.user_id === ctx.user.id,
       }
     })
