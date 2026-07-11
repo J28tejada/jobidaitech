@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 
 import { getSupabaseClient } from '@/lib/supabase'
-import { getWorkspaceContext } from '@/lib/workspaces'
+import { getWorkspaceContext, getWriteAccess } from '@/lib/workspaces'
 import { mapTransactionRow } from '@/lib/transactions'
 import { toDateOnly } from '@/lib/projects'
 
@@ -46,6 +46,11 @@ export async function PUT(
     const ctx = await getWorkspaceContext()
     if (!ctx) {
       return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+    }
+
+    const access = getWriteAccess(ctx.role)
+    if (!access.allowed) {
+      return NextResponse.json({ error: 'No tienes permiso para editar en este espacio' }, { status: 403 })
     }
 
     const body = await request.json()
@@ -100,16 +105,24 @@ export async function PUT(
     }
     updates.updated_at = new Date().toISOString()
 
-    const { data, error } = await supabase
+    const updateQuery = supabase
       .from('transactions')
       .update(updates)
       .eq('id', params.id)
       .eq('workspace_id', ctx.workspaceId)
-      .select()
-      .single()
+
+    if (access.ownOnly) {
+      updateQuery.eq('user_id', ctx.user.id)
+    }
+
+    const { data, error } = await updateQuery.select().maybeSingle()
 
     if (error) {
       throw error
+    }
+
+    if (!data) {
+      return NextResponse.json({ error: 'Transacción no encontrada o sin permiso' }, { status: 404 })
     }
 
     return NextResponse.json(mapTransactionRow(data))
@@ -129,12 +142,23 @@ export async function DELETE(
       return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
     }
 
+    const access = getWriteAccess(ctx.role)
+    if (!access.allowed) {
+      return NextResponse.json({ error: 'No tienes permiso para eliminar en este espacio' }, { status: 403 })
+    }
+
     const supabase = getSupabaseClient()
-    const { error } = await supabase
+    const deleteQuery = supabase
       .from('transactions')
       .delete()
       .eq('id', params.id)
       .eq('workspace_id', ctx.workspaceId)
+
+    if (access.ownOnly) {
+      deleteQuery.eq('user_id', ctx.user.id)
+    }
+
+    const { error } = await deleteQuery
 
     if (error) {
       throw error

@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 
 import { getSupabaseClient } from '@/lib/supabase'
-import { getWorkspaceContext } from '@/lib/workspaces'
+import { getWorkspaceContext, getWriteAccess } from '@/lib/workspaces'
 
 export async function DELETE(
   request: Request,
@@ -10,6 +10,11 @@ export async function DELETE(
   const ctx = await getWorkspaceContext()
   if (!ctx) {
     return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+  }
+
+  const access = getWriteAccess(ctx.role)
+  if (!access.allowed || access.ownOnly) {
+    return NextResponse.json({ error: 'No tienes permiso para eliminar categorías en este espacio' }, { status: 403 })
   }
 
   const supabase = getSupabaseClient()

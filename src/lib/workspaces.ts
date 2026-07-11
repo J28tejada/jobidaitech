@@ -10,6 +10,41 @@ export const ACTIVE_WORKSPACE_COOKIE = 'active_workspace_id'
 export type WorkspaceType = 'personal' | 'business'
 export type WorkspaceRole = 'owner' | 'admin' | 'editor' | 'member' | 'viewer'
 
+// Jerarquía de roles: a mayor número, más permisos.
+export const ROLE_RANK: Record<WorkspaceRole, number> = {
+  viewer: 0,
+  member: 1,
+  editor: 2,
+  admin: 3,
+  owner: 4,
+}
+
+// Roles que se pueden asignar al invitar (nunca 'owner').
+export const ASSIGNABLE_ROLES: WorkspaceRole[] = ['admin', 'editor', 'member', 'viewer']
+
+/** ¿Puede gestionar miembros e invitaciones? (admin o dueño) */
+export function canManageMembers(role: WorkspaceRole): boolean {
+  return ROLE_RANK[role] >= ROLE_RANK.admin
+}
+
+/** ¿Puede cambiar la configuración del espacio / categorías compartidas? (admin o dueño) */
+export function canManageWorkspace(role: WorkspaceRole): boolean {
+  return ROLE_RANK[role] >= ROLE_RANK.admin
+}
+
+/**
+ * Acceso de escritura sobre datos (proyectos/transacciones):
+ * - viewer: nada
+ * - member: puede crear y editar solo lo suyo
+ * - editor/admin/owner: acceso total
+ */
+export function getWriteAccess(role: WorkspaceRole): { allowed: boolean; ownOnly: boolean } {
+  const rank = ROLE_RANK[role]
+  if (rank >= ROLE_RANK.editor) return { allowed: true, ownOnly: false }
+  if (rank >= ROLE_RANK.member) return { allowed: true, ownOnly: true }
+  return { allowed: false, ownOnly: false }
+}
+
 export interface UserProfile {
   id: string
   email?: string | null
@@ -170,6 +205,20 @@ export async function getWorkspaceContext(): Promise<WorkspaceContext | null> {
   }
 
   return { user: profile, workspaceId, personalWorkspaceId, role, isPersonal }
+}
+
+/**
+ * Devuelve el rol del usuario en un espacio concreto (o null si no es miembro).
+ */
+export async function getMembershipRole(userId: string, workspaceId: string): Promise<WorkspaceRole | null> {
+  const supabase = getSupabaseClient()
+  const { data } = await supabase
+    .from('workspace_members')
+    .select('role')
+    .eq('user_id', userId)
+    .eq('workspace_id', workspaceId)
+    .maybeSingle()
+  return (data?.role as WorkspaceRole) ?? null
 }
 
 /**

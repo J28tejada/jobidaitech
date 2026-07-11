@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { useSessionContext } from '@supabase/auth-helpers-react'
 
 import MobileNavBar from './MobileNavBar'
+import PendingInvites from './PendingInvites'
 import Sidebar from './Sidebar'
 import TopBar from './TopBar'
 
@@ -45,7 +46,10 @@ export default function Layout({ children }: LayoutProps) {
             paddingBottom: 'calc(5rem + env(safe-area-inset-bottom, 0px))'
           }}
         >
-          <div className="p-4 lg:p-6 min-w-0 max-w-full pt-16 lg:pt-0">{children}</div>
+          <div className="p-4 lg:p-6 min-w-0 max-w-full pt-16 lg:pt-0">
+            <PendingInvites />
+            {children}
+          </div>
         </main>
       </div>
       <MobileNavBar onQuickAction={() => router.push('/proyectos?new=true')} />

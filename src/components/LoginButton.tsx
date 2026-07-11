@@ -3,7 +3,12 @@
 import { useState } from 'react'
 import { useSupabaseClient } from '@supabase/auth-helpers-react'
 
-export default function LoginButton() {
+interface LoginButtonProps {
+  /** Ruta a la que volver después de iniciar sesión (ej. "/unirse?token=abc"). */
+  nextPath?: string
+}
+
+export default function LoginButton({ nextPath }: LoginButtonProps = {}) {
   const supabase = useSupabaseClient()
   const [isLoading, setIsLoading] = useState(false)
 
@@ -11,14 +16,16 @@ export default function LoginButton() {
     try {
       setIsLoading(true)
       // Usar window.location.origin para obtener la URL actual (funciona en dev y producción)
-      const origin = typeof window !== 'undefined' 
-        ? window.location.origin 
-        : process.env.NEXT_PUBLIC_VERCEL_URL 
+      const origin = typeof window !== 'undefined'
+        ? window.location.origin
+        : process.env.NEXT_PUBLIC_VERCEL_URL
           ? `https://${process.env.NEXT_PUBLIC_VERCEL_URL}`
           : ''
-      
-      const redirectUrl = `${origin}/api/auth/callback`
-      
+
+      const redirectUrl = nextPath
+        ? `${origin}/api/auth/callback?redirect_to=${encodeURIComponent(nextPath)}`
+        : `${origin}/api/auth/callback`
+
       await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {

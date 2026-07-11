@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 
 import { getSupabaseClient } from '@/lib/supabase'
-import { getWorkspaceContext } from '@/lib/workspaces'
+import { getWorkspaceContext, getWriteAccess } from '@/lib/workspaces'
 import { mapCategoryRow } from '@/lib/categories'
 
 export async function GET() {
@@ -29,6 +29,11 @@ export async function POST(request: Request) {
   const ctx = await getWorkspaceContext()
   if (!ctx) {
     return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+  }
+
+  const access = getWriteAccess(ctx.role)
+  if (!access.allowed || access.ownOnly) {
+    return NextResponse.json({ error: 'No tienes permiso para gestionar categorías en este espacio' }, { status: 403 })
   }
 
   try {

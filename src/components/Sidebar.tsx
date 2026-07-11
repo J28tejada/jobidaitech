@@ -9,6 +9,7 @@ import {
   DollarSign,
   BarChart3,
   Settings,
+  Users,
   Menu,
   X,
   LogOut,
@@ -22,6 +23,7 @@ const navigation = [
   { name: 'Proyectos', href: '/proyectos', icon: FolderOpen },
   { name: 'Transacciones', href: '/transacciones', icon: DollarSign },
   { name: 'Reportes', href: '/reportes', icon: BarChart3 },
+  { name: 'Miembros', href: '/miembros', icon: Users },
   { name: 'Configuración', href: '/configuracion', icon: Settings },
 ]
 

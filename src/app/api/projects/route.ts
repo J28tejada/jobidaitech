@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 
 import { getSupabaseClient } from '@/lib/supabase'
-import { getWorkspaceContext } from '@/lib/workspaces'
+import { getWorkspaceContext, getWriteAccess } from '@/lib/workspaces'
 import { mapProjectRow, toDateOnly } from '@/lib/projects'
 
 export async function GET() {
@@ -35,6 +35,10 @@ export async function POST(request: NextRequest) {
     const ctx = await getWorkspaceContext()
     if (!ctx) {
       return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+    }
+
+    if (!getWriteAccess(ctx.role).allowed) {
+      return NextResponse.json({ error: 'No tienes permiso para crear proyectos en este espacio' }, { status: 403 })
     }
 
     const body = await request.json()
