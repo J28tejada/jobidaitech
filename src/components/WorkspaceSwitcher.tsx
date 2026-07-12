@@ -1,6 +1,7 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { Building2, User, Check, ChevronDown, Plus, Loader2 } from 'lucide-react'
 
 type WorkspaceType = 'personal' | 'business'
@@ -19,6 +20,8 @@ export default function WorkspaceSwitcher() {
   const [loading, setLoading] = useState(true)
   const [open, setOpen] = useState(false)
   const [busy, setBusy] = useState(false)
+  const [mounted, setMounted] = useState(false)
+  const [menuPos, setMenuPos] = useState<{ top: number; left: number; width: number } | null>(null)
 
   const [showCreate, setShowCreate] = useState(false)
   const [newName, setNewName] = useState('')
@@ -26,7 +29,10 @@ export default function WorkspaceSwitcher() {
   const [creating, setCreating] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const containerRef = useRef<HTMLDivElement>(null)
+  const buttonRef = useRef<HTMLButtonElement>(null)
+  const menuRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => setMounted(true), [])
 
   useEffect(() => {
     let active = true
@@ -44,15 +50,32 @@ export default function WorkspaceSwitcher() {
     }
   }, [])
 
+  const updatePosition = useCallback(() => {
+    const rect = buttonRef.current?.getBoundingClientRect()
+    if (rect) {
+      setMenuPos({ top: rect.bottom + 8, left: rect.left, width: rect.width })
+    }
+  }, [])
+
   useEffect(() => {
+    if (!open) return
+    updatePosition()
+    const onScroll = () => updatePosition()
+    const onResize = () => updatePosition()
+    window.addEventListener('scroll', onScroll, true)
+    window.addEventListener('resize', onResize)
     const onClick = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        setOpen(false)
-      }
+      const t = e.target as Node
+      if (buttonRef.current?.contains(t) || menuRef.current?.contains(t)) return
+      setOpen(false)
     }
     document.addEventListener('mousedown', onClick)
-    return () => document.removeEventListener('mousedown', onClick)
-  }, [])
+    return () => {
+      window.removeEventListener('scroll', onScroll, true)
+      window.removeEventListener('resize', onResize)
+      document.removeEventListener('mousedown', onClick)
+    }
+  }, [open, updatePosition])
 
   const active = workspaces.find(w => w.isActive)
 
@@ -69,7 +92,6 @@ export default function WorkspaceSwitcher() {
         body: JSON.stringify({ workspaceId }),
       })
       if (!res.ok) throw new Error('No se pudo cambiar de espacio')
-      // Recargar para refrescar todos los datos con el nuevo espacio activo
       window.location.reload()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error al cambiar de espacio')
@@ -92,7 +114,6 @@ export default function WorkspaceSwitcher() {
         const data = await res.json().catch(() => ({}))
         throw new Error(data.error ?? 'No se pudo crear el negocio')
       }
-      // El nuevo negocio queda activo; recargar
       window.location.reload()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error al crear el negocio')
@@ -111,9 +132,123 @@ export default function WorkspaceSwitcher() {
 
   const ActiveIcon = active?.type === 'business' ? Building2 : User
 
+  const dropdown =
+    open && menuPos ? (
+      <div
+        ref={menuRef}
+        style={{ position: 'fixed', top: menuPos.top, left: menuPos.left, minWidth: Math.max(menuPos.width, 256) }}
+        className="w-64 bg-white rounded-xl shadow-lg border border-gray-200 py-1.5 z-[70]"
+      >
+        <p className="px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-gray-400">Espacios</p>
+        <ul className="max-h-64 overflow-y-auto">
+          {workspaces.map(ws => {
+            const Icon = ws.type === 'business' ? Building2 : User
+            return (
+              <li key={ws.id}>
+                <button
+                  type="button"
+                  onClick={() => handleSwitch(ws.id)}
+                  className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors text-left"
+                >
+                  <Icon className="h-4 w-4 text-gray-400 flex-shrink-0" />
+                  <span className="flex-1 truncate">{ws.name}</span>
+                  {ws.type === 'personal' && (
+                    <span className="text-[10px] uppercase tracking-wide text-gray-400">Personal</span>
+                  )}
+                  {ws.isActive && <Check className="h-4 w-4 text-primary-600 flex-shrink-0" />}
+                </button>
+              </li>
+            )
+          })}
+        </ul>
+        <div className="border-t border-gray-100 mt-1 pt-1">
+          <button
+            type="button"
+            onClick={() => {
+              setOpen(false)
+              setShowCreate(true)
+              setError(null)
+            }}
+            className="w-full flex items-center gap-2.5 px-3 py-2 text-sm font-medium text-primary-700 hover:bg-primary-50 transition-colors text-left"
+          >
+            <Plus className="h-4 w-4 flex-shrink-0" />
+            Crear negocio
+          </button>
+        </div>
+      </div>
+    ) : null
+
+  const modal = showCreate ? (
+    <div
+      className="fixed inset-0 z-[90] flex items-center justify-center bg-black/40 p-4"
+      onClick={() => !creating && setShowCreate(false)}
+    >
+      <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl p-6" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center gap-3 mb-4">
+          <div className="p-2 bg-primary-100 rounded-lg">
+            <Building2 className="h-5 w-5 text-primary-600" />
+          </div>
+          <div>
+            <h3 className="text-lg font-semibold text-gray-900">Crear negocio</h3>
+            <p className="text-sm text-gray-500">Un espacio aparte para llevar sus registros</p>
+          </div>
+        </div>
+
+        <form onSubmit={handleCreate} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Nombre del negocio</label>
+            <input
+              type="text"
+              value={newName}
+              onChange={e => setNewName(e.target.value)}
+              placeholder="Ej. Carpintería Del Rey"
+              autoFocus
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Tipo de negocio</label>
+            <select
+              value={newType}
+              onChange={e => setNewType(e.target.value as 'carpentry' | 'construction')}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white"
+            >
+              <option value="carpentry">Carpintería</option>
+              <option value="construction">Construcción</option>
+            </select>
+            <p className="mt-1 text-xs text-gray-500">Define las categorías iniciales del negocio.</p>
+          </div>
+
+          {error && <p className="text-sm text-red-600">{error}</p>}
+
+          <div className="flex items-center justify-end gap-2 pt-2">
+            <button
+              type="button"
+              onClick={() => setShowCreate(false)}
+              disabled={creating}
+              className="px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-900 disabled:opacity-60"
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              disabled={creating || !newName.trim()}
+              className="btn btn-primary flex items-center gap-2 disabled:opacity-60"
+            >
+              {creating && <Loader2 className="h-4 w-4 animate-spin" />}
+              Crear negocio
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  ) : null
+
   return (
-    <div className="relative" ref={containerRef}>
+    <>
       <button
+        ref={buttonRef}
         type="button"
         onClick={() => setOpen(v => !v)}
         disabled={busy}
@@ -130,110 +265,13 @@ export default function WorkspaceSwitcher() {
         )}
       </button>
 
-      {open && (
-        <div className="absolute left-0 mt-2 w-64 bg-white rounded-xl shadow-lg border border-gray-200 py-1.5 z-50">
-          <p className="px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-gray-400">Espacios</p>
-          <ul className="max-h-64 overflow-y-auto">
-            {workspaces.map(ws => {
-              const Icon = ws.type === 'business' ? Building2 : User
-              return (
-                <li key={ws.id}>
-                  <button
-                    type="button"
-                    onClick={() => handleSwitch(ws.id)}
-                    className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors text-left"
-                  >
-                    <Icon className="h-4 w-4 text-gray-400 flex-shrink-0" />
-                    <span className="flex-1 truncate">{ws.name}</span>
-                    {ws.type === 'personal' && (
-                      <span className="text-[10px] uppercase tracking-wide text-gray-400">Personal</span>
-                    )}
-                    {ws.isActive && <Check className="h-4 w-4 text-primary-600 flex-shrink-0" />}
-                  </button>
-                </li>
-              )
-            })}
-          </ul>
-          <div className="border-t border-gray-100 mt-1 pt-1">
-            <button
-              type="button"
-              onClick={() => {
-                setOpen(false)
-                setShowCreate(true)
-                setError(null)
-              }}
-              className="w-full flex items-center gap-2.5 px-3 py-2 text-sm font-medium text-primary-700 hover:bg-primary-50 transition-colors text-left"
-            >
-              <Plus className="h-4 w-4 flex-shrink-0" />
-              Crear negocio
-            </button>
-          </div>
-        </div>
+      {mounted && createPortal(
+        <>
+          {dropdown}
+          {modal}
+        </>,
+        document.body
       )}
-
-      {showCreate && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4" onClick={() => !creating && setShowCreate(false)}>
-          <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl p-6" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center gap-3 mb-4">
-              <div className="p-2 bg-primary-100 rounded-lg">
-                <Building2 className="h-5 w-5 text-primary-600" />
-              </div>
-              <div>
-                <h3 className="text-lg font-semibold text-gray-900">Crear negocio</h3>
-                <p className="text-sm text-gray-500">Un espacio aparte para llevar sus registros</p>
-              </div>
-            </div>
-
-            <form onSubmit={handleCreate} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Nombre del negocio</label>
-                <input
-                  type="text"
-                  value={newName}
-                  onChange={e => setNewName(e.target.value)}
-                  placeholder="Ej. Carpintería Del Rey"
-                  autoFocus
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Tipo de negocio</label>
-                <select
-                  value={newType}
-                  onChange={e => setNewType(e.target.value as 'carpentry' | 'construction')}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white"
-                >
-                  <option value="carpentry">Carpintería</option>
-                  <option value="construction">Construcción</option>
-                </select>
-                <p className="mt-1 text-xs text-gray-500">Define las categorías iniciales del negocio.</p>
-              </div>
-
-              {error && <p className="text-sm text-red-600">{error}</p>}
-
-              <div className="flex items-center justify-end gap-2 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setShowCreate(false)}
-                  disabled={creating}
-                  className="px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-900 disabled:opacity-60"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  disabled={creating || !newName.trim()}
-                  className="btn btn-primary flex items-center gap-2 disabled:opacity-60"
-                >
-                  {creating && <Loader2 className="h-4 w-4 animate-spin" />}
-                  Crear negocio
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-    </div>
+    </>
   )
 }
