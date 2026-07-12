@@ -3,8 +3,8 @@
 
 export const SUPPORT = {
   email: process.env.NEXT_PUBLIC_SUPPORT_EMAIL || '',
-  whatsapp: process.env.NEXT_PUBLIC_SUPPORT_WHATSAPP || '', // solo dígitos, con código de país. Ej: 18095551234
-  phone: process.env.NEXT_PUBLIC_SUPPORT_PHONE || '',
+  whatsapp: process.env.NEXT_PUBLIC_SUPPORT_WHATSAPP || '18098290254', // solo dígitos, con código de país (RD = 1)
+  phone: process.env.NEXT_PUBLIC_SUPPORT_PHONE || '+1 809 829 0254',
 }
 
 export function hasSupportContact(): boolean {
