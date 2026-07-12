@@ -50,6 +50,8 @@ export default function MembersPage() {
   const [myRole, setMyRole] = useState<WorkspaceRole>('viewer')
   const [loading, setLoading] = useState(true)
   const [expandedMember, setExpandedMember] = useState<string | null>(null)
+  const [renameValue, setRenameValue] = useState('')
+  const [transferTarget, setTransferTarget] = useState('')
 
   const [inviteEmail, setInviteEmail] = useState('')
   const [inviteRole, setInviteRole] = useState<WorkspaceRole>('member')
@@ -80,6 +82,7 @@ export default function MembersPage() {
         if (!active) return
         if (current) {
           setWorkspace({ id: current.id, name: current.name, type: current.type })
+          setRenameValue(current.name)
           if (current.type === 'business') {
             await loadMembers(current.id)
             const projRes = await fetch('/api/projects')
@@ -161,6 +164,41 @@ export default function MembersPage() {
     })
     await loadMembers(workspace.id)
     setExpandedMember(null)
+  }
+
+  const renameBusiness = async (name: string) => {
+    if (!workspace || !name.trim()) return
+    const res = await fetch(`/api/workspaces/${workspace.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: name.trim() }),
+    })
+    if (res.ok) window.location.reload()
+  }
+
+  const transferOwnership = async (memberId: string) => {
+    if (!workspace) return
+    if (!confirm('¿Transferir la propiedad del negocio a esta persona? Tú pasarás a ser Administrador.')) return
+    const res = await fetch(`/api/workspaces/${workspace.id}/transfer`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ memberId }),
+    })
+    if (res.ok) window.location.reload()
+  }
+
+  const leaveBusiness = async () => {
+    if (!workspace) return
+    if (!confirm('¿Salir de este negocio? Perderás el acceso a sus datos.')) return
+    const res = await fetch(`/api/workspaces/${workspace.id}/leave`, { method: 'POST' })
+    if (res.ok) window.location.href = '/'
+  }
+
+  const deleteBusiness = async () => {
+    if (!workspace) return
+    if (!confirm(`¿ELIMINAR el negocio "${workspace.name}"? Se borrarán TODOS sus proyectos y transacciones. Esta acción no se puede deshacer.`)) return
+    const res = await fetch(`/api/workspaces/${workspace.id}`, { method: 'DELETE' })
+    if (res.ok) window.location.href = '/'
   }
 
   const inviteLinkFor = (token: string) =>
@@ -362,6 +400,90 @@ export default function MembersPage() {
                 </ul>
               </div>
             )}
+
+            {/* Configuración del negocio */}
+            <div className="card space-y-6">
+              <h2 className="text-lg font-semibold text-gray-900">Configuración del negocio</h2>
+
+              {iCanManage && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Nombre del negocio</label>
+                  <div className="flex gap-2">
+                    <input
+                      value={renameValue}
+                      onChange={e => setRenameValue(e.target.value)}
+                      className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    />
+                    <button
+                      onClick={() => renameBusiness(renameValue)}
+                      disabled={!renameValue.trim() || renameValue.trim() === workspace.name}
+                      className="btn btn-primary disabled:opacity-50"
+                    >
+                      Guardar
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {myRole === 'owner' && members.some(m => !m.isYou) && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Transferir propiedad</label>
+                  <div className="flex gap-2">
+                    <select
+                      value={transferTarget}
+                      onChange={e => setTransferTarget(e.target.value)}
+                      className="flex-1 px-3 py-2 border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    >
+                      <option value="">Elegir persona…</option>
+                      {members.filter(m => !m.isYou).map(m => (
+                        <option key={m.memberId} value={m.memberId}>
+                          {m.name ?? m.email}
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      onClick={() => transferTarget && transferOwnership(transferTarget)}
+                      disabled={!transferTarget}
+                      className="btn btn-secondary disabled:opacity-50"
+                    >
+                      Transferir
+                    </button>
+                  </div>
+                  <p className="mt-1 text-xs text-gray-500">Pasarás a ser Administrador; la otra persona será el Dueño.</p>
+                </div>
+              )}
+
+              {/* Zona de peligro */}
+              <div className="border-t border-gray-100 pt-4">
+                {myRole === 'owner' ? (
+                  <div className="flex items-center justify-between gap-4 flex-wrap">
+                    <div>
+                      <p className="text-sm font-medium text-red-700">Eliminar negocio</p>
+                      <p className="text-xs text-gray-500">Borra todos sus proyectos y transacciones. No se puede deshacer.</p>
+                    </div>
+                    <button
+                      onClick={deleteBusiness}
+                      className="px-4 py-2 rounded-lg border border-red-300 text-red-700 text-sm font-medium hover:bg-red-50"
+                    >
+                      Eliminar negocio
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-between gap-4 flex-wrap">
+                    <div>
+                      <p className="text-sm font-medium text-gray-800">Salir del negocio</p>
+                      <p className="text-xs text-gray-500">Perderás el acceso a los datos de este negocio.</p>
+                    </div>
+                    <button
+                      onClick={leaveBusiness}
+                      className="px-4 py-2 rounded-lg border border-gray-300 text-gray-700 text-sm font-medium hover:bg-gray-50"
+                    >
+                      Salir del negocio
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
           </>
         )}
       </div>
