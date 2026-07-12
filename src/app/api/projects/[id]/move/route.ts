@@ -1,13 +1,17 @@
 import { NextResponse } from 'next/server'
 
 import { getSupabaseClient } from '@/lib/supabase'
-import { canManageWorkspace, getMembershipRole, getWorkspaceContext } from '@/lib/workspaces'
+import { canManageWorkspace, getMembershipRole, getWorkspaceContext, READ_ONLY_ERROR } from '@/lib/workspaces'
 
 // Mover un proyecto (con sus transacciones) del espacio activo a otro espacio del usuario.
 export async function POST(request: Request, { params }: { params: { id: string } }) {
   const ctx = await getWorkspaceContext()
   if (!ctx) {
     return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+  }
+
+  if (!ctx.canWrite) {
+    return NextResponse.json(READ_ONLY_ERROR, { status: 403 })
   }
 
   // Debe poder administrar el espacio de ORIGEN (admin o dueño)

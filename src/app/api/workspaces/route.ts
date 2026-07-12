@@ -6,6 +6,7 @@ import {
   getWorkspaceContext,
   listWorkspacesForUser,
   seedCategoriesForWorkspace,
+  READ_ONLY_ERROR,
 } from '@/lib/workspaces'
 import { DEFAULT_BUSINESS_TYPE } from '@/lib/users'
 import type { BusinessType } from '@/types'
@@ -23,6 +24,8 @@ export async function GET() {
     return NextResponse.json({
       activeWorkspaceId: ctx.workspaceId,
       workspaces,
+      isAdmin: ctx.isAdmin,
+      canWrite: ctx.canWrite,
     })
   } catch (error) {
     console.error('GET /api/workspaces', error)
@@ -34,6 +37,10 @@ export async function POST(request: Request) {
   const ctx = await getWorkspaceContext()
   if (!ctx) {
     return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+  }
+
+  if (!ctx.canWrite) {
+    return NextResponse.json(READ_ONLY_ERROR, { status: 403 })
   }
 
   try {

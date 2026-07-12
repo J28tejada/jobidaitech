@@ -6,6 +6,7 @@ import {
   canManageWorkspace,
   getMembershipRole,
   getWorkspaceContext,
+  READ_ONLY_ERROR,
 } from '@/lib/workspaces'
 
 // Renombrar el negocio (admin o dueño)
@@ -13,6 +14,10 @@ export async function PATCH(request: Request, { params }: { params: { id: string
   const ctx = await getWorkspaceContext()
   if (!ctx) {
     return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+  }
+
+  if (!ctx.canWrite) {
+    return NextResponse.json(READ_ONLY_ERROR, { status: 403 })
   }
 
   const role = await getMembershipRole(ctx.user.id, params.id)
@@ -54,6 +59,10 @@ export async function DELETE(request: Request, { params }: { params: { id: strin
   const ctx = await getWorkspaceContext()
   if (!ctx) {
     return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+  }
+
+  if (!ctx.canWrite) {
+    return NextResponse.json(READ_ONLY_ERROR, { status: 403 })
   }
 
   const role = await getMembershipRole(ctx.user.id, params.id)

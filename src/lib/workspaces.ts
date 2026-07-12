@@ -71,6 +71,38 @@ export interface WorkspaceContext {
   scope: 'all' | 'specific'
   /** IDs de proyectos visibles cuando scope='specific'; null = todos. */
   allowedProjectIds: string[] | null
+  /** ¿La suscripción del usuario permite hacer cambios? (false = solo lectura) */
+  canWrite: boolean
+  /** ¿Es administrador de la plataforma? */
+  isAdmin: boolean
+}
+
+const DEFAULT_ADMIN_EMAILS = ['josuetejadaromero@gmail.com']
+
+/** ¿El correo es de un administrador de la plataforma? (configurable con ADMIN_EMAILS) */
+export function isPlatformAdmin(email?: string | null): boolean {
+  if (!email) return false
+  const fromEnv = (process.env.ADMIN_EMAILS ?? '')
+    .split(',')
+    .map(e => e.trim().toLowerCase())
+    .filter(Boolean)
+  const list = fromEnv.length > 0 ? fromEnv : DEFAULT_ADMIN_EMAILS
+  return list.includes(email.toLowerCase())
+}
+
+/** Respuesta estándar cuando el usuario está en modo solo lectura. */
+export const READ_ONLY_ERROR = {
+  error: 'subscription_read_only',
+  message:
+    'Tu suscripción está inactiva: puedes ver toda tu información pero no hacer cambios. Contacta a soporte para reactivarla.',
+}
+
+/** Calcula si un usuario puede hacer cambios según su suscripción. */
+export function computeCanWrite(row: { access_enabled?: boolean | null; access_until?: string | null } | null): boolean {
+  if (!row) return true
+  if (row.access_enabled === false) return false
+  if (!row.access_until) return true
+  return new Date(row.access_until).getTime() > Date.now()
 }
 
 function profileFromAuthUser(user: {
@@ -185,6 +217,16 @@ export async function getWorkspaceContext(): Promise<WorkspaceContext | null> {
 
   const profile = profileFromAuthUser(user)
   const personalWorkspaceId = await ensureUserAndPersonalWorkspace(profile)
+  const supabase = getSupabaseClient()
+
+  // Estado de suscripción / acceso de escritura
+  const isAdmin = isPlatformAdmin(profile.email)
+  const { data: accessRow } = await supabase
+    .from('users')
+    .select('access_enabled, access_until')
+    .eq('id', user.id)
+    .maybeSingle()
+  const canWrite = isAdmin || computeCanWrite(accessRow)
 
   let workspaceId = personalWorkspaceId
   let role: WorkspaceRole = 'owner'
@@ -196,7 +238,6 @@ export async function getWorkspaceContext(): Promise<WorkspaceContext | null> {
   const requested = cookies().get(ACTIVE_WORKSPACE_COOKIE)?.value
 
   if (requested && requested !== personalWorkspaceId) {
-    const supabase = getSupabaseClient()
     const { data: membership } = await supabase
       .from('workspace_members')
       .select('id, role, scope')
@@ -221,7 +262,18 @@ export async function getWorkspaceContext(): Promise<WorkspaceContext | null> {
     }
   }
 
-  return { user: profile, workspaceId, personalWorkspaceId, role, isPersonal, membershipId, scope, allowedProjectIds }
+  return {
+    user: profile,
+    workspaceId,
+    personalWorkspaceId,
+    role,
+    isPersonal,
+    membershipId,
+    scope,
+    allowedProjectIds,
+    canWrite,
+    isAdmin,
+  }
 }
 
 /**

@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 
 import { getSupabaseClient } from '@/lib/supabase'
-import { canManageMembers, getMembershipRole, getWorkspaceContext } from '@/lib/workspaces'
+import { canManageMembers, getMembershipRole, getWorkspaceContext, READ_ONLY_ERROR } from '@/lib/workspaces'
 
 export async function DELETE(
   request: Request,
@@ -10,6 +10,10 @@ export async function DELETE(
   const ctx = await getWorkspaceContext()
   if (!ctx) {
     return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+  }
+
+  if (!ctx.canWrite) {
+    return NextResponse.json(READ_ONLY_ERROR, { status: 403 })
   }
 
   const role = await getMembershipRole(ctx.user.id, params.id)

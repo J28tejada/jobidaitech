@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import {
@@ -10,6 +10,7 @@ import {
   BarChart3,
   Settings,
   Users,
+  ShieldCheck,
   Menu,
   X,
   LogOut,
@@ -29,10 +30,24 @@ const navigation = [
 
 export default function Sidebar() {
   const [isOpen, setIsOpen] = useState(false)
+  const [isAdmin, setIsAdmin] = useState(false)
   const pathname = usePathname()
   const router = useRouter()
   const supabase = useSupabaseClient()
   const { session } = useSessionContext()
+
+  useEffect(() => {
+    let active = true
+    fetch('/api/subscription')
+      .then(res => (res.ok ? res.json() : null))
+      .then(data => {
+        if (active && data?.isAdmin) setIsAdmin(true)
+      })
+      .catch(() => {})
+    return () => {
+      active = false
+    }
+  }, [])
 
   const handleSignOut = async () => {
     await supabase.auth.signOut()
@@ -93,6 +108,19 @@ export default function Sidebar() {
                 </li>
               )
             })}
+            {isAdmin && (
+              <li>
+                <Link
+                  href="/admin"
+                  onClick={() => setIsOpen(false)}
+                  className={`flex items-center px-4 py-3 text-sm font-medium rounded-lg transition-colors
+                    ${pathname === '/admin' ? 'bg-primary-100 text-primary-700' : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'}`}
+                >
+                  <ShieldCheck className="mr-3 h-5 w-5" />
+                  Administración
+                </Link>
+              </li>
+            )}
           </ul>
         </nav>
 

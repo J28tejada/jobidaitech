@@ -33,12 +33,18 @@ export async function ensureUserRow(user: EnsureUserPayload): Promise<BusinessTy
   }
 
   if (!existingUser) {
+    const now = new Date()
+    const trialEnds = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000) // 30 días de prueba
     const { error: insertUserError } = await supabase.from('users').insert({
       id: userId,
       email: user.email?.toLowerCase() ?? null,
       name: user.name ?? null,
       image_url: user.image ?? null,
       business_type: DEFAULT_BUSINESS_TYPE,
+      access_enabled: true,
+      access_until: trialEnds.toISOString(),
+      trial_started_at: now.toISOString(),
+      plan: null,
     })
 
     if (insertUserError) {

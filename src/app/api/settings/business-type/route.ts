@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 
 import { getSupabaseClient } from '@/lib/supabase'
-import { canManageWorkspace, getWorkspaceContext, seedCategoriesForWorkspace } from '@/lib/workspaces'
+import { canManageWorkspace, getWorkspaceContext, seedCategoriesForWorkspace, READ_ONLY_ERROR } from '@/lib/workspaces'
 import { BusinessType } from '@/types'
 
 const ALLOWED_TYPES: BusinessType[] = ['carpentry', 'construction']
@@ -32,6 +32,10 @@ export async function POST(request: Request) {
   const ctx = await getWorkspaceContext()
   if (!ctx) {
     return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+  }
+
+  if (!ctx.canWrite) {
+    return NextResponse.json(READ_ONLY_ERROR, { status: 403 })
   }
 
   if (!canManageWorkspace(ctx.role)) {

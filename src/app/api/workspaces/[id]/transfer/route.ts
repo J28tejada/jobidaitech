@@ -1,13 +1,17 @@
 import { NextResponse } from 'next/server'
 
 import { getSupabaseClient } from '@/lib/supabase'
-import { getMembershipRole, getWorkspaceContext } from '@/lib/workspaces'
+import { getMembershipRole, getWorkspaceContext, READ_ONLY_ERROR } from '@/lib/workspaces'
 
 // Transferir la propiedad del negocio a otro miembro (solo el dueño actual).
 export async function POST(request: Request, { params }: { params: { id: string } }) {
   const ctx = await getWorkspaceContext()
   if (!ctx) {
     return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+  }
+
+  if (!ctx.canWrite) {
+    return NextResponse.json(READ_ONLY_ERROR, { status: 403 })
   }
 
   const role = await getMembershipRole(ctx.user.id, params.id)

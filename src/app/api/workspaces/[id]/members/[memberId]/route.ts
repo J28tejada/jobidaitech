@@ -6,6 +6,7 @@ import {
   canManageMembers,
   getMembershipRole,
   getWorkspaceContext,
+  READ_ONLY_ERROR,
   type WorkspaceRole,
 } from '@/lib/workspaces'
 
@@ -17,6 +18,10 @@ export async function PATCH(
   const ctx = await getWorkspaceContext()
   if (!ctx) {
     return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+  }
+
+  if (!ctx.canWrite) {
+    return NextResponse.json(READ_ONLY_ERROR, { status: 403 })
   }
 
   const myRole = await getMembershipRole(ctx.user.id, params.id)
@@ -107,6 +112,10 @@ export async function DELETE(
   const ctx = await getWorkspaceContext()
   if (!ctx) {
     return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+  }
+
+  if (!ctx.canWrite) {
+    return NextResponse.json(READ_ONLY_ERROR, { status: 403 })
   }
 
   const myRole = await getMembershipRole(ctx.user.id, params.id)
