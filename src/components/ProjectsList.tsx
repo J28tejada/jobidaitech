@@ -16,10 +16,12 @@ import {
   Eye,
   ArrowUpRight,
   ArrowDownLeft,
+  ArrowRightLeft,
   FolderOpen,
 } from 'lucide-react';
 import ProjectForm from './ProjectForm';
 import TransactionForm from './TransactionForm';
+import MoveProjectModal from './MoveProjectModal';
 
 export default function ProjectsList() {
   const router = useRouter();
@@ -33,6 +35,7 @@ export default function ProjectsList() {
   const [showIncomeForm, setShowIncomeForm] = useState(false);
   const [showExpenseForm, setShowExpenseForm] = useState(false);
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
+  const [movingProject, setMovingProject] = useState<Project | null>(null);
 
   useEffect(() => {
     fetchProjects();
@@ -324,7 +327,7 @@ export default function ProjectsList() {
                   <Eye className="h-3.5 w-3.5 mr-1.5" />
                   Ver Detalles
                 </button>
-                <button 
+                <button
                   onClick={(e) => {
                     e.stopPropagation();
                     handleEditProject(project);
@@ -334,7 +337,17 @@ export default function ProjectsList() {
                 >
                   <Edit className="h-4 w-4" />
                 </button>
-                <button 
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setMovingProject(project);
+                  }}
+                  className="btn-icon bg-gray-100 text-gray-700 hover:bg-gray-200"
+                  title="Mover a otro espacio"
+                >
+                  <ArrowRightLeft className="h-4 w-4" />
+                </button>
+                <button
                   onClick={(e) => {
                     e.stopPropagation();
                     handleDeleteProject(project.id);
@@ -400,6 +413,18 @@ export default function ProjectsList() {
         type="expense"
         projectId={selectedProject?.id}
       />
+
+      {movingProject && (
+        <MoveProjectModal
+          projectId={movingProject.id}
+          projectName={movingProject.name}
+          onClose={() => setMovingProject(null)}
+          onMoved={async () => {
+            setMovingProject(null);
+            await fetchProjects();
+          }}
+        />
+      )}
     </div>
   );
 }
