@@ -60,6 +60,43 @@ export async function sendInviteEmail(params: InviteEmailParams): Promise<boolea
   }
 }
 
+/**
+ * Notifica al administrador que se registró un usuario nuevo.
+ * Usa Resend si hay RESEND_API_KEY. El destinatario es NOTIFY_EMAIL (o el
+ * primer correo de ADMIN_EMAILS). Como el correo va a tu propia cuenta,
+ * funciona incluso con el remitente de prueba de Resend (sin dominio).
+ * Nunca lanza.
+ */
+export async function notifyNewUserRegistered(user: { email?: string | null; name?: string | null }): Promise<void> {
+  const apiKey = process.env.RESEND_API_KEY
+  if (!apiKey) return
+
+  const to =
+    process.env.NOTIFY_EMAIL ||
+    (process.env.ADMIN_EMAILS ?? '').split(',').map(e => e.trim()).filter(Boolean)[0] ||
+    'josuetejadaromero@gmail.com'
+  const from = process.env.RESEND_FROM || 'ContaTaller <onboarding@resend.dev>'
+
+  const html = `
+    <div style="font-family: -apple-system, Segoe UI, Roboto, Arial, sans-serif; color:#1f2937;">
+      <h2 style="color:#111827;">Nuevo registro en ContaTaller</h2>
+      <p><strong>${escapeHtml(user.name ?? 'Sin nombre')}</strong></p>
+      <p>${escapeHtml(user.email ?? 'sin correo')}</p>
+      <p style="color:#6b7280;font-size:13px;">Empezó su prueba de 30 días. Puedes gestionarlo en el panel /admin.</p>
+    </div>
+  `
+
+  try {
+    await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ from, to, subject: `Nuevo usuario: ${user.email ?? user.name ?? ''}`, html }),
+    })
+  } catch (error) {
+    console.error('notifyNewUserRegistered', error)
+  }
+}
+
 function escapeHtml(value: string): string {
   return value
     .replace(/&/g, '&amp;')

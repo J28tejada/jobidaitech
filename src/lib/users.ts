@@ -1,5 +1,6 @@
 import type { BusinessType } from '@/types'
 import { getSupabaseClient } from './supabase'
+import { notifyNewUserRegistered } from './email'
 
 export interface EnsureUserPayload {
   id: string
@@ -50,6 +51,9 @@ export async function ensureUserRow(user: EnsureUserPayload): Promise<BusinessTy
     if (insertUserError) {
       throw insertUserError
     }
+
+    // Notificar al administrador del nuevo registro (no bloquea si falla)
+    await notifyNewUserRegistered({ email: user.email, name: user.name })
 
     return DEFAULT_BUSINESS_TYPE
   }

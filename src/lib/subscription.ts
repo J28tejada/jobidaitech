@@ -46,3 +46,21 @@ export function isoInMonths(months: number): string {
   d.setMonth(d.getMonth() + months)
   return d.toISOString()
 }
+
+/** YYYY-MM-DD de hoy + N meses (para inputs type="date"). */
+export function ymdInMonths(months: number): string {
+  const d = new Date()
+  d.setMonth(d.getMonth() + months)
+  return d.toISOString().slice(0, 10)
+}
+
+/** Convierte un ISO a YYYY-MM-DD (o '' si es null). */
+export function toYmd(iso: string | null | undefined): string {
+  if (!iso) return ''
+  return new Date(iso).toISOString().slice(0, 10)
+}
+
+/** Convierte YYYY-MM-DD a ISO al final del día (acceso válido hasta esa fecha inclusive). */
+export function ymdToIso(ymd: string): string {
+  return new Date(`${ymd}T23:59:59`).toISOString()
+}

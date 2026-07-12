@@ -1,10 +1,10 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Loader2, ShieldAlert, Search } from 'lucide-react'
+import { Loader2, ShieldAlert, Search, Check } from 'lucide-react'
 
 import Layout from '@/components/Layout'
-import { computeAccess, isoInMonths, type AccessRow } from '@/lib/subscription'
+import { computeAccess, ymdInMonths, toYmd, ymdToIso, type AccessRow } from '@/lib/subscription'
 
 interface AdminUser extends AccessRow {
   id: string
@@ -12,6 +12,12 @@ interface AdminUser extends AccessRow {
   name: string | null
   admin_note: string | null
   created_at: string
+}
+
+const RECENT_DAYS = 7
+
+function isRecent(createdAt: string) {
+  return Date.now() - new Date(createdAt).getTime() < RECENT_DAYS * 86_400_000
 }
 
 export default function AdminPage() {
@@ -37,19 +43,12 @@ export default function AdminPage() {
     load()
   }, [])
 
-  const patch = async (id: string, payload: Record<string, unknown>) => {
-    await fetch(`/api/admin/users/${id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    })
-    await load()
-  }
-
   const filtered = users.filter(u => {
     const q = search.toLowerCase()
     return !q || (u.email ?? '').toLowerCase().includes(q) || (u.name ?? '').toLowerCase().includes(q)
   })
+
+  const recentCount = users.filter(u => isRecent(u.created_at)).length
 
   const toneClass = (tone: 'ok' | 'warn' | 'off') =>
     tone === 'ok'
@@ -92,7 +91,14 @@ export default function AdminPage() {
                   className="input pl-10"
                 />
               </div>
-              <p className="mt-2 text-sm text-gray-500">{filtered.length} usuario(s)</p>
+              <p className="mt-2 text-sm text-gray-500">
+                {filtered.length} usuario(s)
+                {recentCount > 0 && (
+                  <span className="ml-2 inline-flex items-center gap-1 text-primary-700 font-medium">
+                    · {recentCount} nuevo(s) en los últimos {RECENT_DAYS} días
+                  </span>
+                )}
+              </p>
             </div>
 
             <div className="space-y-3">
@@ -106,89 +112,26 @@ export default function AdminPage() {
                         {(u.name ?? u.email ?? 'U').charAt(0).toUpperCase()}
                       </div>
                       <div className="min-w-0 flex-1">
-                        <p className="text-sm font-medium text-gray-900 truncate">{u.name ?? u.email}</p>
+                        <p className="text-sm font-medium text-gray-900 truncate flex items-center gap-2">
+                          {u.name ?? u.email}
+                          {isRecent(u.created_at) && (
+                            <span className="text-[10px] uppercase tracking-wide bg-primary-100 text-primary-700 px-1.5 py-0.5 rounded-full">
+                              Nuevo
+                            </span>
+                          )}
+                        </p>
                         <p className="text-xs text-gray-500 truncate">{u.email}</p>
                       </div>
                       <span className={`text-xs font-medium px-2 py-1 rounded-full ${toneClass(info.tone)}`}>{info.label}</span>
                       <button
                         onClick={() => setExpanded(open ? null : u.id)}
-                        className="btn-icon bg-gray-100 text-gray-700 hover:bg-gray-200"
+                        className="btn-icon bg-gray-100 text-gray-700 hover:bg-gray-200 whitespace-nowrap px-3 w-auto"
                       >
-                        {open ? '−' : 'Gestionar'}
+                        {open ? 'Cerrar' : 'Gestionar'}
                       </button>
                     </div>
 
-                    {open && (
-                      <div className="mt-4 pt-4 border-t border-gray-100 space-y-4">
-                        {/* Activar */}
-                        <div>
-                          <p className="text-sm font-medium text-gray-700 mb-2">Activar acceso hasta:</p>
-                          <div className="flex flex-wrap gap-2">
-                            <button onClick={() => patch(u.id, { accessEnabled: true, accessUntil: null })} className="btn btn-success text-xs">
-                              Indefinido
-                            </button>
-                            <button onClick={() => patch(u.id, { accessEnabled: true, accessUntil: isoInMonths(1) })} className="btn btn-secondary text-xs">
-                              +1 mes
-                            </button>
-                            <button onClick={() => patch(u.id, { accessEnabled: true, accessUntil: isoInMonths(3) })} className="btn btn-secondary text-xs">
-                              +3 meses
-                            </button>
-                            <button onClick={() => patch(u.id, { accessEnabled: true, accessUntil: isoInMonths(6) })} className="btn btn-secondary text-xs">
-                              +6 meses
-                            </button>
-                            <button onClick={() => patch(u.id, { accessEnabled: true, accessUntil: isoInMonths(12) })} className="btn btn-secondary text-xs">
-                              +1 año
-                            </button>
-                          </div>
-                        </div>
-
-                        {/* Desactivar */}
-                        <div>
-                          <p className="text-sm font-medium text-gray-700 mb-2">Pasar a solo lectura:</p>
-                          <div className="flex flex-wrap gap-2">
-                            <button onClick={() => patch(u.id, { accessEnabled: false })} className="btn btn-danger text-xs">
-                              Ahora
-                            </button>
-                            <button onClick={() => patch(u.id, { accessEnabled: true, accessUntil: isoInMonths(1) })} className="btn btn-secondary text-xs">
-                              En 1 mes
-                            </button>
-                            <button onClick={() => patch(u.id, { accessEnabled: true, accessUntil: isoInMonths(12) })} className="btn btn-secondary text-xs">
-                              En 1 año
-                            </button>
-                          </div>
-                        </div>
-
-                        {/* Plan y nota */}
-                        <div className="grid sm:grid-cols-2 gap-3">
-                          <div>
-                            <label className="block text-xs font-medium text-gray-500 mb-1">Plan</label>
-                            <select
-                              defaultValue={u.plan ?? ''}
-                              onChange={e => patch(u.id, { plan: e.target.value })}
-                              className="input"
-                            >
-                              <option value="">Prueba / sin plan</option>
-                              <option value="mensual">Mensual</option>
-                              <option value="anual">Anual</option>
-                              <option value="cortesia">Cortesía</option>
-                            </select>
-                          </div>
-                          <div>
-                            <label className="block text-xs font-medium text-gray-500 mb-1">Nota interna</label>
-                            <input
-                              defaultValue={u.admin_note ?? ''}
-                              onBlur={e => e.target.value !== (u.admin_note ?? '') && patch(u.id, { adminNote: e.target.value })}
-                              placeholder="Ej. pagó por transferencia…"
-                              className="input"
-                            />
-                          </div>
-                        </div>
-
-                        <p className="text-xs text-gray-400">
-                          Registrado: {new Date(u.created_at).toLocaleDateString('es-ES')}
-                        </p>
-                      </div>
-                    )}
+                    {open && <AdminUserEditor user={u} onSaved={load} />}
                   </div>
                 )
               })}
@@ -197,5 +140,139 @@ export default function AdminPage() {
         )}
       </div>
     </Layout>
+  )
+}
+
+function AdminUserEditor({ user, onSaved }: { user: AdminUser; onSaved: () => void }) {
+  const [enabled, setEnabled] = useState(user.access_enabled !== false)
+  const [mode, setMode] = useState<'unlimited' | 'date'>(user.access_until ? 'date' : 'unlimited')
+  const [date, setDate] = useState<string>(toYmd(user.access_until) || ymdInMonths(1))
+  const [plan, setPlan] = useState<string>(user.plan ?? '')
+  const [note, setNote] = useState<string>(user.admin_note ?? '')
+  const [saving, setSaving] = useState(false)
+  const [saved, setSaved] = useState(false)
+
+  const save = async () => {
+    setSaving(true)
+    setSaved(false)
+    const accessUntil = !enabled ? undefined : mode === 'unlimited' ? null : ymdToIso(date)
+    const payload: Record<string, unknown> = {
+      accessEnabled: enabled,
+      plan,
+      adminNote: note,
+    }
+    // Solo cambiamos la fecha cuando está Activo (si está en solo lectura, no importa)
+    if (enabled) payload.accessUntil = accessUntil
+    await fetch(`/api/admin/users/${user.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    })
+    setSaving(false)
+    setSaved(true)
+    onSaved()
+    setTimeout(() => setSaved(false), 2000)
+  }
+
+  return (
+    <div className="mt-4 pt-4 border-t border-gray-100 space-y-4">
+      {/* Estado */}
+      <div>
+        <p className="text-sm font-medium text-gray-700 mb-2">Estado de acceso</p>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={() => setEnabled(true)}
+            className={`px-3 py-1.5 rounded-lg text-sm font-medium border ${enabled ? 'bg-green-600 text-white border-green-600' : 'border-gray-300 text-gray-600'}`}
+          >
+            Activo (puede editar)
+          </button>
+          <button
+            type="button"
+            onClick={() => setEnabled(false)}
+            className={`px-3 py-1.5 rounded-lg text-sm font-medium border ${!enabled ? 'bg-gray-700 text-white border-gray-700' : 'border-gray-300 text-gray-600'}`}
+          >
+            Solo lectura
+          </button>
+        </div>
+      </div>
+
+      {/* Vencimiento (solo si está activo) */}
+      {enabled && (
+        <div>
+          <p className="text-sm font-medium text-gray-700 mb-2">Acceso hasta</p>
+          <div className="flex flex-wrap items-center gap-3">
+            <label className="flex items-center gap-2 text-sm text-gray-700">
+              <input type="radio" checked={mode === 'unlimited'} onChange={() => setMode('unlimited')} />
+              Sin límite
+            </label>
+            <label className="flex items-center gap-2 text-sm text-gray-700">
+              <input type="radio" checked={mode === 'date'} onChange={() => setMode('date')} />
+              Hasta fecha:
+            </label>
+            <input
+              type="date"
+              value={date}
+              min={new Date().toISOString().slice(0, 10)}
+              onChange={e => {
+                setDate(e.target.value)
+                setMode('date')
+              }}
+              className="input w-auto"
+            />
+          </div>
+          <div className="flex flex-wrap gap-2 mt-2">
+            {[
+              { label: '+1 mes', m: 1 },
+              { label: '+3 meses', m: 3 },
+              { label: '+6 meses', m: 6 },
+              { label: '+1 año', m: 12 },
+            ].map(b => (
+              <button
+                key={b.m}
+                type="button"
+                onClick={() => {
+                  setDate(ymdInMonths(b.m))
+                  setMode('date')
+                }}
+                className="px-2.5 py-1 text-xs rounded border border-gray-300 text-gray-600 hover:bg-gray-50"
+              >
+                {b.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Plan y nota */}
+      <div className="grid sm:grid-cols-2 gap-3">
+        <div>
+          <label className="block text-xs font-medium text-gray-500 mb-1">Plan</label>
+          <select value={plan} onChange={e => setPlan(e.target.value)} className="input">
+            <option value="">Prueba / sin plan</option>
+            <option value="mensual">Mensual</option>
+            <option value="anual">Anual</option>
+            <option value="cortesia">Cortesía</option>
+          </select>
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-gray-500 mb-1">Nota interna</label>
+          <input
+            value={note}
+            onChange={e => setNote(e.target.value)}
+            placeholder="Ej. pagó por transferencia…"
+            className="input"
+          />
+        </div>
+      </div>
+
+      <div className="flex items-center justify-between">
+        <p className="text-xs text-gray-400">Registrado: {new Date(user.created_at).toLocaleDateString('es-ES')}</p>
+        <button onClick={save} disabled={saving} className="btn btn-primary flex items-center gap-2 disabled:opacity-60">
+          {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : saved ? <Check className="h-4 w-4" /> : null}
+          {saved ? 'Guardado' : 'Guardar cambios'}
+        </button>
+      </div>
+    </div>
   )
 }
