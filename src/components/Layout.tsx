@@ -6,6 +6,7 @@ import { useSessionContext } from '@supabase/auth-helpers-react'
 
 import MobileNavBar from './MobileNavBar'
 import PendingInvites from './PendingInvites'
+import PendingTransfers from './PendingTransfers'
 import Sidebar from './Sidebar'
 import TopBar from './TopBar'
 
@@ -48,6 +49,7 @@ export default function Layout({ children }: LayoutProps) {
         >
           <div className="p-4 lg:p-6 min-w-0 max-w-full pt-16 lg:pt-0">
             <PendingInvites />
+            <PendingTransfers />
             {children}
           </div>
         </main>

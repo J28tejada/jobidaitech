@@ -18,11 +18,13 @@ import {
   ArrowUpRight,
   ArrowDownLeft,
   ArrowRightLeft,
+  Send,
   FolderOpen,
 } from 'lucide-react';
 import ProjectForm from './ProjectForm';
 import TransactionForm from './TransactionForm';
 import MoveProjectModal from './MoveProjectModal';
+import TransferAccountModal from './TransferAccountModal';
 
 export default function ProjectsList() {
   const router = useRouter();
@@ -37,6 +39,7 @@ export default function ProjectsList() {
   const [showExpenseForm, setShowExpenseForm] = useState(false);
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
   const [movingProject, setMovingProject] = useState<Project | null>(null);
+  const [transferProject, setTransferProject] = useState<Project | null>(null);
   const [menu, setMenu] = useState<{ project: Project; top: number; left: number } | null>(null);
   const [mounted, setMounted] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -378,6 +381,12 @@ export default function ProjectsList() {
           >
             <ArrowRightLeft className="h-4 w-4 text-gray-400" /> Mover a otro espacio
           </button>
+          <button
+            onClick={() => { const p = menu.project; setMenu(null); setTransferProject(p); }}
+            className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 text-left"
+          >
+            <Send className="h-4 w-4 text-gray-400" /> Transferir a otra cuenta
+          </button>
           <div className="border-t border-gray-100 my-1" />
           <button
             onClick={() => { const p = menu.project; setMenu(null); handleDeleteProject(p.id); }}
@@ -449,6 +458,14 @@ export default function ProjectsList() {
             setMovingProject(null);
             await fetchProjects();
           }}
+        />
+      )}
+
+      {transferProject && (
+        <TransferAccountModal
+          projectId={transferProject.id}
+          projectName={transferProject.name}
+          onClose={() => setTransferProject(null)}
         />
       )}
     </div>
