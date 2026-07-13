@@ -10,6 +10,7 @@ import PendingInvites from './PendingInvites'
 import PendingTransfers from './PendingTransfers'
 import Sidebar from './Sidebar'
 import TopBar from './TopBar'
+import WorkspaceSwitcher from './WorkspaceSwitcher'
 
 interface LayoutProps {
   children: ReactNode
@@ -42,13 +43,17 @@ export default function Layout({ children }: LayoutProps) {
       <Sidebar />
       <div className="lg:ml-64 flex flex-col min-w-0 max-w-full">
         <TopBar />
-        <main 
+        {/* Encabezado móvil: selector de espacio siempre visible */}
+        <header className="lg:hidden sticky top-0 z-30 bg-white border-b border-gray-200 h-14 flex items-center gap-3 pl-16 pr-3">
+          <WorkspaceSwitcher />
+        </header>
+        <main
           className="flex-1 overflow-auto lg:pb-0 min-w-0 max-w-full"
-          style={{ 
+          style={{
             paddingBottom: 'calc(5rem + env(safe-area-inset-bottom, 0px))'
           }}
         >
-          <div className="p-4 lg:p-6 min-w-0 max-w-full pt-16 lg:pt-0">
+          <div className="p-4 lg:p-6 min-w-0 max-w-full">
             <AccountStatus />
             <PendingInvites />
             <PendingTransfers />

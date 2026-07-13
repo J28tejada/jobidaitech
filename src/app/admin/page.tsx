@@ -60,7 +60,7 @@ export default function AdminPage() {
   return (
     <Layout>
       <div className="space-y-6">
-        <div className="pl-14 lg:pl-0">
+        <div className="">
           <h1 className="text-3xl font-bold text-gray-900">Administración</h1>
           <p className="text-gray-600 mt-2">Gestiona el acceso y las suscripciones de los usuarios.</p>
         </div>

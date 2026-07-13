@@ -258,7 +258,7 @@ export default function ProjectDetail({ projectId }: ProjectDetailProps) {
     <div className="space-y-6 w-full max-w-full overflow-x-hidden">
       {/* Header */}
       <div className="flex items-start justify-between">
-          <div className="flex items-center space-x-4 pl-14 lg:pl-0">
+          <div className="flex items-center space-x-4">
             <button
               onClick={() => router.push('/proyectos')}
               className="p-2 hover:bg-gray-100 rounded-lg transition-colors -ml-14 lg:ml-0"
