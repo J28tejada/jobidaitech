@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 
 import { getSupabaseClient } from '@/lib/supabase'
-import { computeCanWrite, getWorkspaceContext } from '@/lib/workspaces'
+import { getWorkspaceContext } from '@/lib/workspaces'
 
 // Estado de la suscripción del usuario autenticado (para el aviso/banner).
 export async function GET() {
@@ -20,7 +20,6 @@ export async function GET() {
   const accessUntil = row?.access_until ?? null
   const plan = row?.plan ?? null
   const isTrial = !plan && !!accessUntil
-  const canWrite = ctx.isAdmin || computeCanWrite(row ?? null)
 
   let daysLeft: number | null = null
   if (accessUntil) {
@@ -28,8 +27,11 @@ export async function GET() {
   }
 
   return NextResponse.json({
-    canWrite,
+    // Acceso de escritura EFECTIVO en el espacio activo (personal o negocio)
+    canWrite: ctx.canWrite,
     isAdmin: ctx.isAdmin,
+    isPersonal: ctx.isPersonal,
+    // Info de la suscripción PERSONAL (para el contador de prueba)
     isTrial,
     plan,
     accessUntil,

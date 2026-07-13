@@ -219,14 +219,14 @@ export async function getWorkspaceContext(): Promise<WorkspaceContext | null> {
   const personalWorkspaceId = await ensureUserAndPersonalWorkspace(profile)
   const supabase = getSupabaseClient()
 
-  // Estado de suscripción / acceso de escritura
+  // Estado de suscripción del propio usuario (aplica a su espacio personal)
   const isAdmin = isPlatformAdmin(profile.email)
   const { data: accessRow } = await supabase
     .from('users')
     .select('access_enabled, access_until')
     .eq('id', user.id)
     .maybeSingle()
-  const canWrite = isAdmin || computeCanWrite(accessRow)
+  const myCanWrite = computeCanWrite(accessRow)
 
   let workspaceId = personalWorkspaceId
   let role: WorkspaceRole = 'owner'
@@ -259,6 +259,36 @@ export async function getWorkspaceContext(): Promise<WorkspaceContext | null> {
           .eq('member_id', membership.id)
         allowedProjectIds = (mp ?? []).map((r: { project_id: string }) => r.project_id)
       }
+    }
+  }
+
+  // Acceso de escritura EFECTIVO según el espacio activo:
+  // - Personal: depende de la suscripción del propio usuario.
+  // - Negocio: depende de la suscripción del DUEÑO del negocio (quien paga por
+  //   todos sus miembros). Así un empleado con su prueba vencida puede trabajar
+  //   dentro de un negocio con suscripción activa.
+  let canWrite: boolean
+  if (isAdmin) {
+    canWrite = true
+  } else if (isPersonal) {
+    canWrite = myCanWrite
+  } else {
+    const { data: ws } = await supabase
+      .from('workspaces')
+      .select('owner_id')
+      .eq('id', workspaceId)
+      .maybeSingle()
+
+    if (!ws?.owner_id || ws.owner_id === user.id) {
+      // Si soy el dueño (o no se pudo leer), aplica mi propia suscripción.
+      canWrite = myCanWrite
+    } else {
+      const { data: ownerRow } = await supabase
+        .from('users')
+        .select('access_enabled, access_until')
+        .eq('id', ws.owner_id)
+        .maybeSingle()
+      canWrite = computeCanWrite(ownerRow)
     }
   }
 
