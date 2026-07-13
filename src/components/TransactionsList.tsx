@@ -171,30 +171,30 @@ export default function TransactionsList() {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <div className="">
-          <h1 className="text-3xl font-bold text-gray-900">Transacciones</h1>
-          <p className="text-gray-600 mt-2">
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
+        <div>
+          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Transacciones</h1>
+          <p className="text-gray-600 mt-1 sm:mt-2">
             Registra y gestiona todos los ingresos y gastos
           </p>
         </div>
-        <div className="flex space-x-2">
-          <button 
+        <div className="flex gap-2">
+          <button
             onClick={() => {
               setEditingTransaction(null);
               setShowIncomeForm(true);
             }}
-            className="btn btn-success flex items-center"
+            className="btn btn-success flex items-center justify-center flex-1 sm:flex-none"
           >
             <ArrowUpRight className="h-4 w-4 mr-1.5" />
             Nuevo Ingreso
           </button>
-          <button 
+          <button
             onClick={() => {
               setEditingTransaction(null);
               setShowExpenseForm(true);
             }}
-            className="btn btn-danger flex items-center"
+            className="btn btn-danger flex items-center justify-center flex-1 sm:flex-none"
           >
             <ArrowDownLeft className="h-4 w-4 mr-1.5" />
             Nuevo Gasto

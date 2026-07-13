@@ -235,19 +235,19 @@ export default function ProjectsList() {
 
   return (
     <div className="space-y-6 w-full max-w-full overflow-x-hidden">
-      <div className="flex justify-between items-center">
-        <div className="">
-          <h1 className="text-3xl font-bold text-gray-900">Proyectos</h1>
-          <p className="text-gray-600 mt-2">
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
+        <div>
+          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Proyectos</h1>
+          <p className="text-gray-600 mt-1 sm:mt-2">
             Gestiona todos tus proyectos y pedidos del taller
           </p>
         </div>
-        <button 
+        <button
           onClick={() => {
             setEditingProject(null);
             setShowProjectForm(true);
           }}
-          className="btn btn-primary flex items-center"
+          className="btn btn-primary flex items-center justify-center w-full sm:w-auto"
         >
           <Plus className="h-4 w-4 mr-1.5" />
           Nuevo Proyecto

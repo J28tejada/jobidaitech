@@ -257,30 +257,30 @@ export default function ProjectDetail({ projectId }: ProjectDetailProps) {
   return (
     <div className="space-y-6 w-full max-w-full overflow-x-hidden">
       {/* Header */}
-      <div className="flex items-start justify-between">
-          <div className="flex items-center space-x-4">
-            <button
-              onClick={() => router.push('/proyectos')}
-              className="p-2 hover:bg-gray-100 rounded-lg transition-colors -ml-14 lg:ml-0"
-            >
-              <ArrowLeft className="h-5 w-5 text-gray-600" />
-            </button>
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900">{project.name}</h1>
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex items-center gap-2 sm:gap-4 min-w-0">
+          <button
+            onClick={() => router.push('/proyectos')}
+            className="p-2 hover:bg-gray-100 rounded-lg transition-colors flex-shrink-0 -ml-2"
+          >
+            <ArrowLeft className="h-5 w-5 text-gray-600" />
+          </button>
+          <div className="min-w-0">
+            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 break-words">{project.name}</h1>
             <p className="text-gray-600 mt-1">{project.description || 'Sin descripción'}</p>
           </div>
         </div>
-        <div className="flex items-center space-x-2">
+        <div className="flex gap-2 flex-shrink-0">
           <button
             onClick={() => setShowProjectForm(true)}
-            className="btn btn-secondary flex items-center"
+            className="btn btn-secondary flex items-center justify-center flex-1 sm:flex-none"
           >
             <Edit className="h-4 w-4 mr-2" />
             Editar
           </button>
           <button
             onClick={handleDeleteProject}
-            className="btn btn-danger flex items-center"
+            className="btn btn-danger flex items-center justify-center flex-1 sm:flex-none"
           >
             <Trash2 className="h-4 w-4 mr-2" />
             Eliminar
@@ -368,18 +368,18 @@ export default function ProjectDetail({ projectId }: ProjectDetailProps) {
 
           {/* Transactions */}
           <div className="card">
-            <div className="flex items-center justify-between mb-4">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
               <div>
                 <h2 className="text-lg font-semibold text-gray-900">Transacciones</h2>
                 <p className="text-sm text-gray-500 mt-1">{transactions.length} registro(s)</p>
               </div>
-              <div className="flex space-x-2">
+              <div className="flex gap-2">
                 <button
                   onClick={() => {
                     setEditingTransaction(null);
                     setShowIncomeForm(true);
                   }}
-                  className="btn btn-success flex items-center"
+                  className="btn btn-success flex items-center justify-center flex-1 sm:flex-none"
                 >
                   <ArrowUpRight className="h-3.5 w-3.5 mr-1" />
                   Ingreso
@@ -389,7 +389,7 @@ export default function ProjectDetail({ projectId }: ProjectDetailProps) {
                     setEditingTransaction(null);
                     setShowExpenseForm(true);
                   }}
-                  className="btn btn-danger flex items-center"
+                  className="btn btn-danger flex items-center justify-center flex-1 sm:flex-none"
                 >
                   <ArrowDownLeft className="h-3.5 w-3.5 mr-1" />
                   Gasto
