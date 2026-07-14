@@ -27,6 +27,9 @@ export async function PATCH(request: Request, { params }: { params: { id: string
     if (body.plan !== undefined) {
       updates.plan = body.plan === '' ? null : body.plan
     }
+    if (body.planTier !== undefined && ['trial', 'basico', 'negocio', 'pro'].includes(body.planTier)) {
+      updates.plan_tier = body.planTier
+    }
     if (body.adminNote !== undefined) {
       updates.admin_note = body.adminNote
     }

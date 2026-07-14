@@ -4,6 +4,7 @@ import { CATEGORY_TEMPLATES, type BusinessType, type Category } from '@/types'
 import { getSupabaseClient } from './supabase'
 import { createSupabaseRouteClient } from './supabase-route'
 import { DEFAULT_BUSINESS_TYPE, ensureUserRow, type EnsureUserPayload } from './users'
+import { hasModule, type ModuleKey, type PlanTier } from './modules'
 
 export const ACTIVE_WORKSPACE_COOKIE = 'active_workspace_id'
 
@@ -75,6 +76,10 @@ export interface WorkspaceContext {
   canWrite: boolean
   /** ¿Es administrador de la plataforma? */
   isAdmin: boolean
+  /** Plan efectivo del espacio activo (del dueño, en un negocio). */
+  planTier: PlanTier
+  /** ¿El plan del espacio activo incluye este módulo? */
+  hasModule: (key: ModuleKey) => boolean
 }
 
 const DEFAULT_ADMIN_EMAILS = ['josuetejadaromero@gmail.com']
@@ -223,10 +228,11 @@ export async function getWorkspaceContext(): Promise<WorkspaceContext | null> {
   const isAdmin = isPlatformAdmin(profile.email)
   const { data: accessRow } = await supabase
     .from('users')
-    .select('access_enabled, access_until')
+    .select('access_enabled, access_until, plan_tier')
     .eq('id', user.id)
     .maybeSingle()
   const myCanWrite = computeCanWrite(accessRow)
+  const myPlanTier = (accessRow?.plan_tier as PlanTier) ?? 'pro'
 
   let workspaceId = personalWorkspaceId
   let role: WorkspaceRole = 'owner'
@@ -268,10 +274,10 @@ export async function getWorkspaceContext(): Promise<WorkspaceContext | null> {
   //   todos sus miembros). Así un empleado con su prueba vencida puede trabajar
   //   dentro de un negocio con suscripción activa.
   let canWrite: boolean
-  if (isAdmin) {
-    canWrite = true
-  } else if (isPersonal) {
-    canWrite = myCanWrite
+  let planTier: PlanTier
+  if (isPersonal) {
+    canWrite = isAdmin || myCanWrite
+    planTier = myPlanTier
   } else {
     const { data: ws } = await supabase
       .from('workspaces')
@@ -280,15 +286,17 @@ export async function getWorkspaceContext(): Promise<WorkspaceContext | null> {
       .maybeSingle()
 
     if (!ws?.owner_id || ws.owner_id === user.id) {
-      // Si soy el dueño (o no se pudo leer), aplica mi propia suscripción.
-      canWrite = myCanWrite
+      // Si soy el dueño (o no se pudo leer), aplica mi propia suscripción y plan.
+      canWrite = isAdmin || myCanWrite
+      planTier = myPlanTier
     } else {
       const { data: ownerRow } = await supabase
         .from('users')
-        .select('access_enabled, access_until')
+        .select('access_enabled, access_until, plan_tier')
         .eq('id', ws.owner_id)
         .maybeSingle()
-      canWrite = computeCanWrite(ownerRow)
+      canWrite = isAdmin || computeCanWrite(ownerRow)
+      planTier = (ownerRow?.plan_tier as PlanTier) ?? 'pro'
     }
   }
 
@@ -303,6 +311,8 @@ export async function getWorkspaceContext(): Promise<WorkspaceContext | null> {
     allowedProjectIds,
     canWrite,
     isAdmin,
+    planTier,
+    hasModule: (key: ModuleKey) => hasModule(planTier, key),
   }
 }
 

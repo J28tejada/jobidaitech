@@ -41,7 +41,7 @@ export default function LoginPage() {
               <h1 className="text-4xl font-bold text-gray-900">ContaTaller</h1>
             </div>
             <p className="text-xl text-gray-600 leading-relaxed">
-              Control financiero inteligente para talleres y proyectos de construcción
+              Sabé cuánto ganás en cada trabajo. Controla ingresos, gastos y ganancia por proyecto — para tu negocio.
             </p>
           </div>
 

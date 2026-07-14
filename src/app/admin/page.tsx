@@ -5,12 +5,33 @@ import { Loader2, ShieldAlert, Search, Check } from 'lucide-react'
 
 import Layout from '@/components/Layout'
 import { computeAccess, ymdInMonths, toYmd, ymdToIso, type AccessRow } from '@/lib/subscription'
+import { ASSIGNABLE_TIERS, PLAN_LABELS, type PlanTier } from '@/lib/modules'
 
 interface AdminUser extends AccessRow {
   id: string
   email: string | null
   name: string | null
   admin_note: string | null
+  plan_tier?: string | null
+  created_at: string
+}
+
+interface Metrics {
+  totalUsers: number
+  newUsers7d: number
+  newLeads: number
+  activatedUsers30d: number
+  events30d: Record<string, number>
+}
+
+interface Lead {
+  id: string
+  name: string | null
+  email: string | null
+  whatsapp: string | null
+  business: string | null
+  message: string | null
+  status: string
   created_at: string
 }
 
@@ -22,6 +43,8 @@ function isRecent(createdAt: string) {
 
 export default function AdminPage() {
   const [users, setUsers] = useState<AdminUser[]>([])
+  const [metrics, setMetrics] = useState<Metrics | null>(null)
+  const [leads, setLeads] = useState<Lead[]>([])
   const [loading, setLoading] = useState(true)
   const [forbidden, setForbidden] = useState(false)
   const [search, setSearch] = useState('')
@@ -37,6 +60,9 @@ export default function AdminPage() {
     const data = await res.json()
     setUsers(data.users ?? [])
     setLoading(false)
+    // KPIs y leads (no bloquean la lista)
+    fetch('/api/admin/metrics').then(r => (r.ok ? r.json() : null)).then(m => m && setMetrics(m)).catch(() => {})
+    fetch('/api/admin/leads').then(r => (r.ok ? r.json() : { leads: [] })).then(d => setLeads(d.leads ?? [])).catch(() => {})
   }
 
   useEffect(() => {
@@ -81,6 +107,22 @@ export default function AdminPage() {
           </div>
         ) : (
           <>
+            {metrics && (
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                {[
+                  { label: 'Usuarios', value: metrics.totalUsers },
+                  { label: 'Nuevos (7d)', value: metrics.newUsers7d },
+                  { label: 'Activados (30d)', value: metrics.activatedUsers30d },
+                  { label: 'Leads sin atender', value: metrics.newLeads },
+                ].map(k => (
+                  <div key={k.label} className="card">
+                    <p className="text-2xl font-bold text-gray-900">{k.value}</p>
+                    <p className="text-xs text-gray-500 mt-1">{k.label}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+
             <div className="card">
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
@@ -136,6 +178,40 @@ export default function AdminPage() {
                 )
               })}
             </div>
+
+            {leads.length > 0 && (
+              <div className="card">
+                <h2 className="text-lg font-semibold text-gray-900 mb-3">Leads del servicio de marketing</h2>
+                <ul className="divide-y divide-gray-100">
+                  {leads.map(l => (
+                    <li key={l.id} className="py-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-gray-900 truncate">
+                            {l.name ?? l.email ?? 'Sin nombre'}
+                            {l.business && <span className="text-gray-500"> · {l.business}</span>}
+                          </p>
+                          <p className="text-xs text-gray-500">
+                            {l.whatsapp ?? l.email ?? ''} · {new Date(l.created_at).toLocaleDateString('es-ES')}
+                          </p>
+                        </div>
+                        {l.whatsapp && (
+                          <a
+                            href={`https://wa.me/${l.whatsapp.replace(/\D/g, '')}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="btn btn-success text-xs flex-shrink-0"
+                          >
+                            WhatsApp
+                          </a>
+                        )}
+                      </div>
+                      {l.message && <p className="text-sm text-gray-600 mt-1">{l.message}</p>}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </>
         )}
       </div>
@@ -148,6 +224,7 @@ function AdminUserEditor({ user, onSaved }: { user: AdminUser; onSaved: () => vo
   const [mode, setMode] = useState<'unlimited' | 'date'>(user.access_until ? 'date' : 'unlimited')
   const [date, setDate] = useState<string>(toYmd(user.access_until) || ymdInMonths(1))
   const [plan, setPlan] = useState<string>(user.plan ?? '')
+  const [tier, setTier] = useState<PlanTier>((user.plan_tier as PlanTier) ?? 'pro')
   const [note, setNote] = useState<string>(user.admin_note ?? '')
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
@@ -159,6 +236,7 @@ function AdminUserEditor({ user, onSaved }: { user: AdminUser; onSaved: () => vo
     const payload: Record<string, unknown> = {
       accessEnabled: enabled,
       plan,
+      planTier: tier,
       adminNote: note,
     }
     // Solo cambiamos la fecha cuando está Activo (si está en solo lectura, no importa)
@@ -244,12 +322,22 @@ function AdminUserEditor({ user, onSaved }: { user: AdminUser; onSaved: () => vo
         </div>
       )}
 
-      {/* Plan y nota */}
-      <div className="grid sm:grid-cols-2 gap-3">
+      {/* Plan (módulos), cobro y nota */}
+      <div className="grid sm:grid-cols-3 gap-3">
         <div>
-          <label className="block text-xs font-medium text-gray-500 mb-1">Plan</label>
+          <label className="block text-xs font-medium text-gray-500 mb-1">Plan (módulos)</label>
+          <select value={tier} onChange={e => setTier(e.target.value as PlanTier)} className="input">
+            {ASSIGNABLE_TIERS.map(t => (
+              <option key={t} value={t}>
+                {PLAN_LABELS[t]}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-gray-500 mb-1">Cobro</label>
           <select value={plan} onChange={e => setPlan(e.target.value)} className="input">
-            <option value="">Prueba / sin plan</option>
+            <option value="">Sin plan</option>
             <option value="mensual">Mensual</option>
             <option value="anual">Anual</option>
             <option value="cortesia">Cortesía</option>

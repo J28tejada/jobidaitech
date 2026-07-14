@@ -4,6 +4,7 @@ import { getSupabaseClient } from '@/lib/supabase'
 import { getWorkspaceContext, getWriteAccess, READ_ONLY_ERROR } from '@/lib/workspaces'
 import { mapTransactionRow } from '@/lib/transactions'
 import { toDateOnly } from '@/lib/projects'
+import { track } from '@/lib/analytics'
 
 export async function GET(request: NextRequest) {
   try {
@@ -121,6 +122,12 @@ export async function POST(request: NextRequest) {
     if (error) {
       throw error
     }
+
+    await track('transaction_created', {
+      userId: ctx.user.id,
+      workspaceId: ctx.workspaceId,
+      props: { type: body.type },
+    })
 
     return NextResponse.json(mapTransactionRow(data), { status: 201 })
   } catch (error) {

@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseClient } from '@/lib/supabase'
 import { getWorkspaceContext, getWriteAccess, READ_ONLY_ERROR } from '@/lib/workspaces'
 import { mapProjectRow, toDateOnly } from '@/lib/projects'
+import { track } from '@/lib/analytics'
 
 export async function GET() {
   try {
@@ -81,6 +82,8 @@ export async function POST(request: NextRequest) {
     }
 
     const project = mapProjectRow(data)
+
+    await track('project_created', { userId: ctx.user.id, workspaceId: ctx.workspaceId })
 
     // Si el colaborador tiene alcance restringido, auto-asignarle el proyecto que acaba de crear
     if (ctx.scope === 'specific' && ctx.membershipId) {

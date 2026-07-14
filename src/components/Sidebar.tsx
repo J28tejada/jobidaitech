@@ -11,6 +11,7 @@ import {
   Settings,
   Users,
   ShieldCheck,
+  Rocket,
   Menu,
   X,
   LogOut,
@@ -23,6 +24,7 @@ const navigation = [
   { name: 'Transacciones', href: '/transacciones', icon: DollarSign },
   { name: 'Reportes', href: '/reportes', icon: BarChart3 },
   { name: 'Miembros', href: '/miembros', icon: Users },
+  { name: 'Crecé tus ventas', href: '/crecer', icon: Rocket },
   { name: 'Configuración', href: '/configuracion', icon: Settings },
 ]
 

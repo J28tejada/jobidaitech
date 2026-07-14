@@ -97,6 +97,47 @@ export async function notifyNewUserRegistered(user: { email?: string | null; nam
   }
 }
 
+/**
+ * Notifica al administrador que alguien pidió el servicio de marketing.
+ * Usa Resend si está configurado; nunca lanza.
+ */
+export async function notifyServiceLead(lead: {
+  name?: string | null
+  email?: string | null
+  whatsapp?: string | null
+  business?: string | null
+  message?: string | null
+}): Promise<void> {
+  const apiKey = process.env.RESEND_API_KEY
+  if (!apiKey) return
+
+  const to =
+    process.env.NOTIFY_EMAIL ||
+    (process.env.ADMIN_EMAILS ?? '').split(',').map(e => e.trim()).filter(Boolean)[0] ||
+    'josuetejadaromero@gmail.com'
+  const from = process.env.RESEND_FROM || 'ContaTaller <onboarding@resend.dev>'
+
+  const html = `
+    <div style="font-family: -apple-system, Segoe UI, Roboto, Arial, sans-serif; color:#1f2937;">
+      <h2 style="color:#111827;">Nuevo interesado en el servicio de marketing</h2>
+      <p><strong>${escapeHtml(lead.name ?? 'Sin nombre')}</strong> — ${escapeHtml(lead.business ?? '')}</p>
+      <p>Correo: ${escapeHtml(lead.email ?? '-')}<br>WhatsApp: ${escapeHtml(lead.whatsapp ?? '-')}</p>
+      <p>${escapeHtml(lead.message ?? '')}</p>
+      <p style="color:#6b7280;font-size:13px;">Míralo en el panel /admin.</p>
+    </div>
+  `
+
+  try {
+    await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ from, to, subject: 'Nuevo lead: servicio de marketing', html }),
+    })
+  } catch (error) {
+    console.error('notifyServiceLead', error)
+  }
+}
+
 function escapeHtml(value: string): string {
   return value
     .replace(/&/g, '&amp;')

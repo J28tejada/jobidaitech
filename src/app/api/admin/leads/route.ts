@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server'
 import { getSupabaseClient } from '@/lib/supabase'
 import { getWorkspaceContext } from '@/lib/workspaces'
 
-// Lista de todos los usuarios de la plataforma (solo administrador).
+// Leads del servicio de marketing (solo administrador).
 export async function GET() {
   const ctx = await getWorkspaceContext()
   if (!ctx) {
@@ -15,14 +15,15 @@ export async function GET() {
 
   const supabase = getSupabaseClient()
   const { data, error } = await supabase
-    .from('users')
-    .select('id, email, name, plan, plan_tier, access_enabled, access_until, admin_note, trial_started_at, created_at')
+    .from('service_leads')
+    .select('id, name, email, whatsapp, business, message, status, created_at')
     .order('created_at', { ascending: false })
+    .limit(100)
 
   if (error) {
-    console.error('GET /api/admin/users', error)
-    return NextResponse.json({ error: 'Error al obtener usuarios' }, { status: 500 })
+    console.error('GET /api/admin/leads', error)
+    return NextResponse.json({ error: 'Error al obtener leads' }, { status: 500 })
   }
 
-  return NextResponse.json({ users: data ?? [] })
+  return NextResponse.json({ leads: data ?? [] })
 }
