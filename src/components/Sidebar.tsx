@@ -70,8 +70,8 @@ export default function Sidebar() {
 
   return (
     <>
-      <div className="lg:hidden fixed top-4 left-4 z-50">
-        <button 
+      <div className="lg:hidden print:hidden fixed top-4 left-4 z-50">
+        <button
           onClick={() => setIsOpen(!isOpen)} 
           className="p-2 bg-primary-600 text-white rounded-lg shadow-md hover:bg-primary-700 transition-colors"
           aria-label="Menú de navegación"
@@ -88,7 +88,7 @@ export default function Sidebar() {
       )}
 
       <div
-        className={`fixed inset-y-0 left-0 z-50 w-64 bg-white shadow-lg transform transition-transform duration-300 ease-in-out
+        className={`fixed inset-y-0 left-0 z-50 w-64 bg-white shadow-lg transform transition-transform duration-300 ease-in-out print:hidden
         ${isOpen ? 'translate-x-0' : '-translate-x-full'}
         lg:translate-x-0 flex flex-col`}
       >

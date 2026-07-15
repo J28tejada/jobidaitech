@@ -39,7 +39,7 @@ export default function TopBar() {
   }
 
   return (
-    <header className="hidden lg:flex items-center justify-between bg-white border-b border-gray-200 px-6 py-4 sticky top-0 z-30 w-full max-w-full overflow-x-hidden">
+    <header className="hidden lg:flex print:!hidden items-center justify-between bg-white border-b border-gray-200 px-6 py-4 sticky top-0 z-30 w-full max-w-full overflow-x-hidden">
       <div className="flex items-center gap-4">
         <div>
           <h2 className="text-lg font-semibold text-gray-900">Panel financiero</h2>

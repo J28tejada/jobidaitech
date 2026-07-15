@@ -41,10 +41,10 @@ export default function Layout({ children }: LayoutProps) {
   return (
     <div className="min-h-screen bg-gray-50 w-full relative overflow-x-hidden">
       <Sidebar />
-      <div className="lg:ml-64 flex flex-col min-w-0 max-w-full">
+      <div className="lg:ml-64 print:ml-0 flex flex-col min-w-0 max-w-full">
         <TopBar />
         {/* Encabezado móvil: selector de espacio siempre visible */}
-        <header className="lg:hidden sticky top-0 z-30 bg-white border-b border-gray-200 h-14 flex items-center gap-3 pl-16 pr-3">
+        <header className="lg:hidden print:hidden sticky top-0 z-30 bg-white border-b border-gray-200 h-14 flex items-center gap-3 pl-16 pr-3">
           <WorkspaceSwitcher />
         </header>
         <main

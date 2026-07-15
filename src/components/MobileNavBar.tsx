@@ -20,7 +20,7 @@ export default function MobileNavBar({ onQuickAction }: MobileNavBarProps) {
   const pathname = usePathname();
 
   return (
-    <div className="lg:hidden">
+    <div className="lg:hidden print:hidden">
       <div 
         className="fixed left-0 right-0 z-40 bg-white border-t border-gray-200 shadow-lg"
         style={{ 

@@ -4,7 +4,7 @@ interface TransactionRow {
   type: 'income' | 'expense'
   amount: number
   date: string
-  project_id?: string
+  project_id?: string | null
 }
 
 interface ProjectRow {
@@ -95,6 +95,48 @@ export function calculateProjectSummary(project: ProjectRow, transactions: Trans
     transactionCount: transactions.length,
     lastTransactionDate,
   }
+}
+
+/**
+ * Buckets mensuales de ingresos/gastos/ganancia entre dos fechas (inclusive
+ * por mes). Generaliza calculateMonthlyReports (que es a N meses desde hoy).
+ */
+export function monthlyBucketsInRange(transactions: TransactionRow[], from: Date, to: Date): MonthlyReport[] {
+  const reports: MonthlyReport[] = []
+  let cursor = new Date(from.getFullYear(), from.getMonth(), 1)
+  const end = new Date(to.getFullYear(), to.getMonth(), 1)
+  let guard = 0
+
+  while (cursor <= end && guard < 240) {
+    const monthStart = new Date(cursor.getFullYear(), cursor.getMonth(), 1)
+    const nextMonth = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1)
+
+    let income = 0
+    let expenses = 0
+    for (const t of transactions) {
+      const d = new Date(t.date)
+      if (Number.isNaN(d.getTime())) continue
+      if (d >= monthStart && d < nextMonth) {
+        const amount = Number(t.amount ?? 0)
+        if (t.type === 'income') income += amount
+        else expenses += amount
+      }
+    }
+
+    reports.push({
+      month: monthStart.toLocaleDateString('es-ES', { month: 'long' }),
+      year: monthStart.getFullYear(),
+      income,
+      expenses,
+      profit: income - expenses,
+      projectCount: 0,
+    })
+
+    cursor = nextMonth
+    guard += 1
+  }
+
+  return reports
 }
 
 export function calculateMonthlyReports(transactions: TransactionRow[], months: number): MonthlyReport[] {
