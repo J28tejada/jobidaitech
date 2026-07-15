@@ -24,6 +24,8 @@ import {
 
 import { SUPPORT } from '@/lib/support'
 import { useCurrency } from './CurrencyProvider'
+import { useToast } from './Toaster'
+import { useConfirm } from './ConfirmDialog'
 
 interface Movement {
   id: string
@@ -60,6 +62,8 @@ const formatQty = (n: number) => {
 
 export default function InventoryList() {
   const { format: formatCurrency } = useCurrency()
+  const toast = useToast()
+  const confirm = useConfirm()
   const [loading, setLoading] = useState(true)
   const [locked, setLocked] = useState(false)
   const [items, setItems] = useState<Product[]>([])
@@ -128,18 +132,28 @@ export default function InventoryList() {
   }
 
   const archive = async (item: Product) => {
-    await fetch(`/api/products/${item.id}`, {
+    const res = await fetch(`/api/products/${item.id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
       body: JSON.stringify({ active: !item.active }),
     })
+    if (res.ok) toast.success(item.active ? 'Producto archivado' : 'Producto reactivado')
+    else toast.error('No se pudo actualizar el producto')
     await load()
   }
 
   const remove = async (item: Product) => {
-    if (!window.confirm(`¿Eliminar "${item.name}"? Se borrará también su historial.`)) return
-    await fetch(`/api/products/${item.id}`, { method: 'DELETE', credentials: 'include' })
+    const ok = await confirm({
+      title: 'Eliminar producto',
+      message: `¿Eliminar "${item.name}"? Se borrará también su historial de movimientos.`,
+      confirmText: 'Eliminar',
+      danger: true,
+    })
+    if (!ok) return
+    const res = await fetch(`/api/products/${item.id}`, { method: 'DELETE', credentials: 'include' })
+    if (res.ok) toast.success('Producto eliminado')
+    else toast.error('No se pudo eliminar el producto')
     await load()
   }
 
@@ -389,9 +403,11 @@ export default function InventoryList() {
             setEditing(null)
           }}
           onSaved={async () => {
+            const wasEditing = !!editing
             setShowForm(false)
             setEditing(null)
             await load()
+            toast.success(wasEditing ? 'Producto actualizado' : 'Producto creado')
           }}
         />
       )}
@@ -402,8 +418,10 @@ export default function InventoryList() {
           type={moveTarget.type}
           onClose={() => setMoveTarget(null)}
           onSaved={async () => {
+            const label = moveTarget.type === 'in' ? 'Entrada registrada' : moveTarget.type === 'out' ? 'Salida registrada' : 'Stock ajustado'
             setMoveTarget(null)
             await load()
+            toast.success(label)
           }}
         />
       )}

@@ -16,10 +16,12 @@ import ProjectForm from './ProjectForm';
 import TransactionForm from './TransactionForm';
 import Onboarding from './Onboarding';
 import { useCurrency } from './CurrencyProvider';
+import { useToast } from './Toaster';
 
 export default function Dashboard() {
   const router = useRouter();
   const { format: formatCurrency } = useCurrency();
+  const toast = useToast();
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [recentProjects, setRecentProjects] = useState<Project[]>([]);
   const [receivables, setReceivables] = useState<{ totalOutstanding: number; overdueAmount: number } | null>(null);
@@ -123,9 +125,13 @@ export default function Dashboard() {
       if (response.ok) {
         await fetchStats(); // Refresh stats
         await fetchRecentProjects(); // Refresh recent projects
+        toast.success('Proyecto creado');
+      } else {
+        toast.error('No se pudo crear el proyecto');
       }
     } catch (error) {
       console.error('Error creating project:', error);
+      toast.error('Ocurrió un error al crear el proyecto');
     }
   };
 
@@ -142,9 +148,13 @@ export default function Dashboard() {
 
       if (response.ok) {
         await fetchStats(); // Refresh stats
+        toast.success('Transacción registrada');
+      } else {
+        toast.error('No se pudo registrar la transacción');
       }
     } catch (error) {
       console.error('Error creating transaction:', error);
+      toast.error('Ocurrió un error al registrar la transacción');
     }
   };
 

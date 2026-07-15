@@ -5,6 +5,8 @@ import { SessionContextProvider } from '@supabase/auth-helpers-react'
 import { createPagesBrowserClient } from '@supabase/auth-helpers-nextjs'
 
 import { CurrencyProvider } from './CurrencyProvider'
+import { ToastProvider } from './Toaster'
+import { ConfirmProvider } from './ConfirmDialog'
 
 interface ProvidersProps {
   children: ReactNode
@@ -27,7 +29,11 @@ export default function Providers({ children }: ProvidersProps) {
 
   return (
     <SessionContextProvider supabaseClient={supabaseClient}>
-      <CurrencyProvider>{children}</CurrencyProvider>
+      <CurrencyProvider>
+        <ToastProvider>
+          <ConfirmProvider>{children}</ConfirmProvider>
+        </ToastProvider>
+      </CurrencyProvider>
     </SessionContextProvider>
   )
 }

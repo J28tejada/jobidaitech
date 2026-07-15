@@ -26,10 +26,14 @@ import TransactionForm from './TransactionForm';
 import MoveProjectModal from './MoveProjectModal';
 import TransferAccountModal from './TransferAccountModal';
 import { useCurrency } from './CurrencyProvider';
+import { useToast } from './Toaster';
+import { useConfirm } from './ConfirmDialog';
 
 export default function ProjectsList() {
   const router = useRouter();
   const { format: formatCurrency } = useCurrency();
+  const toast = useToast();
+  const confirm = useConfirm();
   const searchParams = useSearchParams();
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
@@ -116,6 +120,10 @@ export default function ProjectsList() {
         if (response.ok) {
           await fetchProjects();
           setEditingProject(null);
+          toast.success('Proyecto actualizado');
+        } else {
+          const body = await response.json().catch(() => null);
+          toast.error(body?.message || body?.error || 'No se pudo actualizar el proyecto');
         }
       } else {
         // Create new project
@@ -130,10 +138,15 @@ export default function ProjectsList() {
 
         if (response.ok) {
           await fetchProjects();
+          toast.success('Proyecto creado');
+        } else {
+          const body = await response.json().catch(() => null);
+          toast.error(body?.message || body?.error || 'No se pudo crear el proyecto');
         }
       }
     } catch (error) {
       console.error('Error saving project:', error);
+      toast.error('Ocurrió un error al guardar el proyecto');
     }
   };
 
@@ -143,19 +156,28 @@ export default function ProjectsList() {
   };
 
   const handleDeleteProject = async (projectId: string) => {
-    if (window.confirm('¿Estás seguro de que quieres eliminar este proyecto?')) {
-      try {
-        const response = await fetch(`/api/projects/${projectId}`, {
-          method: 'DELETE',
-          credentials: 'include',
-        });
+    const ok = await confirm({
+      title: 'Eliminar proyecto',
+      message: '¿Estás seguro de que quieres eliminar este proyecto? Se eliminarán también sus transacciones.',
+      confirmText: 'Eliminar',
+      danger: true,
+    });
+    if (!ok) return;
+    try {
+      const response = await fetch(`/api/projects/${projectId}`, {
+        method: 'DELETE',
+        credentials: 'include',
+      });
 
-        if (response.ok) {
-          await fetchProjects();
-        }
-      } catch (error) {
-        console.error('Error deleting project:', error);
+      if (response.ok) {
+        await fetchProjects();
+        toast.success('Proyecto eliminado');
+      } else {
+        toast.error('No se pudo eliminar el proyecto');
       }
+    } catch (error) {
+      console.error('Error deleting project:', error);
+      toast.error('Ocurrió un error al eliminar el proyecto');
     }
   };
 

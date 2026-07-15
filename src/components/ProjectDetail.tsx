@@ -26,6 +26,8 @@ import {
 import ProjectForm from './ProjectForm';
 import TransactionForm from './TransactionForm';
 import { useCurrency } from './CurrencyProvider';
+import { useToast } from './Toaster';
+import { useConfirm } from './ConfirmDialog';
 
 interface ProjectDetailProps {
   projectId: string;
@@ -34,6 +36,8 @@ interface ProjectDetailProps {
 export default function ProjectDetail({ projectId }: ProjectDetailProps) {
   const router = useRouter();
   const { format: formatCurrency } = useCurrency();
+  const toast = useToast();
+  const confirm = useConfirm();
   const [project, setProject] = useState<Project | null>(null);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
@@ -88,9 +92,13 @@ export default function ProjectDetail({ projectId }: ProjectDetailProps) {
       if (response.ok) {
         await fetchProjectData();
         setShowProjectForm(false);
+        toast.success('Proyecto actualizado');
+      } else {
+        toast.error('No se pudo actualizar el proyecto');
       }
     } catch (error) {
       console.error('Error saving project:', error);
+      toast.error('Ocurrió un error al guardar el proyecto');
     }
   };
 
@@ -109,6 +117,9 @@ export default function ProjectDetail({ projectId }: ProjectDetailProps) {
           setEditingTransaction(null);
           setShowIncomeForm(false);
           setShowExpenseForm(false);
+          toast.success('Transacción actualizada');
+        } else {
+          toast.error('No se pudo actualizar la transacción');
         }
       } else {
         const response = await fetch('/api/transactions', {
@@ -122,17 +133,25 @@ export default function ProjectDetail({ projectId }: ProjectDetailProps) {
           await fetchProjectData();
           setShowIncomeForm(false);
           setShowExpenseForm(false);
+          toast.success('Transacción registrada');
+        } else {
+          toast.error('No se pudo registrar la transacción');
         }
       }
     } catch (error) {
       console.error('Error saving transaction:', error);
+      toast.error('Ocurrió un error al guardar la transacción');
     }
   };
 
   const handleDeleteProject = async () => {
-    if (!confirm('¿Estás seguro de que quieres eliminar este proyecto? Esta acción no se puede deshacer.')) {
-      return;
-    }
+    const ok = await confirm({
+      title: 'Eliminar proyecto',
+      message: '¿Estás seguro de que quieres eliminar este proyecto? Esta acción no se puede deshacer.',
+      confirmText: 'Eliminar',
+      danger: true,
+    });
+    if (!ok) return;
 
     try {
       const response = await fetch(`/api/projects/${projectId}`, {
@@ -141,17 +160,25 @@ export default function ProjectDetail({ projectId }: ProjectDetailProps) {
       });
 
       if (response.ok) {
+        toast.success('Proyecto eliminado');
         router.push('/proyectos');
+      } else {
+        toast.error('No se pudo eliminar el proyecto');
       }
     } catch (error) {
       console.error('Error deleting project:', error);
+      toast.error('Ocurrió un error al eliminar el proyecto');
     }
   };
 
   const handleDeleteTransaction = async (transactionId: string) => {
-    if (!confirm('¿Estás seguro de que quieres eliminar esta transacción?')) {
-      return;
-    }
+    const ok = await confirm({
+      title: 'Eliminar transacción',
+      message: '¿Estás seguro de que quieres eliminar esta transacción?',
+      confirmText: 'Eliminar',
+      danger: true,
+    });
+    if (!ok) return;
 
     try {
       const response = await fetch(`/api/transactions/${transactionId}`, {
@@ -161,9 +188,13 @@ export default function ProjectDetail({ projectId }: ProjectDetailProps) {
 
       if (response.ok) {
         await fetchProjectData();
+        toast.success('Transacción eliminada');
+      } else {
+        toast.error('No se pudo eliminar la transacción');
       }
     } catch (error) {
       console.error('Error deleting transaction:', error);
+      toast.error('Ocurrió un error al eliminar');
     }
   };
 

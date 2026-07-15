@@ -4,6 +4,8 @@ import { useCallback, useEffect, useState } from 'react'
 import { Loader2, UserPlus, Building2, Copy, Check, Trash2, Mail, ShieldCheck, FolderCog, ChevronDown } from 'lucide-react'
 
 import Layout from '@/components/Layout'
+import { useToast } from '@/components/Toaster'
+import { useConfirm } from '@/components/ConfirmDialog'
 import {
   ASSIGNABLE_ROLES,
   ROLE_DESCRIPTIONS,
@@ -43,6 +45,8 @@ interface ActiveWorkspace {
 }
 
 export default function MembersPage() {
+  const toast = useToast()
+  const confirm = useConfirm()
   const [workspace, setWorkspace] = useState<ActiveWorkspace | null>(null)
   const [members, setMembers] = useState<Member[]>([])
   const [invitations, setInvitations] = useState<Invitation[]>([])
@@ -144,8 +148,17 @@ export default function MembersPage() {
   }
 
   const removeMember = async (memberId: string) => {
-    if (!workspace || !confirm('¿Quitar a esta persona del negocio?')) return
-    await fetch(`/api/workspaces/${workspace.id}/members/${memberId}`, { method: 'DELETE' })
+    if (!workspace) return
+    const ok = await confirm({
+      title: 'Quitar miembro',
+      message: '¿Quitar a esta persona del negocio?',
+      confirmText: 'Quitar',
+      danger: true,
+    })
+    if (!ok) return
+    const res = await fetch(`/api/workspaces/${workspace.id}/members/${memberId}`, { method: 'DELETE' })
+    if (res.ok) toast.success('Miembro removido')
+    else toast.error('No se pudo remover al miembro')
     await loadMembers(workspace.id)
   }
 
@@ -178,27 +191,47 @@ export default function MembersPage() {
 
   const transferOwnership = async (memberId: string) => {
     if (!workspace) return
-    if (!confirm('¿Transferir la propiedad del negocio a esta persona? Tú pasarás a ser Administrador.')) return
+    const ok = await confirm({
+      title: 'Transferir propiedad',
+      message: '¿Transferir la propiedad del negocio a esta persona? Tú pasarás a ser Administrador.',
+      confirmText: 'Transferir',
+    })
+    if (!ok) return
     const res = await fetch(`/api/workspaces/${workspace.id}/transfer`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ memberId }),
     })
     if (res.ok) window.location.reload()
+    else toast.error('No se pudo transferir la propiedad')
   }
 
   const leaveBusiness = async () => {
     if (!workspace) return
-    if (!confirm('¿Salir de este negocio? Perderás el acceso a sus datos.')) return
+    const ok = await confirm({
+      title: 'Salir del negocio',
+      message: '¿Salir de este negocio? Perderás el acceso a sus datos.',
+      confirmText: 'Salir',
+      danger: true,
+    })
+    if (!ok) return
     const res = await fetch(`/api/workspaces/${workspace.id}/leave`, { method: 'POST' })
     if (res.ok) window.location.href = '/'
+    else toast.error('No se pudo salir del negocio')
   }
 
   const deleteBusiness = async () => {
     if (!workspace) return
-    if (!confirm(`¿ELIMINAR el negocio "${workspace.name}"? Se borrarán TODOS sus proyectos y transacciones. Esta acción no se puede deshacer.`)) return
+    const ok = await confirm({
+      title: 'Eliminar negocio',
+      message: `¿ELIMINAR el negocio "${workspace.name}"? Se borrarán TODOS sus proyectos y transacciones. Esta acción no se puede deshacer.`,
+      confirmText: 'Eliminar todo',
+      danger: true,
+    })
+    if (!ok) return
     const res = await fetch(`/api/workspaces/${workspace.id}`, { method: 'DELETE' })
     if (res.ok) window.location.href = '/'
+    else toast.error('No se pudo eliminar el negocio')
   }
 
   const inviteLinkFor = (token: string) =>

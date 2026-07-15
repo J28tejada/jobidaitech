@@ -3,6 +3,8 @@
 import { useEffect, useState } from 'react';
 import { Category } from '@/types';
 import { Plus, Trash2, Settings2, Loader2, Pencil, X } from 'lucide-react';
+import { useToast } from './Toaster';
+import { useConfirm } from './ConfirmDialog';
 
 interface CategoryFormState {
   name: string;
@@ -19,6 +21,8 @@ const initialForm: CategoryFormState = {
 };
 
 export default function CategoryManager() {
+  const toast = useToast();
+  const confirm = useConfirm();
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -81,10 +85,12 @@ export default function CategoryManager() {
 
       await loadCategories();
       setForm(initialForm);
+      toast.success(editingId ? 'Categoría actualizada' : 'Categoría creada');
       setEditingId(null);
     } catch (err) {
       console.error(err);
       setError('Ocurrió un error al guardar la categoría');
+      toast.error('No se pudo guardar la categoría');
     } finally {
       setSaving(false);
     }
@@ -108,7 +114,13 @@ export default function CategoryManager() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('¿Deseas eliminar esta categoría?')) return;
+    const ok = await confirm({
+      title: 'Eliminar categoría',
+      message: '¿Deseas eliminar esta categoría?',
+      confirmText: 'Eliminar',
+      danger: true,
+    });
+    if (!ok) return;
 
     try {
       const response = await fetch(`/api/categories/${id}`, { method: 'DELETE', credentials: 'include' });
@@ -117,9 +129,11 @@ export default function CategoryManager() {
       }
 
       setCategories(prev => prev.filter(category => category.id !== id));
+      toast.success('Categoría eliminada');
     } catch (err) {
       console.error(err);
       setError('No se pudo eliminar la categoría');
+      toast.error('No se pudo eliminar la categoría');
     }
   };
 

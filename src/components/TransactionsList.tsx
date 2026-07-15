@@ -15,11 +15,15 @@ import {
 } from 'lucide-react';
 import TransactionForm from './TransactionForm';
 import { useCurrency } from './CurrencyProvider';
+import { useToast } from './Toaster';
+import { useConfirm } from './ConfirmDialog';
 
 const PAGE_SIZE = 25;
 
 export default function TransactionsList() {
   const { format: formatCurrency } = useCurrency();
+  const toast = useToast();
+  const confirm = useConfirm();
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -124,30 +128,27 @@ export default function TransactionsList() {
 
   const handleTransactionSave = async (transactionData: Omit<Transaction, 'id' | 'createdAt' | 'updatedAt'>) => {
     try {
-      if (editingTransaction) {
-        const response = await fetch(`/api/transactions/${editingTransaction.id}`, {
-          method: 'PUT',
+      const editing = !!editingTransaction;
+      const response = await fetch(
+        editing ? `/api/transactions/${editingTransaction!.id}` : '/api/transactions',
+        {
+          method: editing ? 'PUT' : 'POST',
           headers: { 'Content-Type': 'application/json' },
           credentials: 'include',
           body: JSON.stringify(transactionData),
-        });
-        if (response.ok) {
-          await refresh();
-          setEditingTransaction(null);
         }
+      );
+      if (response.ok) {
+        await refresh();
+        setEditingTransaction(null);
+        toast.success(editing ? 'Transacción actualizada' : 'Transacción registrada');
       } else {
-        const response = await fetch('/api/transactions', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',
-          body: JSON.stringify(transactionData),
-        });
-        if (response.ok) {
-          await refresh();
-        }
+        const body = await response.json().catch(() => null);
+        toast.error(body?.message || body?.error || 'No se pudo guardar la transacción');
       }
     } catch (error) {
       console.error('Error saving transaction:', error);
+      toast.error('Ocurrió un error al guardar la transacción');
     }
   };
 
@@ -161,18 +162,27 @@ export default function TransactionsList() {
   };
 
   const handleDeleteTransaction = async (transactionId: string) => {
-    if (window.confirm('¿Estás seguro de que quieres eliminar esta transacción?')) {
-      try {
-        const response = await fetch(`/api/transactions/${transactionId}`, {
-          method: 'DELETE',
-          credentials: 'include',
-        });
-        if (response.ok) {
-          await refresh();
-        }
-      } catch (error) {
-        console.error('Error deleting transaction:', error);
+    const ok = await confirm({
+      title: 'Eliminar transacción',
+      message: '¿Estás seguro de que quieres eliminar esta transacción?',
+      confirmText: 'Eliminar',
+      danger: true,
+    });
+    if (!ok) return;
+    try {
+      const response = await fetch(`/api/transactions/${transactionId}`, {
+        method: 'DELETE',
+        credentials: 'include',
+      });
+      if (response.ok) {
+        await refresh();
+        toast.success('Transacción eliminada');
+      } else {
+        toast.error('No se pudo eliminar la transacción');
       }
+    } catch (error) {
+      console.error('Error deleting transaction:', error);
+      toast.error('Ocurrió un error al eliminar');
     }
   };
 
@@ -191,7 +201,14 @@ export default function TransactionsList() {
 
   const deleteSelected = async () => {
     if (selected.size === 0) return;
-    if (!window.confirm(`¿Eliminar ${selected.size} transacción(es) seleccionada(s)?`)) return;
+    const count = selected.size;
+    const ok = await confirm({
+      title: 'Eliminar transacciones',
+      message: `¿Eliminar ${count} transacción(es) seleccionada(s)?`,
+      confirmText: 'Eliminar',
+      danger: true,
+    });
+    if (!ok) return;
     setDeleting(true);
     try {
       await Promise.all(
@@ -200,8 +217,10 @@ export default function TransactionsList() {
         )
       );
       await refresh();
+      toast.success(`${count} transacción(es) eliminada(s)`);
     } catch (error) {
       console.error('Error deleting selected transactions:', error);
+      toast.error('No se pudieron eliminar todas las transacciones');
     } finally {
       setDeleting(false);
     }

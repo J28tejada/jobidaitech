@@ -20,6 +20,8 @@ import {
 
 import { SUPPORT } from '@/lib/support'
 import { useCurrency } from './CurrencyProvider'
+import { useToast } from './Toaster'
+import { useConfirm } from './ConfirmDialog'
 
 interface Receivable {
   id: string
@@ -69,6 +71,8 @@ const reminderLink = (r: Receivable, fmt: (n: number) => string) => {
 
 export default function ReceivablesList() {
   const { format: formatCurrency } = useCurrency()
+  const toast = useToast()
+  const confirm = useConfirm()
   const [loading, setLoading] = useState(true)
   const [locked, setLocked] = useState(false)
   const [items, setItems] = useState<Receivable[]>([])
@@ -141,18 +145,31 @@ export default function ReceivablesList() {
   }
 
   const updateStatus = async (item: Receivable, status: 'paid' | 'cancelled') => {
-    await fetch(`/api/receivables/${item.id}`, {
+    const res = await fetch(`/api/receivables/${item.id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
       body: JSON.stringify({ status }),
     })
+    if (res.ok) {
+      toast.success(status === 'paid' ? 'Cuenta marcada como pagada' : 'Cuenta cancelada')
+    } else {
+      toast.error('No se pudo actualizar la cuenta')
+    }
     await load()
   }
 
   const remove = async (item: Receivable) => {
-    if (!window.confirm(`¿Eliminar la cuenta por cobrar de ${item.client}?`)) return
-    await fetch(`/api/receivables/${item.id}`, { method: 'DELETE', credentials: 'include' })
+    const ok = await confirm({
+      title: 'Eliminar cuenta por cobrar',
+      message: `¿Eliminar la cuenta por cobrar de ${item.client}?`,
+      confirmText: 'Eliminar',
+      danger: true,
+    })
+    if (!ok) return
+    const res = await fetch(`/api/receivables/${item.id}`, { method: 'DELETE', credentials: 'include' })
+    if (res.ok) toast.success('Cuenta eliminada')
+    else toast.error('No se pudo eliminar la cuenta')
     await load()
   }
 
@@ -372,9 +389,11 @@ export default function ReceivablesList() {
             setEditing(null)
           }}
           onSaved={async () => {
+            const wasEditing = !!editing
             setShowForm(false)
             setEditing(null)
             await load()
+            toast.success(wasEditing ? 'Cuenta actualizada' : 'Cuenta por cobrar creada')
           }}
         />
       )}
@@ -386,6 +405,7 @@ export default function ReceivablesList() {
           onSaved={async () => {
             setAbonoTarget(null)
             await load()
+            toast.success('Abono registrado')
           }}
         />
       )}
