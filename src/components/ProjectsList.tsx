@@ -25,9 +25,11 @@ import ProjectForm from './ProjectForm';
 import TransactionForm from './TransactionForm';
 import MoveProjectModal from './MoveProjectModal';
 import TransferAccountModal from './TransferAccountModal';
+import { useCurrency } from './CurrencyProvider';
 
 export default function ProjectsList() {
   const router = useRouter();
+  const { format: formatCurrency } = useCurrency();
   const searchParams = useSearchParams();
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
@@ -182,19 +184,6 @@ export default function ProjectsList() {
     } else {
       setShowExpenseForm(true);
     }
-  };
-
-  const formatCurrency = (amount: number) => {
-    const value = Number.isFinite(amount) ? amount : 0;
-    const [, decimals] = value.toFixed(2).split('.');
-    const hasDecimals = Number(decimals) !== 0;
-
-    return new Intl.NumberFormat('es-MX', {
-      style: 'currency',
-      currency: 'MXN',
-      minimumFractionDigits: hasDecimals ? 2 : 0,
-      maximumFractionDigits: hasDecimals ? 2 : 0,
-    }).format(value);
   };
 
   const formatDate = (value?: Date | string | null) => {

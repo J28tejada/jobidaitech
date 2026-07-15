@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { Transaction, Project, Category } from '@/types';
-import { X, Save, DollarSign, Calendar, FileText, Tag, CreditCard } from 'lucide-react';
+import { X, Save, DollarSign, Calendar, FileText, Tag, CreditCard, Paperclip, Loader2, Trash2 } from 'lucide-react';
 
 interface TransactionFormProps {
   isOpen: boolean;
@@ -93,6 +93,9 @@ export default function TransactionForm({
 
   const [loadingCategories, setLoadingCategories] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [attachments, setAttachments] = useState<string[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
 
   useEffect(() => {
     fetchProjects();
@@ -117,6 +120,7 @@ export default function TransactionForm({
         paymentMethod: transaction.paymentMethod,
         reference: transaction.reference || '',
       });
+      setAttachments(Array.isArray(transaction.attachments) ? transaction.attachments : []);
     } else {
       setFormData({
         projectId: projectId || '',
@@ -129,8 +133,10 @@ export default function TransactionForm({
         paymentMethod: 'cash',
         reference: '',
       });
+      setAttachments([]);
     }
     setErrors({});
+    setUploadError(null);
   }, [transaction, isOpen, projectId, type]);
 
   useEffect(() => {
@@ -209,9 +215,43 @@ export default function TransactionForm({
     return Object.keys(newErrors).length === 0;
   };
 
+  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = ''; // permite volver a subir el mismo archivo
+    if (!file) return;
+    setUploading(true);
+    setUploadError(null);
+    try {
+      const body = new FormData();
+      body.append('file', file);
+      const res = await fetch('/api/uploads', { method: 'POST', credentials: 'include', body });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || 'No se pudo subir el archivo');
+      setAttachments(prev => [...prev, data.path]);
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : 'Error al subir el archivo');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const removeAttachment = (path: string) => {
+    setAttachments(prev => prev.filter(p => p !== path));
+  };
+
+  const viewAttachment = async (path: string) => {
+    try {
+      const res = await fetch(`/api/uploads/sign?path=${encodeURIComponent(path)}`, { credentials: 'include' });
+      const data = await res.json();
+      if (res.ok && data?.url) window.open(data.url, '_blank', 'noopener,noreferrer');
+    } catch {
+      /* noop */
+    }
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!validateForm()) {
       return;
     }
@@ -226,7 +266,7 @@ export default function TransactionForm({
       date: new Date(formData.date),
       paymentMethod: formData.paymentMethod,
       reference: formData.reference || undefined,
-      attachments: [],
+      attachments,
     };
 
     onSave(transactionData);
@@ -243,6 +283,7 @@ export default function TransactionForm({
         paymentMethod: 'cash',
         reference: '',
       }));
+      setAttachments([]);
       setErrors({});
     } else {
       onClose();
@@ -433,6 +474,50 @@ export default function TransactionForm({
               className="input"
               placeholder="Número de factura, comprobante, etc."
             />
+          </div>
+
+          <div>
+            <label className="label">
+              <Paperclip className="h-4 w-4 inline mr-1" />
+              Recibos / comprobantes
+            </label>
+            {attachments.length > 0 && (
+              <ul className="space-y-2 mb-2">
+                {attachments.map((path, i) => (
+                  <li key={path} className="flex items-center justify-between bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">
+                    <button
+                      type="button"
+                      onClick={() => viewAttachment(path)}
+                      className="text-sm text-primary-600 hover:underline flex items-center gap-2 min-w-0"
+                    >
+                      <Paperclip className="h-4 w-4 flex-shrink-0" />
+                      <span className="truncate">Recibo {i + 1}</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => removeAttachment(path)}
+                      className="text-danger-500 hover:text-danger-700 p-1 flex-shrink-0"
+                      aria-label="Quitar recibo"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <label className="btn btn-secondary inline-flex items-center cursor-pointer">
+              {uploading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Paperclip className="h-4 w-4 mr-2" />}
+              {uploading ? 'Subiendo…' : 'Adjuntar recibo'}
+              <input
+                type="file"
+                accept="image/*,application/pdf"
+                className="hidden"
+                onChange={handleUpload}
+                disabled={uploading}
+              />
+            </label>
+            <p className="text-xs text-gray-500 mt-1">Imagen o PDF, hasta 4 MB.</p>
+            {uploadError && <p className="text-sm text-danger-600 mt-1">{uploadError}</p>}
           </div>
 
           <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2 sm:gap-3 pt-4 sm:pt-6 border-t border-gray-200 sticky bottom-0 bg-white -mx-4 sm:mx-0 px-4 sm:px-0 pb-1">

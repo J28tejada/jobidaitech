@@ -22,8 +22,10 @@ import {
   Area,
 } from 'recharts';
 import { TrendingUp, TrendingDown, DollarSign, BarChart3, Calendar } from 'lucide-react';
+import { useCurrency } from '@/components/CurrencyProvider';
 
 function ReportsContent() {
+  const { format: formatCurrency } = useCurrency();
   const [monthlyReports, setMonthlyReports] = useState<MonthlyReport[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -46,19 +48,6 @@ function ReportsContent() {
     } finally {
       setLoading(false);
     }
-  };
-
-  const formatCurrency = (amount: number) => {
-    const value = Number.isFinite(amount) ? amount : 0;
-    const [, decimals] = value.toFixed(2).split('.');
-    const hasDecimals = Number(decimals) !== 0;
-
-    return new Intl.NumberFormat('es-MX', {
-      style: 'currency',
-      currency: 'MXN',
-      minimumFractionDigits: hasDecimals ? 2 : 0,
-      maximumFractionDigits: hasDecimals ? 2 : 0,
-    }).format(value);
   };
 
   const formatCurrencyCompact = (amount: number) => {

@@ -15,32 +15,43 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url)
     const projectId = searchParams.get('projectId')
+    const type = searchParams.get('type') // 'income' | 'expense'
+    const category = searchParams.get('category')
+    const from = searchParams.get('from') // YYYY-MM-DD
+    const to = searchParams.get('to') // YYYY-MM-DD
+    const search = (searchParams.get('search') || '').trim()
+
+    const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10) || 1)
+    const pageSize = Math.min(1000, Math.max(1, parseInt(searchParams.get('pageSize') || '25', 10) || 25))
+    const offset = (page - 1) * pageSize
 
     const supabase = getSupabaseClient()
     const query = supabase
       .from('transactions')
-      .select('*')
+      .select('*', { count: 'exact' })
       .eq('workspace_id', ctx.workspaceId)
       .order('date', { ascending: false })
       .order('created_at', { ascending: false })
 
-    if (projectId) {
-      query.eq('project_id', projectId)
-    }
+    if (projectId) query.eq('project_id', projectId)
+    if (type === 'income' || type === 'expense') query.eq('type', type)
+    if (category) query.eq('category_name', category)
+    if (from) query.gte('date', from)
+    if (to) query.lte('date', to)
+    if (search) query.or(`description.ilike.%${search}%,category_name.ilike.%${search}%`)
 
     // Alcance por proyecto
     if (ctx.allowedProjectIds) {
       query.in('project_id', ctx.allowedProjectIds)
     }
 
-    const { data, error } = await query
+    query.range(offset, offset + pageSize - 1)
 
-    if (error) {
-      throw error
-    }
+    const { data, error, count } = await query
+    if (error) throw error
 
-    const transactions = (data ?? []).map(mapTransactionRow)
-    return NextResponse.json(transactions)
+    const items = (data ?? []).map(mapTransactionRow)
+    return NextResponse.json({ items, total: count ?? items.length, page, pageSize })
   } catch (error) {
     console.error('GET /api/transactions', error)
     return NextResponse.json({ error: 'Error al obtener transacciones' }, { status: 500 })

@@ -29,6 +29,8 @@ export async function GET() {
       canWrite: ctx.canWrite,
       planTier: ctx.planTier,
       modules: modulesForTier(ctx.planTier),
+      currency: ctx.currency,
+      locale: ctx.locale,
     })
   } catch (error) {
     console.error('GET /api/workspaces', error)

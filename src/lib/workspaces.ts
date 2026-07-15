@@ -5,6 +5,7 @@ import { getSupabaseClient } from './supabase'
 import { createSupabaseRouteClient } from './supabase-route'
 import { DEFAULT_BUSINESS_TYPE, ensureUserRow, type EnsureUserPayload } from './users'
 import { hasModule, type ModuleKey, type PlanTier } from './modules'
+import { DEFAULT_CURRENCY, DEFAULT_LOCALE } from './format'
 
 export const ACTIVE_WORKSPACE_COOKIE = 'active_workspace_id'
 
@@ -80,6 +81,10 @@ export interface WorkspaceContext {
   planTier: PlanTier
   /** ¿El plan del espacio activo incluye este módulo? */
   hasModule: (key: ModuleKey) => boolean
+  /** Moneda del espacio activo (ISO 4217, ej. 'DOP'). */
+  currency: string
+  /** Locale del espacio activo (ej. 'es-DO'). */
+  locale: string
 }
 
 const DEFAULT_ADMIN_EMAILS = ['josuetejadaromero@gmail.com']
@@ -307,6 +312,15 @@ export async function getWorkspaceContext(): Promise<WorkspaceContext | null> {
     }
   }
 
+  // Moneda/locale del espacio activo (para formatear montos).
+  const { data: wsPrefs } = await supabase
+    .from('workspaces')
+    .select('currency, locale')
+    .eq('id', workspaceId)
+    .maybeSingle()
+  const currency = (wsPrefs?.currency as string) || DEFAULT_CURRENCY
+  const locale = (wsPrefs?.locale as string) || DEFAULT_LOCALE
+
   return {
     user: profile,
     workspaceId,
@@ -320,6 +334,8 @@ export async function getWorkspaceContext(): Promise<WorkspaceContext | null> {
     isAdmin,
     planTier,
     hasModule: (key: ModuleKey) => hasModule(planTier, key),
+    currency,
+    locale,
   }
 }
 

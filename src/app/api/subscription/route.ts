@@ -35,6 +35,9 @@ export async function GET() {
     // Plan/módulos EFECTIVOS del espacio activo (para el gating de nav y paywall)
     planTier: ctx.planTier,
     modules: modulesForTier(ctx.planTier),
+    // Moneda/locale del espacio activo (para formatear montos en el cliente)
+    currency: ctx.currency,
+    locale: ctx.locale,
     // Info de la suscripción PERSONAL (para el contador de prueba)
     isTrial,
     plan,

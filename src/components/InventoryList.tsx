@@ -23,6 +23,7 @@ import {
 } from 'lucide-react'
 
 import { SUPPORT } from '@/lib/support'
+import { useCurrency } from './CurrencyProvider'
 
 interface Movement {
   id: string
@@ -52,24 +53,13 @@ interface Summary {
   lowStockCount: number
 }
 
-const formatCurrency = (amount: number) => {
-  const value = Number.isFinite(amount) ? amount : 0
-  const [, decimals] = value.toFixed(2).split('.')
-  const hasDecimals = Number(decimals) !== 0
-  return new Intl.NumberFormat('es-MX', {
-    style: 'currency',
-    currency: 'MXN',
-    minimumFractionDigits: hasDecimals ? 2 : 0,
-    maximumFractionDigits: hasDecimals ? 2 : 0,
-  }).format(value)
-}
-
 const formatQty = (n: number) => {
   const v = Number.isFinite(n) ? n : 0
   return Number.isInteger(v) ? String(v) : v.toFixed(2)
 }
 
 export default function InventoryList() {
+  const { format: formatCurrency } = useCurrency()
   const [loading, setLoading] = useState(true)
   const [locked, setLocked] = useState(false)
   const [items, setItems] = useState<Product[]>([])

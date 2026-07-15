@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { Category } from '@/types';
-import { Plus, Trash2, Settings2, Loader2 } from 'lucide-react';
+import { Plus, Trash2, Settings2, Loader2, Pencil, X } from 'lucide-react';
 
 interface CategoryFormState {
   name: string;
@@ -23,6 +23,7 @@ export default function CategoryManager() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState<CategoryFormState>(initialForm);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const loadCategories = async () => {
@@ -54,33 +55,56 @@ export default function CategoryManager() {
     setError(null);
 
     try {
-      const response = await fetch('/api/categories', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({
-          name: form.name.trim(),
-          type: form.type,
-          color: form.color,
-          subcategories: form.subcategories
-            .split(',')
-            .map(item => item.trim())
-            .filter(Boolean),
-        }),
-      });
+      const payload = {
+        name: form.name.trim(),
+        type: form.type,
+        color: form.color,
+        subcategories: form.subcategories
+          .split(',')
+          .map(item => item.trim())
+          .filter(Boolean),
+      };
+
+      const response = await fetch(
+        editingId ? `/api/categories/${editingId}` : '/api/categories',
+        {
+          method: editingId ? 'PUT' : 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify(payload),
+        }
+      );
 
       if (!response.ok) {
-        throw new Error('No se pudo crear la categoría');
+        throw new Error('No se pudo guardar la categoría');
       }
 
       await loadCategories();
       setForm(initialForm);
+      setEditingId(null);
     } catch (err) {
       console.error(err);
       setError('Ocurrió un error al guardar la categoría');
     } finally {
       setSaving(false);
     }
+  };
+
+  const startEdit = (category: Category) => {
+    setEditingId(category.id);
+    setForm({
+      name: category.name,
+      type: category.type,
+      subcategories: (category.subcategories ?? []).join(', '),
+      color: category.color ?? '#4b5563',
+    });
+    setError(null);
+  };
+
+  const cancelEdit = () => {
+    setEditingId(null);
+    setForm(initialForm);
+    setError(null);
   };
 
   const handleDelete = async (id: string) => {
@@ -153,14 +177,20 @@ export default function CategoryManager() {
           />
         </div>
         {error && <p className="text-sm text-danger-600">{error}</p>}
-        <div className="flex justify-end">
+        <div className="flex justify-end gap-2">
+          {editingId && (
+            <button type="button" onClick={cancelEdit} className="btn btn-secondary inline-flex items-center">
+              <X className="h-4 w-4 mr-2" />
+              Cancelar
+            </button>
+          )}
           <button
             type="submit"
             disabled={saving}
             className="btn btn-primary inline-flex items-center"
           >
-            {saving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Plus className="h-4 w-4 mr-2" />}
-            Agregar categoría
+            {saving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : editingId ? <Pencil className="h-4 w-4 mr-2" /> : <Plus className="h-4 w-4 mr-2" />}
+            {editingId ? 'Guardar cambios' : 'Agregar categoría'}
           </button>
         </div>
       </form>
@@ -177,23 +207,43 @@ export default function CategoryManager() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             {categories.map(category => (
-              <div key={category.id} className="flex items-start justify-between bg-gray-50 border border-gray-200 rounded-lg p-3">
-                <div>
-                  <span className="text-sm font-medium text-gray-900">{category.name}</span>
-                  <div className="text-xs text-gray-500 capitalize">{category.type === 'income' ? 'Ingreso' : 'Gasto'}</div>
-                  {category.subcategories && category.subcategories.length > 0 && (
-                    <p className="text-xs text-gray-500 mt-1">
-                      {category.subcategories.join(', ')}
-                    </p>
+              <div
+                key={category.id}
+                className={`flex items-start justify-between border rounded-lg p-3 ${
+                  editingId === category.id ? 'bg-primary-50 border-primary-300' : 'bg-gray-50 border-gray-200'
+                }`}
+              >
+                <div className="flex items-start gap-2 min-w-0">
+                  {category.color && (
+                    <span
+                      className="inline-block h-3 w-3 rounded-full mt-1 flex-shrink-0"
+                      style={{ backgroundColor: category.color }}
+                    />
                   )}
+                  <div className="min-w-0">
+                    <span className="text-sm font-medium text-gray-900">{category.name}</span>
+                    <div className="text-xs text-gray-500 capitalize">{category.type === 'income' ? 'Ingreso' : 'Gasto'}</div>
+                    {category.subcategories && category.subcategories.length > 0 && (
+                      <p className="text-xs text-gray-500 mt-1">{category.subcategories.join(', ')}</p>
+                    )}
+                  </div>
                 </div>
-                <button
-                  onClick={() => handleDelete(category.id)}
-                  className="text-danger-500 hover:text-danger-700"
-                  aria-label={`Eliminar categoría ${category.name}`}
-                >
-                  <Trash2 className="h-4 w-4" />
-                </button>
+                <div className="flex items-center gap-1 flex-shrink-0">
+                  <button
+                    onClick={() => startEdit(category)}
+                    className="text-gray-400 hover:text-primary-600 p-1"
+                    aria-label={`Editar categoría ${category.name}`}
+                  >
+                    <Pencil className="h-4 w-4" />
+                  </button>
+                  <button
+                    onClick={() => handleDelete(category.id)}
+                    className="text-danger-500 hover:text-danger-700 p-1"
+                    aria-label={`Eliminar categoría ${category.name}`}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </div>
               </div>
             ))}
           </div>

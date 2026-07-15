@@ -21,9 +21,11 @@ import {
   XCircle,
   Plus,
   MoreVertical,
+  Paperclip,
 } from 'lucide-react';
 import ProjectForm from './ProjectForm';
 import TransactionForm from './TransactionForm';
+import { useCurrency } from './CurrencyProvider';
 
 interface ProjectDetailProps {
   projectId: string;
@@ -31,6 +33,7 @@ interface ProjectDetailProps {
 
 export default function ProjectDetail({ projectId }: ProjectDetailProps) {
   const router = useRouter();
+  const { format: formatCurrency } = useCurrency();
   const [project, setProject] = useState<Project | null>(null);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
@@ -48,7 +51,7 @@ export default function ProjectDetail({ projectId }: ProjectDetailProps) {
       setLoading(true);
       const [projectRes, transactionsRes] = await Promise.all([
         fetch(`/api/projects/${projectId}`, { credentials: 'include' }),
-        fetch(`/api/transactions?projectId=${projectId}`, { credentials: 'include' }),
+        fetch(`/api/transactions?projectId=${projectId}&pageSize=1000`, { credentials: 'include' }),
       ]);
 
       if (!projectRes.ok) {
@@ -57,9 +60,15 @@ export default function ProjectDetail({ projectId }: ProjectDetailProps) {
 
       const projectData = await projectRes.json();
       const transactionsData = await transactionsRes.json();
+      // La API devuelve { items, total }; toleramos también un arreglo directo.
+      const txItems = Array.isArray(transactionsData)
+        ? transactionsData
+        : Array.isArray(transactionsData?.items)
+        ? transactionsData.items
+        : [];
 
       setProject(projectData);
-      setTransactions(Array.isArray(transactionsData) ? transactionsData : []);
+      setTransactions(txItems);
     } catch (error) {
       console.error('Error fetching project data:', error);
     } finally {
@@ -167,19 +176,6 @@ export default function ProjectDetail({ projectId }: ProjectDetailProps) {
     }
   };
 
-  const formatCurrency = (amount: number) => {
-    const value = Number.isFinite(amount) ? amount : 0;
-    const [, decimals] = value.toFixed(2).split('.');
-    const hasDecimals = Number(decimals) !== 0;
-
-    return new Intl.NumberFormat('es-MX', {
-      style: 'currency',
-      currency: 'MXN',
-      minimumFractionDigits: hasDecimals ? 2 : 0,
-      maximumFractionDigits: hasDecimals ? 2 : 0,
-    }).format(value);
-  };
-
   const formatDate = (value?: Date | string | null) => {
     if (!value) return 'Sin fecha';
     return new Date(value).toLocaleDateString('es-ES', {
@@ -187,6 +183,16 @@ export default function ProjectDetail({ projectId }: ProjectDetailProps) {
       month: 'long',
       day: 'numeric',
     });
+  };
+
+  const viewAttachment = async (path: string) => {
+    try {
+      const res = await fetch(`/api/uploads/sign?path=${encodeURIComponent(path)}`, { credentials: 'include' });
+      const data = await res.json();
+      if (res.ok && data?.url) window.open(data.url, '_blank', 'noopener,noreferrer');
+    } catch {
+      /* noop */
+    }
   };
 
   const formatDateShort = (value?: Date | string | null) => {
@@ -462,7 +468,18 @@ export default function ProjectDetail({ projectId }: ProjectDetailProps) {
                           </div>
                         </td>
                         <td className="py-4 px-4">
-                          <p className="text-sm font-medium text-gray-900">{transaction.description}</p>
+                          <p className="text-sm font-medium text-gray-900 flex items-center gap-1.5">
+                            {transaction.description}
+                            {transaction.attachments && transaction.attachments.length > 0 && (
+                              <button
+                                onClick={() => viewAttachment(transaction.attachments![0])}
+                                className="text-gray-400 hover:text-primary-600"
+                                title={`${transaction.attachments!.length} recibo(s)`}
+                              >
+                                <Paperclip className="h-3.5 w-3.5" />
+                              </button>
+                            )}
+                          </p>
                           {transaction.reference && (
                             <p className="text-xs text-gray-500 mt-1">Ref: {transaction.reference}</p>
                           )}

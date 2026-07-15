@@ -4,6 +4,8 @@ import { useState, type ReactNode } from 'react'
 import { SessionContextProvider } from '@supabase/auth-helpers-react'
 import { createPagesBrowserClient } from '@supabase/auth-helpers-nextjs'
 
+import { CurrencyProvider } from './CurrencyProvider'
+
 interface ProvidersProps {
   children: ReactNode
 }
@@ -23,5 +25,9 @@ export default function Providers({ children }: ProvidersProps) {
     })
   })
 
-  return <SessionContextProvider supabaseClient={supabaseClient}>{children}</SessionContextProvider>
+  return (
+    <SessionContextProvider supabaseClient={supabaseClient}>
+      <CurrencyProvider>{children}</CurrencyProvider>
+    </SessionContextProvider>
+  )
 }

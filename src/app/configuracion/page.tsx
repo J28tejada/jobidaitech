@@ -6,6 +6,8 @@ import { Loader2, HelpCircle, Sparkles } from 'lucide-react';
 import Layout from '@/components/Layout';
 import CategoryManager from '@/components/CategoryManager';
 import { BusinessType } from '@/types';
+import { CURRENCIES } from '@/lib/format';
+import { useCurrency } from '@/components/CurrencyProvider';
 
 const BUSINESS_OPTIONS: { value: BusinessType; label: string; description: string }[] = [
   {
@@ -17,10 +19,14 @@ const BUSINESS_OPTIONS: { value: BusinessType; label: string; description: strin
 
 export default function ConfigurationPage() {
   const router = useRouter();
+  const { format, refresh: refreshCurrency } = useCurrency();
   const [businessType, setBusinessType] = useState<BusinessType>('carpentry');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
+  const [currency, setCurrency] = useState<string>('DOP');
+  const [savingCurrency, setSavingCurrency] = useState(false);
+  const [currencyFeedback, setCurrencyFeedback] = useState<string | null>(null);
 
   const handleShowOnboarding = () => {
     // Establecer una señal para que se muestre el onboarding
@@ -32,10 +38,17 @@ export default function ConfigurationPage() {
   const fetchSettings = async () => {
     try {
       setLoading(true);
-      const response = await fetch('/api/settings/business-type', { credentials: 'include' });
-      if (response.ok) {
-        const data = await response.json();
+      const [btRes, curRes] = await Promise.all([
+        fetch('/api/settings/business-type', { credentials: 'include' }),
+        fetch('/api/settings/currency', { credentials: 'include' }),
+      ]);
+      if (btRes.ok) {
+        const data = await btRes.json();
         setBusinessType(data.businessType);
+      }
+      if (curRes.ok) {
+        const data = await curRes.json();
+        if (data.currency) setCurrency(data.currency);
       }
     } catch (error) {
       console.error('Error fetching settings', error);
@@ -47,6 +60,30 @@ export default function ConfigurationPage() {
   useEffect(() => {
     fetchSettings();
   }, []);
+
+  const handleCurrencyChange = async (value: string) => {
+    setSavingCurrency(true);
+    setCurrencyFeedback(null);
+    try {
+      const response = await fetch('/api/settings/currency', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ currency: value }),
+      });
+      if (!response.ok) {
+        const body = await response.json().catch(() => null);
+        throw new Error(body?.error || 'No se pudo actualizar la moneda');
+      }
+      setCurrency(value);
+      refreshCurrency();
+      setCurrencyFeedback('Moneda actualizada. Los montos ahora se muestran en esta moneda.');
+    } catch (error) {
+      setCurrencyFeedback(error instanceof Error ? error.message : 'Error al guardar la moneda');
+    } finally {
+      setSavingCurrency(false);
+    }
+  };
 
   const handleBusinessTypeChange = async (value: BusinessType) => {
     setSaving(true);
@@ -119,6 +156,39 @@ export default function ConfigurationPage() {
                 </label>
               ))}
               {feedback && <p className="text-sm text-primary-600">{feedback}</p>}
+            </div>
+          )}
+        </div>
+
+        {/* Moneda */}
+        <div className="card">
+          <h2 className="text-lg font-semibold text-gray-900 mb-4">Moneda</h2>
+          <p className="text-gray-600 mb-4">
+            Elige la moneda en la que se muestran todos los montos de este espacio.
+          </p>
+          {loading ? (
+            <div className="flex items-center space-x-2 text-gray-500">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              <span>Cargando moneda actual…</span>
+            </div>
+          ) : (
+            <div className="space-y-3 max-w-md">
+              <select
+                className="input"
+                value={currency}
+                onChange={e => handleCurrencyChange(e.target.value)}
+                disabled={savingCurrency}
+              >
+                {CURRENCIES.map(c => (
+                  <option key={c.code} value={c.code}>
+                    {c.label}
+                  </option>
+                ))}
+              </select>
+              <p className="text-sm text-gray-500">
+                Ejemplo: {format(1234.5)}
+              </p>
+              {currencyFeedback && <p className="text-sm text-primary-600">{currencyFeedback}</p>}
             </div>
           )}
         </div>

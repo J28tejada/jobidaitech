@@ -15,9 +15,11 @@ import {
 import ProjectForm from './ProjectForm';
 import TransactionForm from './TransactionForm';
 import Onboarding from './Onboarding';
+import { useCurrency } from './CurrencyProvider';
 
 export default function Dashboard() {
   const router = useRouter();
+  const { format: formatCurrency } = useCurrency();
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [recentProjects, setRecentProjects] = useState<Project[]>([]);
   const [receivables, setReceivables] = useState<{ totalOutstanding: number; overdueAmount: number } | null>(null);
@@ -161,19 +163,6 @@ export default function Dashboard() {
       </div>
     );
   }
-
-  const formatCurrency = (amount: number) => {
-    const value = Number.isFinite(amount) ? amount : 0;
-    const [, decimals] = value.toFixed(2).split('.');
-    const hasDecimals = Number(decimals) !== 0;
-
-    return new Intl.NumberFormat('es-MX', {
-      style: 'currency',
-      currency: 'MXN',
-      minimumFractionDigits: hasDecimals ? 2 : 0,
-      maximumFractionDigits: hasDecimals ? 2 : 0,
-    }).format(value);
-  };
 
   const formatPercentage = (value?: number | null) => {
     const safeValue = Number.isFinite(value as number) ? (value as number) : 0;

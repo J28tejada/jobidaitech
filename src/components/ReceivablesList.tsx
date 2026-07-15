@@ -19,6 +19,7 @@ import {
 } from 'lucide-react'
 
 import { SUPPORT } from '@/lib/support'
+import { useCurrency } from './CurrencyProvider'
 
 interface Receivable {
   id: string
@@ -45,18 +46,6 @@ interface ProjectOption {
   name: string
 }
 
-const formatCurrency = (amount: number) => {
-  const value = Number.isFinite(amount) ? amount : 0
-  const [, decimals] = value.toFixed(2).split('.')
-  const hasDecimals = Number(decimals) !== 0
-  return new Intl.NumberFormat('es-MX', {
-    style: 'currency',
-    currency: 'MXN',
-    minimumFractionDigits: hasDecimals ? 2 : 0,
-    maximumFractionDigits: hasDecimals ? 2 : 0,
-  }).format(value)
-}
-
 const todayStr = () => new Date().toISOString().slice(0, 10)
 const isOverdue = (r: Receivable) => r.status === 'open' && r.balance > 0 && !!r.dueDate && r.dueDate < todayStr()
 
@@ -67,11 +56,11 @@ const formatDate = (value: string | null) => {
   return d.toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' })
 }
 
-const reminderLink = (r: Receivable) => {
+const reminderLink = (r: Receivable, fmt: (n: number) => string) => {
   const digits = (r.clientPhone || '').replace(/\D/g, '')
   if (!digits) return null
   const msg =
-    `Hola ${r.client}, te recuerdo tu saldo pendiente de ${formatCurrency(r.balance)}` +
+    `Hola ${r.client}, te recuerdo tu saldo pendiente de ${fmt(r.balance)}` +
     (r.description ? ` por ${r.description}` : '') +
     (r.dueDate ? ` (vence ${formatDate(r.dueDate)})` : '') +
     `. ¡Gracias!`
@@ -79,6 +68,7 @@ const reminderLink = (r: Receivable) => {
 }
 
 export default function ReceivablesList() {
+  const { format: formatCurrency } = useCurrency()
   const [loading, setLoading] = useState(true)
   const [locked, setLocked] = useState(false)
   const [items, setItems] = useState<Receivable[]>([])
@@ -312,9 +302,9 @@ export default function ReceivablesList() {
                 <Coins className="h-4 w-4 text-gray-400" /> Registrar abono
               </button>
             )}
-            {reminderLink(menu.item) && (
+            {reminderLink(menu.item, formatCurrency) && (
               <a
-                href={reminderLink(menu.item)!}
+                href={reminderLink(menu.item, formatCurrency)!}
                 target="_blank"
                 rel="noopener noreferrer"
                 onClick={() => setMenu(null)}
@@ -545,6 +535,7 @@ function ReceivableForm({
 }
 
 function AbonoForm({ receivable, onClose, onSaved }: { receivable: Receivable; onClose: () => void; onSaved: () => void }) {
+  const { format: formatCurrency } = useCurrency()
   const [amount, setAmount] = useState('')
   const [date, setDate] = useState(todayStr())
   const [method, setMethod] = useState('')
