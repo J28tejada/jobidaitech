@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 
 import { getSupabaseClient } from '@/lib/supabase'
 import { getWorkspaceContext } from '@/lib/workspaces'
+import { modulesForTier } from '@/lib/modules'
 
 // Estado de la suscripción del usuario autenticado (para el aviso/banner).
 export async function GET() {
@@ -31,6 +32,9 @@ export async function GET() {
     canWrite: ctx.canWrite,
     isAdmin: ctx.isAdmin,
     isPersonal: ctx.isPersonal,
+    // Plan/módulos EFECTIVOS del espacio activo (para el gating de nav y paywall)
+    planTier: ctx.planTier,
+    modules: modulesForTier(ctx.planTier),
     // Info de la suscripción PERSONAL (para el contador de prueba)
     isTrial,
     plan,

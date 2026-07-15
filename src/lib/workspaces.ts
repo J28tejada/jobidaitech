@@ -102,6 +102,13 @@ export const READ_ONLY_ERROR = {
     'Tu suscripción está inactiva: puedes ver toda tu información pero no hacer cambios. Contacta a soporte para reactivarla.',
 }
 
+/** Respuesta estándar cuando el plan del espacio no incluye el módulo. */
+export const MODULE_LOCKED_ERROR = {
+  error: 'module_locked',
+  message:
+    'Este módulo no está incluido en tu plan actual. Actualiza tu plan para activarlo.',
+}
+
 /** Calcula si un usuario puede hacer cambios según su suscripción. */
 export function computeCanWrite(row: { access_enabled?: boolean | null; access_until?: string | null } | null): boolean {
   if (!row) return true

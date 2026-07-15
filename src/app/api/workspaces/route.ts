@@ -9,6 +9,7 @@ import {
   READ_ONLY_ERROR,
 } from '@/lib/workspaces'
 import { DEFAULT_BUSINESS_TYPE } from '@/lib/users'
+import { modulesForTier } from '@/lib/modules'
 import type { BusinessType } from '@/types'
 
 const SUPPORTED_BUSINESS_TYPES: BusinessType[] = ['carpentry', 'construction']
@@ -26,6 +27,8 @@ export async function GET() {
       workspaces,
       isAdmin: ctx.isAdmin,
       canWrite: ctx.canWrite,
+      planTier: ctx.planTier,
+      modules: modulesForTier(ctx.planTier),
     })
   } catch (error) {
     console.error('GET /api/workspaces', error)

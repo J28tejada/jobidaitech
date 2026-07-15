@@ -12,16 +12,21 @@ import {
   Users,
   ShieldCheck,
   Rocket,
+  Coins,
+  Lock,
   Menu,
   X,
   LogOut,
 } from 'lucide-react'
 import { useSessionContext, useSupabaseClient } from '@supabase/auth-helpers-react'
 
-const navigation = [
+type NavItem = { name: string; href: string; icon: typeof Home; moduleKey?: string }
+
+const navigation: NavItem[] = [
   { name: 'Panel de control', href: '/', icon: Home },
   { name: 'Proyectos', href: '/proyectos', icon: FolderOpen },
   { name: 'Transacciones', href: '/transacciones', icon: DollarSign },
+  { name: 'Cobros', href: '/cobros', icon: Coins, moduleKey: 'receivables' },
   { name: 'Reportes', href: '/reportes', icon: BarChart3 },
   { name: 'Miembros', href: '/miembros', icon: Users },
   { name: 'Crecé tus ventas', href: '/crecer', icon: Rocket },
@@ -31,6 +36,7 @@ const navigation = [
 export default function Sidebar() {
   const [isOpen, setIsOpen] = useState(false)
   const [isAdmin, setIsAdmin] = useState(false)
+  const [modules, setModules] = useState<string[] | null>(null)
   const pathname = usePathname()
   const router = useRouter()
   const supabase = useSupabaseClient()
@@ -41,7 +47,9 @@ export default function Sidebar() {
     fetch('/api/subscription')
       .then(res => (res.ok ? res.json() : null))
       .then(data => {
-        if (active && data?.isAdmin) setIsAdmin(true)
+        if (!active || !data) return
+        if (data.isAdmin) setIsAdmin(true)
+        if (Array.isArray(data.modules)) setModules(data.modules)
       })
       .catch(() => {})
     return () => {
@@ -90,6 +98,8 @@ export default function Sidebar() {
           <ul className="space-y-2">
             {navigation.map(item => {
               const isActive = pathname === item.href
+              // Módulo bloqueado si el plan no lo incluye (solo cuando ya cargó).
+              const isLocked = !!item.moduleKey && modules !== null && !modules.includes(item.moduleKey)
               return (
                 <li key={item.name}>
                   <Link
@@ -99,7 +109,8 @@ export default function Sidebar() {
                     onClick={() => setIsOpen(false)}
                   >
                     <item.icon className="mr-3 h-5 w-5" />
-                    {item.name}
+                    <span className="flex-1">{item.name}</span>
+                    {isLocked && <Lock className="h-3.5 w-3.5 text-gray-400" />}
                   </Link>
                 </li>
               )

@@ -3,12 +3,13 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { DashboardStats, Project, Transaction } from '@/types';
-import { 
-  FolderOpen, 
-  TrendingUp, 
-  TrendingDown, 
+import {
+  FolderOpen,
+  TrendingUp,
+  TrendingDown,
   DollarSign,
-  Activity
+  Activity,
+  Coins
 } from 'lucide-react';
 import ProjectForm from './ProjectForm';
 import TransactionForm from './TransactionForm';
@@ -18,6 +19,7 @@ export default function Dashboard() {
   const router = useRouter();
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [recentProjects, setRecentProjects] = useState<Project[]>([]);
+  const [receivables, setReceivables] = useState<{ totalOutstanding: number; overdueAmount: number } | null>(null);
   const [loading, setLoading] = useState(true);
   const [showProjectForm, setShowProjectForm] = useState(false);
   const [showIncomeForm, setShowIncomeForm] = useState(false);
@@ -26,7 +28,22 @@ export default function Dashboard() {
   useEffect(() => {
     fetchStats();
     fetchRecentProjects();
+    fetchReceivables();
   }, []);
+
+  const fetchReceivables = async () => {
+    try {
+      // 403 = módulo no incluido en el plan; simplemente no mostramos el KPI.
+      const response = await fetch('/api/receivables/summary', { credentials: 'include' });
+      if (!response.ok) return;
+      const data = await response.json();
+      if (data && typeof data.totalOutstanding === 'number') {
+        setReceivables({ totalOutstanding: data.totalOutstanding, overdueAmount: data.overdueAmount ?? 0 });
+      }
+    } catch {
+      // silencioso
+    }
+  };
 
   const fetchStats = async () => {
     try {
@@ -246,6 +263,34 @@ export default function Dashboard() {
             </div>
           </div>
         </div>
+
+        {receivables && (
+          <button
+            onClick={() => router.push('/cobros')}
+            className="card cursor-pointer hover:shadow-lg transition-all duration-200 text-left border-l-4 border-l-yellow-500 w-full overflow-hidden group"
+          >
+            <div className="flex items-start justify-between w-full min-w-0">
+              <div className="flex items-center flex-1 min-w-0">
+                <div className="p-3 bg-yellow-100 rounded-lg group-hover:bg-yellow-200 transition-colors">
+                  <Coins className="h-6 w-6 text-yellow-600" />
+                </div>
+                <div className="ml-4 flex-1 min-w-0">
+                  <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1 truncate">
+                    Por Cobrar
+                  </p>
+                  <p className="text-xl font-bold text-gray-900 mb-1 break-words leading-tight">
+                    {formatCurrency(receivables.totalOutstanding)}
+                  </p>
+                  <p className="text-xs text-gray-500 truncate">
+                    {receivables.overdueAmount > 0
+                      ? `${formatCurrency(receivables.overdueAmount)} vencido`
+                      : 'Al día'}
+                  </p>
+                </div>
+              </div>
+            </div>
+          </button>
+        )}
       </div>
 
       {/* Quick Actions and Summary - Side by side */}
