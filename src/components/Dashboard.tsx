@@ -9,7 +9,8 @@ import {
   TrendingDown,
   DollarSign,
   Activity,
-  Coins
+  Coins,
+  Boxes
 } from 'lucide-react';
 import ProjectForm from './ProjectForm';
 import TransactionForm from './TransactionForm';
@@ -20,6 +21,7 @@ export default function Dashboard() {
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [recentProjects, setRecentProjects] = useState<Project[]>([]);
   const [receivables, setReceivables] = useState<{ totalOutstanding: number; overdueAmount: number } | null>(null);
+  const [inventory, setInventory] = useState<{ inventoryValue: number; lowStockCount: number } | null>(null);
   const [loading, setLoading] = useState(true);
   const [showProjectForm, setShowProjectForm] = useState(false);
   const [showIncomeForm, setShowIncomeForm] = useState(false);
@@ -29,6 +31,7 @@ export default function Dashboard() {
     fetchStats();
     fetchRecentProjects();
     fetchReceivables();
+    fetchInventory();
   }, []);
 
   const fetchReceivables = async () => {
@@ -39,6 +42,20 @@ export default function Dashboard() {
       const data = await response.json();
       if (data && typeof data.totalOutstanding === 'number') {
         setReceivables({ totalOutstanding: data.totalOutstanding, overdueAmount: data.overdueAmount ?? 0 });
+      }
+    } catch {
+      // silencioso
+    }
+  };
+
+  const fetchInventory = async () => {
+    try {
+      // 403 = módulo no incluido en el plan; simplemente no mostramos el KPI.
+      const response = await fetch('/api/products/summary', { credentials: 'include' });
+      if (!response.ok) return;
+      const data = await response.json();
+      if (data && typeof data.inventoryValue === 'number') {
+        setInventory({ inventoryValue: data.inventoryValue, lowStockCount: data.lowStockCount ?? 0 });
       }
     } catch {
       // silencioso
@@ -285,6 +302,34 @@ export default function Dashboard() {
                     {receivables.overdueAmount > 0
                       ? `${formatCurrency(receivables.overdueAmount)} vencido`
                       : 'Al día'}
+                  </p>
+                </div>
+              </div>
+            </div>
+          </button>
+        )}
+
+        {inventory && (
+          <button
+            onClick={() => router.push('/inventario')}
+            className="card cursor-pointer hover:shadow-lg transition-all duration-200 text-left border-l-4 border-l-primary-600 w-full overflow-hidden group"
+          >
+            <div className="flex items-start justify-between w-full min-w-0">
+              <div className="flex items-center flex-1 min-w-0">
+                <div className="p-3 bg-primary-100 rounded-lg group-hover:bg-primary-200 transition-colors">
+                  <Boxes className="h-6 w-6 text-primary-600" />
+                </div>
+                <div className="ml-4 flex-1 min-w-0">
+                  <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1 truncate">
+                    Inventario
+                  </p>
+                  <p className="text-xl font-bold text-gray-900 mb-1 break-words leading-tight">
+                    {formatCurrency(inventory.inventoryValue)}
+                  </p>
+                  <p className="text-xs text-gray-500 truncate">
+                    {inventory.lowStockCount > 0
+                      ? `${inventory.lowStockCount} bajo stock`
+                      : 'Stock al día'}
                   </p>
                 </div>
               </div>

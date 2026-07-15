@@ -2,7 +2,7 @@
 // Modelo "Odoo-lite": internamente hay módulos; de cara al cliente se venden
 // planes empaquetados. Un plan incluye un conjunto de módulos.
 
-export type ModuleKey = 'core' | 'team' | 'reports' | 'growth' | 'receivables'
+export type ModuleKey = 'core' | 'team' | 'reports' | 'growth' | 'receivables' | 'inventory'
 export type PlanTier = 'trial' | 'basico' | 'negocio' | 'pro'
 
 export const MODULES: Record<ModuleKey, { name: string; description: string }> = {
@@ -26,14 +26,18 @@ export const MODULES: Record<ModuleKey, { name: string; description: string }> =
     name: 'Cobros (¿quién me debe?)',
     description: 'Cuentas por cobrar, abonos, saldos y recordatorios por WhatsApp.',
   },
+  inventory: {
+    name: 'Inventario',
+    description: 'Productos, stock, movimientos y alertas de bajo stock.',
+  },
 }
 
 // Qué módulos incluye cada plan. Durante la prueba todo está disponible.
 export const PLAN_MODULES: Record<PlanTier, ModuleKey[]> = {
-  trial: ['core', 'team', 'reports', 'growth', 'receivables'],
+  trial: ['core', 'team', 'reports', 'growth', 'receivables', 'inventory'],
   basico: ['core', 'growth'],
-  negocio: ['core', 'team', 'growth', 'receivables'],
-  pro: ['core', 'team', 'reports', 'growth', 'receivables'],
+  negocio: ['core', 'team', 'growth', 'receivables', 'inventory'],
+  pro: ['core', 'team', 'reports', 'growth', 'receivables', 'inventory'],
 }
 
 /** Lista de módulos incluidos en un plan (para exponer al cliente). */
