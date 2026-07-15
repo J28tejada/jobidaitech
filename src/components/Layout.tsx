@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { useSessionContext } from '@supabase/auth-helpers-react'
 
 import AccountStatus from './AccountStatus'
+import InstallPrompt from './InstallPrompt'
 import MobileNavBar from './MobileNavBar'
 import PendingInvites from './PendingInvites'
 import PendingTransfers from './PendingTransfers'
@@ -55,6 +56,7 @@ export default function Layout({ children }: LayoutProps) {
         >
           <div className="p-4 lg:p-6 min-w-0 max-w-full">
             <AccountStatus />
+            <InstallPrompt />
             <PendingInvites />
             <PendingTransfers />
             {children}
