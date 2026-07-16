@@ -18,6 +18,7 @@ import {
   FileText,
   Target,
   CalendarClock,
+  Sparkles,
   Lock,
   Menu,
   X,
@@ -40,6 +41,7 @@ const navigation: NavItem[] = [
   { name: 'Reportes', href: '/reportes', icon: BarChart3, moduleKey: 'reports' },
   { name: 'Miembros', href: '/miembros', icon: Users, moduleKey: 'team' },
   { name: 'Crecé tus ventas', href: '/crecer', icon: Rocket },
+  { name: 'Planes', href: '/planes', icon: Sparkles },
   { name: 'Configuración', href: '/configuracion', icon: Settings },
 ]
 

@@ -80,8 +80,9 @@ export default function AccountStatus() {
           <div className="text-sm text-amber-900">
             <p className="font-medium">Estás en modo solo lectura</p>
             <p className="text-amber-800">
-              Puedes ver toda tu información, pero no hacer cambios. Contacta a soporte para activar tu suscripción.
+              Puedes ver toda tu información, pero no hacer cambios. Activa un plan para seguir trabajando.
             </p>
+            <a href="/planes" className="inline-block mt-1 font-medium text-primary-700 hover:underline">Ver planes →</a>
           </div>
         </div>
       )
@@ -94,7 +95,8 @@ export default function AccountStatus() {
             <p className="font-medium">
               Tu prueba termina en {sub.daysLeft} día{sub.daysLeft === 1 ? '' : 's'}
             </p>
-            <p className="text-amber-800">Después podrás seguir viendo tu información pero no editarla. Contacta para suscribirte.</p>
+            <p className="text-amber-800">Después podrás seguir viendo tu información pero no editarla.</p>
+            <a href="/planes" className="inline-block mt-1 font-medium text-primary-700 hover:underline">Ver planes →</a>
           </div>
         </div>
       )
@@ -134,6 +136,9 @@ export default function AccountStatus() {
             <button onClick={dismissWelcome} className="btn btn-primary w-full">
               Entendido, ¡a empezar!
             </button>
+            <a href="/planes" className="block text-center text-sm text-primary-700 hover:underline mt-3">
+              Ver planes y precios
+            </a>
           </div>
         </div>
       )}

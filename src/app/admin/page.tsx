@@ -35,6 +35,18 @@ interface Lead {
   created_at: string
 }
 
+interface PlanRequest {
+  id: string
+  name: string | null
+  whatsapp: string | null
+  business: string | null
+  plan: string | null
+  cycle: string | null
+  message: string | null
+  status: string
+  created_at: string
+}
+
 const RECENT_DAYS = 7
 
 function isRecent(createdAt: string) {
@@ -45,6 +57,7 @@ export default function AdminPage() {
   const [users, setUsers] = useState<AdminUser[]>([])
   const [metrics, setMetrics] = useState<Metrics | null>(null)
   const [leads, setLeads] = useState<Lead[]>([])
+  const [planRequests, setPlanRequests] = useState<PlanRequest[]>([])
   const [loading, setLoading] = useState(true)
   const [forbidden, setForbidden] = useState(false)
   const [search, setSearch] = useState('')
@@ -63,6 +76,7 @@ export default function AdminPage() {
     // KPIs y leads (no bloquean la lista)
     fetch('/api/admin/metrics').then(r => (r.ok ? r.json() : null)).then(m => m && setMetrics(m)).catch(() => {})
     fetch('/api/admin/leads').then(r => (r.ok ? r.json() : { leads: [] })).then(d => setLeads(d.leads ?? [])).catch(() => {})
+    fetch('/api/admin/plan-requests').then(r => (r.ok ? r.json() : { requests: [] })).then(d => setPlanRequests(d.requests ?? [])).catch(() => {})
   }
 
   useEffect(() => {
@@ -178,6 +192,41 @@ export default function AdminPage() {
                 )
               })}
             </div>
+
+            {planRequests.length > 0 && (
+              <div className="card">
+                <h2 className="text-lg font-semibold text-gray-900 mb-3">Solicitudes de plan</h2>
+                <ul className="divide-y divide-gray-100">
+                  {planRequests.map(r => (
+                    <li key={r.id} className="py-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-gray-900 truncate">
+                            {r.name ?? 'Sin nombre'}
+                            {r.plan && <span className="text-primary-700"> · Plan {r.plan}{r.cycle === 'annual' ? ' (anual)' : ''}</span>}
+                            {r.business && <span className="text-gray-500"> · {r.business}</span>}
+                          </p>
+                          <p className="text-xs text-gray-500">
+                            {r.whatsapp ?? ''} · {new Date(r.created_at).toLocaleDateString('es-ES')}
+                          </p>
+                        </div>
+                        {r.whatsapp && (
+                          <a
+                            href={`https://wa.me/${r.whatsapp.replace(/\D/g, '')}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="btn btn-success text-xs flex-shrink-0"
+                          >
+                            WhatsApp
+                          </a>
+                        )}
+                      </div>
+                      {r.message && <p className="text-sm text-gray-600 mt-1">{r.message}</p>}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
 
             {leads.length > 0 && (
               <div className="card">
