@@ -10,7 +10,8 @@ import {
   DollarSign,
   Activity,
   Coins,
-  Boxes
+  Boxes,
+  Target
 } from 'lucide-react';
 import ProjectForm from './ProjectForm';
 import TransactionForm from './TransactionForm';
@@ -26,6 +27,7 @@ export default function Dashboard() {
   const [recentProjects, setRecentProjects] = useState<Project[]>([]);
   const [receivables, setReceivables] = useState<{ totalOutstanding: number; overdueAmount: number } | null>(null);
   const [inventory, setInventory] = useState<{ inventoryValue: number; lowStockCount: number } | null>(null);
+  const [pipeline, setPipeline] = useState<{ openValue: number; followUpsDue: number } | null>(null);
   const [loading, setLoading] = useState(true);
   const [showProjectForm, setShowProjectForm] = useState(false);
   const [showIncomeForm, setShowIncomeForm] = useState(false);
@@ -36,7 +38,21 @@ export default function Dashboard() {
     fetchRecentProjects();
     fetchReceivables();
     fetchInventory();
+    fetchPipeline();
   }, []);
+
+  const fetchPipeline = async () => {
+    try {
+      const response = await fetch('/api/opportunities/summary', { credentials: 'include' });
+      if (!response.ok) return;
+      const data = await response.json();
+      if (data && typeof data.openValue === 'number') {
+        setPipeline({ openValue: data.openValue, followUpsDue: data.followUpsDue ?? 0 });
+      }
+    } catch {
+      // silencioso
+    }
+  };
 
   const fetchReceivables = async () => {
     try {
@@ -329,6 +345,34 @@ export default function Dashboard() {
                     {inventory.lowStockCount > 0
                       ? `${inventory.lowStockCount} bajo stock`
                       : 'Stock al día'}
+                  </p>
+                </div>
+              </div>
+            </div>
+          </button>
+        )}
+
+        {pipeline && (
+          <button
+            onClick={() => router.push('/oportunidades')}
+            className="card cursor-pointer hover:shadow-lg transition-all duration-200 text-left border-l-4 border-l-primary-600 w-full overflow-hidden group"
+          >
+            <div className="flex items-start justify-between w-full min-w-0">
+              <div className="flex items-center flex-1 min-w-0">
+                <div className="p-3 bg-primary-100 rounded-lg group-hover:bg-primary-200 transition-colors">
+                  <Target className="h-6 w-6 text-primary-600" />
+                </div>
+                <div className="ml-4 flex-1 min-w-0">
+                  <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1 truncate">
+                    En el embudo
+                  </p>
+                  <p className="text-xl font-bold text-gray-900 mb-1 break-words leading-tight">
+                    {formatCurrency(pipeline.openValue)}
+                  </p>
+                  <p className="text-xs text-gray-500 truncate">
+                    {pipeline.followUpsDue > 0
+                      ? `${pipeline.followUpsDue} seguimiento(s) hoy`
+                      : 'Sin pendientes'}
                   </p>
                 </div>
               </div>
