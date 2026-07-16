@@ -44,13 +44,24 @@ export const MODULES: Record<ModuleKey, { name: string; description: string }> =
   },
 }
 
-// Qué módulos incluye cada plan. Durante la prueba todo está disponible.
-// 'sales', 'crm' y 'agenda' son gancho de entrada: en TODOS los planes.
+// Qué módulos incluye cada plan.
+// Estrategia (micro-LATAM): el plan de entrada (Básico) trae TODO lo operativo
+// del día a día para enganchar y encajar con cualquier tipo de negocio. Se sube
+// a Negocio por EQUIPO (varios usuarios) + REPORTES avanzados/exportar; y a Pro
+// por soporte prioritario, descuento en el servicio de marketing y funciones
+// premium futuras (facturación NCF, pagos, POS) — diferencias que no son de
+// módulo. Durante la prueba (30 días) todo está disponible.
+const ALL_OPERATIONAL: ModuleKey[] = ['core', 'growth', 'sales', 'crm', 'agenda', 'receivables', 'inventory']
+
 export const PLAN_MODULES: Record<PlanTier, ModuleKey[]> = {
+  // Prueba: todo desbloqueado.
   trial: ['core', 'team', 'reports', 'growth', 'receivables', 'inventory', 'sales', 'crm', 'agenda'],
-  basico: ['core', 'growth', 'sales', 'crm', 'agenda'],
-  negocio: ['core', 'team', 'growth', 'receivables', 'inventory', 'sales', 'crm', 'agenda'],
-  pro: ['core', 'team', 'reports', 'growth', 'receivables', 'inventory', 'sales', 'crm', 'agenda'],
+  // Básico (1 usuario): todo lo operativo, SIN equipo ni reportes avanzados.
+  basico: [...ALL_OPERATIONAL],
+  // Negocio: Básico + equipo (colaboradores/roles) + reportes avanzados/exportar.
+  negocio: [...ALL_OPERATIONAL, 'team', 'reports'],
+  // Pro: mismos módulos que Negocio; se diferencia por soporte/descuento/premium.
+  pro: [...ALL_OPERATIONAL, 'team', 'reports'],
 }
 
 /** Lista de módulos incluidos en un plan (para exponer al cliente). */

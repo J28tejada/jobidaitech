@@ -37,8 +37,8 @@ const navigation: NavItem[] = [
   { name: 'Transacciones', href: '/transacciones', icon: DollarSign },
   { name: 'Cobros', href: '/cobros', icon: Coins, moduleKey: 'receivables' },
   { name: 'Inventario', href: '/inventario', icon: Boxes, moduleKey: 'inventory' },
-  { name: 'Reportes', href: '/reportes', icon: BarChart3 },
-  { name: 'Miembros', href: '/miembros', icon: Users },
+  { name: 'Reportes', href: '/reportes', icon: BarChart3, moduleKey: 'reports' },
+  { name: 'Miembros', href: '/miembros', icon: Users, moduleKey: 'team' },
   { name: 'Crecé tus ventas', href: '/crecer', icon: Rocket },
   { name: 'Configuración', href: '/configuracion', icon: Settings },
 ]

@@ -8,6 +8,7 @@ import {
   getMembershipRole,
   getWorkspaceContext,
   READ_ONLY_ERROR,
+  MODULE_LOCKED_ERROR,
   type WorkspaceRole,
 } from '@/lib/workspaces'
 
@@ -19,6 +20,14 @@ export async function POST(request: Request, { params }: { params: { id: string 
 
   if (!ctx.canWrite) {
     return NextResponse.json(READ_ONLY_ERROR, { status: 403 })
+  }
+
+  // Invitar colaboradores es parte del módulo "Equipo" (plan Negocio/Pro).
+  if (!ctx.hasModule('team')) {
+    return NextResponse.json(
+      { ...MODULE_LOCKED_ERROR, message: 'Invitar colaboradores está disponible en los planes Negocio y Pro.' },
+      { status: 403 }
+    )
   }
 
   const role = await getMembershipRole(ctx.user.id, params.id)

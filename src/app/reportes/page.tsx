@@ -21,9 +21,10 @@ import {
   ComposedChart,
   Area,
 } from 'recharts';
-import { TrendingUp, TrendingDown, DollarSign, BarChart3, Calendar, Download, FileSpreadsheet, Printer, PieChart as PieIcon, FolderOpen } from 'lucide-react';
+import { TrendingUp, TrendingDown, DollarSign, BarChart3, Calendar, Download, FileSpreadsheet, Printer, PieChart as PieIcon, FolderOpen, Lock, Rocket } from 'lucide-react';
 import { useCurrency } from '@/components/CurrencyProvider';
 import { downloadCSV, downloadXLSX } from '@/lib/export';
+import { SUPPORT } from '@/lib/support';
 
 interface CategoryRow {
   category: string;
@@ -71,6 +72,7 @@ function ReportsContent() {
   const [projects, setProjects] = useState<{ id: string; name: string }[]>([]);
   const [data, setData] = useState<ReportData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [locked, setLocked] = useState(false);
   const [exporting, setExporting] = useState(false);
 
   const { from, to } = useMemo(() => {
@@ -108,8 +110,14 @@ function ReportsContent() {
     const params = new URLSearchParams({ from, to });
     if (projectId !== 'all') params.set('projectId', projectId);
     fetch(`/api/reports?${params.toString()}`, { credentials: 'include' })
-      .then(r => (r.ok ? r.json() : null))
-      .then(d => setData(d))
+      .then(async r => {
+        if (r.status === 403) {
+          const body = await r.json().catch(() => null);
+          if (body?.error === 'module_locked') { setLocked(true); return null; }
+        }
+        return r.ok ? r.json() : null;
+      })
+      .then(d => d && setData(d))
       .catch(() => setData(null))
       .finally(() => setLoading(false));
   }, [from, to, projectId]);
@@ -232,6 +240,45 @@ function ReportsContent() {
   const expenseCategories = (data?.byCategory ?? []).filter(c => c.type === 'expense' && c.total > 0);
   const expenseTotal = expenseCategories.reduce((s, c) => s + c.total, 0);
   const pieData = expenseCategories.map(c => ({ name: c.category, value: c.total }));
+
+  if (locked) {
+    const waNumber = (SUPPORT.whatsapp || '').replace(/\D/g, '');
+    const waLink = waNumber
+      ? `https://wa.me/${waNumber}?text=${encodeURIComponent('Hola, quiero activar los Reportes avanzados en ContaTaller.')}`
+      : null;
+    return (
+      <div className="max-w-2xl mx-auto text-center py-10 space-y-6">
+        <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-primary-100">
+          <Lock className="h-8 w-8 text-primary-600" />
+        </div>
+        <div>
+          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Reportes avanzados y exportar</h1>
+          <p className="text-gray-600 mt-2">
+            Analiza por rango de fechas, categoría y proyecto, y exporta a Excel, CSV o PDF para tu contador.
+            Está incluido en los planes <strong>Negocio</strong> y <strong>Pro</strong>.
+          </p>
+        </div>
+        <div className="grid sm:grid-cols-3 gap-4 text-left">
+          {[
+            { icon: Calendar, t: 'Rango de fechas', d: 'Elige el periodo que quieras.' },
+            { icon: PieIcon, t: 'Por categoría', d: '¿En qué se va el dinero?' },
+            { icon: FileSpreadsheet, t: 'Exportar', d: 'Excel, CSV y PDF.' },
+          ].map(({ icon: Icon, t, d }) => (
+            <div key={t} className="card">
+              <Icon className="h-5 w-5 text-primary-600 mb-2" />
+              <h3 className="font-semibold text-gray-900 text-sm">{t}</h3>
+              <p className="text-xs text-gray-600 mt-1">{d}</p>
+            </div>
+          ))}
+        </div>
+        {waLink && (
+          <a href={waLink} target="_blank" rel="noopener noreferrer" className="btn btn-primary inline-flex items-center gap-2">
+            <Rocket className="h-4 w-4" /> Actualizar mi plan
+          </a>
+        )}
+      </div>
+    );
+  }
 
   if (loading && !data) {
     return (

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 
 import { getSupabaseClient } from '@/lib/supabase'
-import { getWorkspaceContext } from '@/lib/workspaces'
+import { getWorkspaceContext, MODULE_LOCKED_ERROR } from '@/lib/workspaces'
 import { monthlyBucketsInRange } from '@/lib/statistics'
 
 interface TxRow {
@@ -18,6 +18,9 @@ export async function GET(request: NextRequest) {
     const ctx = await getWorkspaceContext()
     if (!ctx) {
       return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+    }
+    if (!ctx.hasModule('reports')) {
+      return NextResponse.json(MODULE_LOCKED_ERROR, { status: 403 })
     }
 
     const { searchParams } = new URL(request.url)
