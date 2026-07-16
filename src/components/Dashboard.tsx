@@ -11,7 +11,8 @@ import {
   Activity,
   Coins,
   Boxes,
-  Target
+  Target,
+  CalendarClock
 } from 'lucide-react';
 import ProjectForm from './ProjectForm';
 import TransactionForm from './TransactionForm';
@@ -28,6 +29,7 @@ export default function Dashboard() {
   const [receivables, setReceivables] = useState<{ totalOutstanding: number; overdueAmount: number } | null>(null);
   const [inventory, setInventory] = useState<{ inventoryValue: number; lowStockCount: number } | null>(null);
   const [pipeline, setPipeline] = useState<{ openValue: number; followUpsDue: number } | null>(null);
+  const [agenda, setAgenda] = useState<{ todayCount: number; todayIncome: number } | null>(null);
   const [loading, setLoading] = useState(true);
   const [showProjectForm, setShowProjectForm] = useState(false);
   const [showIncomeForm, setShowIncomeForm] = useState(false);
@@ -39,7 +41,21 @@ export default function Dashboard() {
     fetchReceivables();
     fetchInventory();
     fetchPipeline();
+    fetchAgenda();
   }, []);
+
+  const fetchAgenda = async () => {
+    try {
+      const response = await fetch('/api/appointments/summary', { credentials: 'include' });
+      if (!response.ok) return;
+      const data = await response.json();
+      if (data && typeof data.todayCount === 'number') {
+        setAgenda({ todayCount: data.todayCount, todayIncome: data.todayIncome ?? 0 });
+      }
+    } catch {
+      // silencioso
+    }
+  };
 
   const fetchPipeline = async () => {
     try {
@@ -373,6 +389,32 @@ export default function Dashboard() {
                     {pipeline.followUpsDue > 0
                       ? `${pipeline.followUpsDue} seguimiento(s) hoy`
                       : 'Sin pendientes'}
+                  </p>
+                </div>
+              </div>
+            </div>
+          </button>
+        )}
+
+        {agenda && (
+          <button
+            onClick={() => router.push('/agenda')}
+            className="card cursor-pointer hover:shadow-lg transition-all duration-200 text-left border-l-4 border-l-success-600 w-full overflow-hidden group"
+          >
+            <div className="flex items-start justify-between w-full min-w-0">
+              <div className="flex items-center flex-1 min-w-0">
+                <div className="p-3 bg-success-100 rounded-lg group-hover:bg-success-200 transition-colors">
+                  <CalendarClock className="h-6 w-6 text-success-600" />
+                </div>
+                <div className="ml-4 flex-1 min-w-0">
+                  <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1 truncate">
+                    Citas hoy
+                  </p>
+                  <p className="text-xl font-bold text-gray-900 mb-1 break-words leading-tight">
+                    {agenda.todayCount}
+                  </p>
+                  <p className="text-xs text-gray-500 truncate">
+                    {agenda.todayIncome > 0 ? `${formatCurrency(agenda.todayIncome)} estimado` : 'Sin citas hoy'}
                   </p>
                 </div>
               </div>
