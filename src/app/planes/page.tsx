@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Check, Hammer, Loader2, MessageCircle, X, CheckCircle2 } from 'lucide-react'
+import { Check, Hammer, Loader2, MessageCircle, X, CheckCircle2, LayoutDashboard, LogIn } from 'lucide-react'
 
 import { PLANS_DISPLAY, ANNUAL_MONTHS_PAID, type PaidTier } from '@/lib/plans'
 import { formatCurrency } from '@/lib/format'
@@ -12,12 +12,16 @@ const fmt = (n: number) => formatCurrency(n, { currency: 'DOP', locale: 'es-DO' 
 export default function PlanesPage() {
   const [cycle, setCycle] = useState<'monthly' | 'annual'>('monthly')
   const [currentTier, setCurrentTier] = useState<string | null>(null)
+  const [loggedIn, setLoggedIn] = useState(false)
   const [request, setRequest] = useState<PaidTier | null>(null)
 
   useEffect(() => {
     // Si hay sesión, marcar el plan actual (si no, es un visitante público).
     fetch('/api/subscription', { credentials: 'include' })
-      .then(r => (r.ok ? r.json() : null))
+      .then(r => {
+        if (r.ok) setLoggedIn(true)
+        return r.ok ? r.json() : null
+      })
       .then(d => d?.planTier && setCurrentTier(d.planTier))
       .catch(() => {})
   }, [])
@@ -30,15 +34,30 @@ export default function PlanesPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-primary-50 to-white">
-      <div className="max-w-5xl mx-auto px-4 py-10 sm:py-14">
+      <div className="max-w-5xl mx-auto px-4 py-6 sm:py-10">
+        {/* Barra superior */}
+        <header className="flex items-center justify-between mb-8 sm:mb-10">
+          <a href={loggedIn ? '/' : '/login'} className="inline-flex items-center gap-2">
+            <div className="p-2 bg-primary-600 rounded-xl">
+              <Hammer className="h-5 w-5 text-white" />
+            </div>
+            <span className="text-lg font-bold text-gray-900">ContaTaller</span>
+          </a>
+          <a href={loggedIn ? '/' : '/login'} className="btn btn-primary text-sm inline-flex items-center gap-1.5">
+            {loggedIn ? (
+              <>
+                <LayoutDashboard className="h-4 w-4" /> Ir a la app
+              </>
+            ) : (
+              <>
+                <LogIn className="h-4 w-4" /> Entrar
+              </>
+            )}
+          </a>
+        </header>
+
         {/* Encabezado */}
         <div className="text-center space-y-3">
-          <div className="inline-flex items-center gap-2">
-            <div className="p-2 bg-primary-600 rounded-xl">
-              <Hammer className="h-6 w-6 text-white" />
-            </div>
-            <span className="text-xl font-bold text-gray-900">ContaTaller</span>
-          </div>
           <h1 className="text-3xl sm:text-4xl font-bold text-gray-900">Planes para tu negocio</h1>
           <p className="text-gray-600 max-w-xl mx-auto">
             Empieza con <strong>30 días gratis</strong>. Sin tarjeta. Cambia o cancela cuando quieras.
