@@ -14,6 +14,8 @@ import {
   Rocket,
   Coins,
   Boxes,
+  Contact,
+  FileText,
   Lock,
   Menu,
   X,
@@ -26,6 +28,8 @@ type NavItem = { name: string; href: string; icon: typeof Home; moduleKey?: stri
 const navigation: NavItem[] = [
   { name: 'Panel de control', href: '/', icon: Home },
   { name: 'Proyectos', href: '/proyectos', icon: FolderOpen },
+  { name: 'Clientes', href: '/clientes', icon: Contact, moduleKey: 'sales' },
+  { name: 'Cotizaciones', href: '/cotizaciones', icon: FileText, moduleKey: 'sales' },
   { name: 'Transacciones', href: '/transacciones', icon: DollarSign },
   { name: 'Cobros', href: '/cobros', icon: Coins, moduleKey: 'receivables' },
   { name: 'Inventario', href: '/inventario', icon: Boxes, moduleKey: 'inventory' },
