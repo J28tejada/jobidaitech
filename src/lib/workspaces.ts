@@ -85,6 +85,8 @@ export interface WorkspaceContext {
   currency: string
   /** Locale del espacio activo (ej. 'es-DO'). */
   locale: string
+  /** Tipo de negocio del espacio activo (para organizar módulos por rubro). */
+  businessType: string
 }
 
 const DEFAULT_ADMIN_EMAILS = ['josuetejadaromero@gmail.com']
@@ -315,11 +317,12 @@ export async function getWorkspaceContext(): Promise<WorkspaceContext | null> {
   // Moneda/locale del espacio activo (para formatear montos).
   const { data: wsPrefs } = await supabase
     .from('workspaces')
-    .select('currency, locale')
+    .select('currency, locale, business_type')
     .eq('id', workspaceId)
     .maybeSingle()
   const currency = (wsPrefs?.currency as string) || DEFAULT_CURRENCY
   const locale = (wsPrefs?.locale as string) || DEFAULT_LOCALE
+  const businessType = (wsPrefs?.business_type as string) || 'other'
 
   return {
     user: profile,
@@ -336,6 +339,7 @@ export async function getWorkspaceContext(): Promise<WorkspaceContext | null> {
     hasModule: (key: ModuleKey) => hasModule(planTier, key),
     currency,
     locale,
+    businessType,
   }
 }
 

@@ -35,6 +35,8 @@ export async function GET() {
     // Plan/módulos EFECTIVOS del espacio activo (para el gating de nav y paywall)
     planTier: ctx.planTier,
     modules: modulesForTier(ctx.planTier),
+    // Tipo de negocio (para organizar el menú por rubro)
+    businessType: ctx.businessType,
     // Moneda/locale del espacio activo (para formatear montos en el cliente)
     currency: ctx.currency,
     locale: ctx.locale,
