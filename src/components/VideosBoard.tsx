@@ -7,6 +7,7 @@ import {
   MoreVertical,
   Film,
   Users,
+  Upload,
   Edit,
   Trash2,
   Loader2,
@@ -24,6 +25,7 @@ import { useToast } from './Toaster'
 import { useConfirm } from './ConfirmDialog'
 import { useCurrency } from './CurrencyProvider'
 import { downloadCSV } from '@/lib/export'
+import VideoImport from './VideoImport'
 
 interface Recorder {
   id: string
@@ -95,6 +97,7 @@ export default function VideosBoard() {
   const [editing, setEditing] = useState<Video | null>(null)
   const [showRecorders, setShowRecorders] = useState(false)
   const [showReport, setShowReport] = useState(false)
+  const [showImport, setShowImport] = useState(false)
 
   useEffect(() => {
     setMounted(true)
@@ -199,8 +202,11 @@ export default function VideosBoard() {
           <p className="text-gray-600 mt-1 sm:mt-2">Registra tus videos y reporta al cliente por fecha.</p>
         </div>
         <div className="flex gap-2 w-full sm:w-auto">
+          <button onClick={() => setShowImport(true)} className="btn btn-secondary flex items-center justify-center" title="Importar desde Excel">
+            <Upload className="h-4 w-4 sm:mr-1.5" /> <span className="hidden sm:inline">Importar</span>
+          </button>
           <button onClick={() => setShowRecorders(true)} className="btn btn-secondary flex items-center justify-center">
-            <Users className="h-4 w-4 mr-1.5" /> Camarógrafos
+            <Users className="h-4 w-4 sm:mr-1.5" /> <span className="hidden sm:inline">Camarógrafos</span>
           </button>
           <button onClick={() => { setEditing(null); setShowForm(true) }} className="btn btn-primary flex items-center justify-center flex-1 sm:flex-none">
             <Plus className="h-4 w-4 mr-1.5" /> Nuevo video
@@ -374,6 +380,18 @@ export default function VideosBoard() {
           clientFilter={clientFilter}
           onClose={() => setShowReport(false)}
           onCreated={async () => { setShowReport(false); await loadReports(); toast.success('Reporte generado') }}
+        />
+      )}
+
+      {showImport && (
+        <VideoImport
+          clients={clients}
+          onClose={() => setShowImport(false)}
+          onImported={async (n) => {
+            setShowImport(false)
+            await loadVideos()
+            toast.success(`${n} video${n === 1 ? '' : 's'} importado${n === 1 ? '' : 's'}`)
+          }}
         />
       )}
     </div>
