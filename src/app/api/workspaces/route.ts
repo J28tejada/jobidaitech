@@ -10,9 +10,6 @@ import {
 } from '@/lib/workspaces'
 import { DEFAULT_BUSINESS_TYPE } from '@/lib/users'
 import { modulesForTier } from '@/lib/modules'
-import type { BusinessType } from '@/types'
-
-const SUPPORTED_BUSINESS_TYPES: BusinessType[] = ['carpentry', 'construction']
 
 export async function GET() {
   const ctx = await getWorkspaceContext()
@@ -51,9 +48,10 @@ export async function POST(request: Request) {
   try {
     const body = await request.json()
     const name = typeof body.name === 'string' ? body.name.trim() : ''
-    const businessType: BusinessType = SUPPORTED_BUSINESS_TYPES.includes(body.businessType)
-      ? body.businessType
-      : DEFAULT_BUSINESS_TYPE
+    // Tipo de negocio: texto libre (lista amplia + personalizado). Limitamos
+    // el largo por seguridad.
+    const rawType = typeof body.businessType === 'string' ? body.businessType.trim().slice(0, 80) : ''
+    const businessType = rawType || DEFAULT_BUSINESS_TYPE
 
     if (!name) {
       return NextResponse.json({ error: 'El nombre del negocio es obligatorio' }, { status: 400 })

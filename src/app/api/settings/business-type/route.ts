@@ -2,9 +2,7 @@ import { NextResponse } from 'next/server'
 
 import { getSupabaseClient } from '@/lib/supabase'
 import { canManageWorkspace, getWorkspaceContext, seedCategoriesForWorkspace, READ_ONLY_ERROR } from '@/lib/workspaces'
-import { BusinessType } from '@/types'
-
-const ALLOWED_TYPES: BusinessType[] = ['carpentry', 'construction']
+import { CATEGORY_TEMPLATES } from '@/types'
 
 export async function GET() {
   const ctx = await getWorkspaceContext()
@@ -44,10 +42,10 @@ export async function POST(request: Request) {
 
   try {
     const body = await request.json()
-    const { businessType } = body as { businessType?: BusinessType }
+    const businessType = typeof body.businessType === 'string' ? body.businessType.trim().slice(0, 80) : ''
 
-    if (!businessType || !ALLOWED_TYPES.includes(businessType)) {
-      return NextResponse.json({ error: 'Tipo de negocio no soportado' }, { status: 400 })
+    if (!businessType) {
+      return NextResponse.json({ error: 'Indica el tipo de negocio' }, { status: 400 })
     }
 
     const supabase = getSupabaseClient()
@@ -66,18 +64,24 @@ export async function POST(request: Request) {
       await supabase.from('users').update({ business_type: businessType }).eq('id', ctx.user.id)
     }
 
-    const { error: deleteError } = await supabase
-      .from('categories')
-      .delete()
-      .eq('workspace_id', ctx.workspaceId)
+    // Solo re-sembramos categorías si el tipo tiene una plantilla específica.
+    // Para tipos genéricos/personalizados NO borramos las categorías del usuario.
+    let reseeded = false
+    if (CATEGORY_TEMPLATES[businessType]) {
+      const { error: deleteError } = await supabase
+        .from('categories')
+        .delete()
+        .eq('workspace_id', ctx.workspaceId)
 
-    if (deleteError) {
-      throw deleteError
+      if (deleteError) {
+        throw deleteError
+      }
+
+      await seedCategoriesForWorkspace(ctx.workspaceId, ctx.user.id, businessType)
+      reseeded = true
     }
 
-    await seedCategoriesForWorkspace(ctx.workspaceId, ctx.user.id, businessType)
-
-    return NextResponse.json({ businessType })
+    return NextResponse.json({ businessType, reseeded })
   } catch (error) {
     console.error('POST /api/settings/business-type', error)
     return NextResponse.json({ error: 'Error al actualizar el tipo de negocio' }, { status: 500 })

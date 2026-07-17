@@ -4,6 +4,8 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Building2, User, Check, ChevronDown, Plus, Loader2 } from 'lucide-react'
 
+import BusinessTypePicker from './BusinessTypePicker'
+
 type WorkspaceType = 'personal' | 'business'
 
 interface Workspace {
@@ -25,7 +27,7 @@ export default function WorkspaceSwitcher() {
 
   const [showCreate, setShowCreate] = useState(false)
   const [newName, setNewName] = useState('')
-  const [newType, setNewType] = useState<'carpentry' | 'construction'>('carpentry')
+  const [newType, setNewType] = useState<string>('carpentry')
   const [creating, setCreating] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -209,15 +211,8 @@ export default function WorkspaceSwitcher() {
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Tipo de negocio</label>
-            <select
-              value={newType}
-              onChange={e => setNewType(e.target.value as 'carpentry' | 'construction')}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white"
-            >
-              <option value="carpentry">Carpintería</option>
-              <option value="construction">Construcción</option>
-            </select>
-            <p className="mt-1 text-xs text-gray-500">Define las categorías iniciales del negocio.</p>
+            <BusinessTypePicker value={newType} onChange={setNewType} />
+            <p className="mt-1 text-xs text-gray-500">Busca en la lista o escribe el tuyo. Define las categorías iniciales.</p>
           </div>
 
           {error && <p className="text-sm text-red-600">{error}</p>}

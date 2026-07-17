@@ -147,7 +147,7 @@ const steps = [
         <ul className="space-y-2 text-sm text-gray-600 list-disc list-inside">
           <li>Crea categorías personalizadas de ingresos y gastos</li>
           <li>Agrega subcategorías para mayor detalle</li>
-          <li>Configura el tipo de negocio (actualmente: Carpintería/Ebanistería)</li>
+          <li>Elige tu tipo de negocio (amplia lista o escribe el tuyo)</li>
         </ul>
         <div className="bg-purple-50 rounded-lg p-3 mt-4">
           <p className="text-xs text-purple-800">

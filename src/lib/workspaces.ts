@@ -1,6 +1,6 @@
 import { cookies } from 'next/headers'
 
-import { CATEGORY_TEMPLATES, type BusinessType, type Category } from '@/types'
+import { getCategoryTemplate, type BusinessType, type Category } from '@/types'
 import { getSupabaseClient } from './supabase'
 import { createSupabaseRouteClient } from './supabase-route'
 import { DEFAULT_BUSINESS_TYPE, ensureUserRow, type EnsureUserPayload } from './users'
@@ -145,7 +145,7 @@ export async function seedCategoriesForWorkspace(
   businessType: BusinessType
 ) {
   const supabase = getSupabaseClient()
-  const template = CATEGORY_TEMPLATES[businessType]
+  const template = getCategoryTemplate(businessType)
 
   if (!template || template.length === 0) {
     return

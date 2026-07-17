@@ -5,17 +5,10 @@ import { useRouter } from 'next/navigation';
 import { Loader2, HelpCircle, Sparkles } from 'lucide-react';
 import Layout from '@/components/Layout';
 import CategoryManager from '@/components/CategoryManager';
+import BusinessTypePicker from '@/components/BusinessTypePicker';
 import { BusinessType } from '@/types';
 import { CURRENCIES } from '@/lib/format';
 import { useCurrency } from '@/components/CurrencyProvider';
-
-const BUSINESS_OPTIONS: { value: BusinessType; label: string; description: string }[] = [
-  {
-    value: 'carpentry',
-    label: 'Carpintería / Ebanistería',
-    description: 'Plantilla con categorías pensadas para talleres de carpintería y fabricación de muebles.',
-  },
-];
 
 export default function ConfigurationPage() {
   const router = useRouter();
@@ -100,8 +93,13 @@ export default function ConfigurationPage() {
         throw new Error('No se pudo actualizar el tipo de negocio');
       }
 
+      const data = await response.json().catch(() => ({}));
       setBusinessType(value);
-      setFeedback('Plantilla actualizada. Tus categorías se han sincronizado con la plantilla seleccionada.');
+      setFeedback(
+        data?.reseeded
+          ? 'Tipo de negocio actualizado. Se cargaron las categorías sugeridas para este negocio.'
+          : 'Tipo de negocio actualizado.'
+      );
     } catch (error) {
       console.error(error);
       setFeedback('Ocurrió un error al guardar la plantilla.');
@@ -121,40 +119,28 @@ export default function ConfigurationPage() {
         </div>
 
         <div className="card">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Plantilla de negocio</h2>
+          <h2 className="text-lg font-semibold text-gray-900 mb-4">Tipo de negocio</h2>
           <p className="text-gray-600 mb-4">
-            Selecciona el tipo de negocio para precargar categorías y procesos adaptados a tu operación.
+            Elige tu tipo de negocio. Busca en la lista o escribe el tuyo. Define las categorías iniciales sugeridas.
           </p>
 
           {loading ? (
             <div className="flex items-center space-x-2 text-gray-500">
               <Loader2 className="h-4 w-4 animate-spin" />
-              <span>Cargando plantilla actual…</span>
+              <span>Cargando…</span>
             </div>
           ) : (
-            <div className="space-y-4">
-              {BUSINESS_OPTIONS.map(option => (
-                <label
-                  key={option.value}
-                  className={`flex items-start space-x-3 p-4 border rounded-lg cursor-pointer transition-colors ${
-                    option.value === businessType ? 'border-primary-400 bg-primary-50' : 'border-gray-200'
-                  }`}
-                >
-                  <input
-                    type="radio"
-                    name="business-type"
-                    value={option.value}
-                    checked={option.value === businessType}
-                    onChange={() => handleBusinessTypeChange(option.value)}
-                    className="mt-1"
-                    disabled={saving}
-                  />
-                  <div>
-                    <h3 className="font-semibold text-gray-900">{option.label}</h3>
-                    <p className="text-sm text-gray-600">{option.description}</p>
-                  </div>
-                </label>
-              ))}
+            <div className="space-y-2 max-w-md">
+              <BusinessTypePicker
+                value={businessType}
+                onChange={handleBusinessTypeChange}
+                disabled={saving}
+              />
+              {saving && (
+                <p className="text-sm text-gray-500 flex items-center gap-2">
+                  <Loader2 className="h-4 w-4 animate-spin" /> Guardando…
+                </p>
+              )}
               {feedback && <p className="text-sm text-primary-600">{feedback}</p>}
             </div>
           )}

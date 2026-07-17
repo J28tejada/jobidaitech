@@ -29,7 +29,11 @@ export interface Transaction {
   updatedAt: Date;
 }
 
-export type BusinessType = 'construction' | 'carpentry';
+// Tipo de negocio: texto libre. Hay una gama amplia de tipos conocidos (ver
+// src/lib/businessTypes.ts) y se permite escribir uno personalizado. Las
+// plantillas de categorías son opcionales; si no hay una específica se usa la
+// genérica.
+export type BusinessType = string;
 
 export interface Category {
   id: string;
@@ -76,7 +80,7 @@ export interface MonthlyReport {
 }
 
 // Plantillas de categorías por tipo de negocio
-export const CATEGORY_TEMPLATES: Record<BusinessType, Category[]> = {
+export const CATEGORY_TEMPLATES: Record<string, Category[]> = {
   construction: [
     {
       id: 'construction-income-advance',
@@ -292,4 +296,36 @@ export const CATEGORY_TEMPLATES: Record<BusinessType, Category[]> = {
     },
   ],
 };
+
+// Plantilla genérica para cualquier tipo de negocio sin plantilla específica.
+// Cubre ingresos/gastos comunes; el usuario puede editarlas luego.
+export const GENERIC_CATEGORY_TEMPLATE: Category[] = [
+  { id: 'generic-income-sales', name: 'Ventas', type: 'income', color: '#10b981' },
+  { id: 'generic-income-services', name: 'Servicios', type: 'income', color: '#10b981' },
+  { id: 'generic-income-advance', name: 'Anticipos', type: 'income', color: '#10b981' },
+  { id: 'generic-income-other', name: 'Otros ingresos', type: 'income', color: '#10b981' },
+
+  { id: 'generic-expense-supplies', name: 'Insumos y Materiales', type: 'expense', color: '#ef4444' },
+  { id: 'generic-expense-merchandise', name: 'Mercancía / Compras', type: 'expense', color: '#ef4444' },
+  { id: 'generic-expense-payroll', name: 'Nómina / Mano de Obra', type: 'expense', color: '#f59e0b' },
+  { id: 'generic-expense-rent', name: 'Alquiler', type: 'expense', color: '#8b5cf6' },
+  {
+    id: 'generic-expense-utilities',
+    name: 'Servicios',
+    type: 'expense',
+    subcategories: ['Electricidad', 'Agua', 'Internet', 'Teléfono'],
+    color: '#06b6d4',
+  },
+  { id: 'generic-expense-transport', name: 'Transporte', type: 'expense', color: '#06b6d4' },
+  { id: 'generic-expense-equipment', name: 'Equipos y Herramientas', type: 'expense', color: '#8b5cf6' },
+  { id: 'generic-expense-marketing', name: 'Marketing y Publicidad', type: 'expense', color: '#6b7280' },
+  { id: 'generic-expense-taxes', name: 'Impuestos', type: 'expense', color: '#6b7280' },
+  { id: 'generic-expense-admin', name: 'Administración y Otros', type: 'expense', color: '#6b7280' },
+];
+
+/** Devuelve la plantilla de categorías para un tipo de negocio (genérica si no hay específica). */
+export function getCategoryTemplate(value: string | null | undefined): Category[] {
+  if (value && CATEGORY_TEMPLATES[value]) return CATEGORY_TEMPLATES[value];
+  return GENERIC_CATEGORY_TEMPLATE;
+}
 
