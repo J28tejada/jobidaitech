@@ -2,7 +2,7 @@
 // Modelo "Odoo-lite": internamente hay módulos; de cara al cliente se venden
 // planes empaquetados. Un plan incluye un conjunto de módulos.
 
-export type ModuleKey = 'core' | 'team' | 'reports' | 'growth' | 'receivables' | 'inventory' | 'sales' | 'crm' | 'agenda'
+export type ModuleKey = 'core' | 'team' | 'reports' | 'growth' | 'receivables' | 'inventory' | 'sales' | 'crm' | 'agenda' | 'videos'
 export type PlanTier = 'trial' | 'basico' | 'negocio' | 'pro'
 
 export const MODULES: Record<ModuleKey, { name: string; description: string }> = {
@@ -42,6 +42,10 @@ export const MODULES: Record<ModuleKey, { name: string; description: string }> =
     name: 'Agenda de citas',
     description: 'Citas y catálogo de servicios con recordatorio por WhatsApp.',
   },
+  videos: {
+    name: 'Videos / producción',
+    description: 'Registra videos entregados con tarifa por camarógrafo y reporta al cliente.',
+  },
 }
 
 // Qué módulos incluye cada plan.
@@ -51,11 +55,11 @@ export const MODULES: Record<ModuleKey, { name: string; description: string }> =
 // por soporte prioritario, descuento en el servicio de marketing y funciones
 // premium futuras (facturación NCF, pagos, POS) — diferencias que no son de
 // módulo. Durante la prueba (30 días) todo está disponible.
-const ALL_OPERATIONAL: ModuleKey[] = ['core', 'growth', 'sales', 'crm', 'agenda', 'receivables', 'inventory']
+const ALL_OPERATIONAL: ModuleKey[] = ['core', 'growth', 'sales', 'crm', 'agenda', 'videos', 'receivables', 'inventory']
 
 export const PLAN_MODULES: Record<PlanTier, ModuleKey[]> = {
   // Prueba: todo desbloqueado.
-  trial: ['core', 'team', 'reports', 'growth', 'receivables', 'inventory', 'sales', 'crm', 'agenda'],
+  trial: ['core', 'team', 'reports', 'growth', 'receivables', 'inventory', 'sales', 'crm', 'agenda', 'videos'],
   // Básico (1 usuario): todo lo operativo, SIN equipo ni reportes avanzados.
   basico: [...ALL_OPERATIONAL],
   // Negocio: Básico + equipo (colaboradores/roles) + reportes avanzados/exportar.
