@@ -112,6 +112,7 @@ export default function VideoImport({ clients, onClose, onImported }: { clients:
   const [headerIdx, setHeaderIdx] = useState(0)
   const [columns, setColumns] = useState<{ header: string; map: Field }[]>([])
   const [defaultYear, setDefaultYear] = useState(new Date().getFullYear())
+  const [forceYear, setForceYear] = useState(false)
   const [clientId, setClientId] = useState('')
   const [parsing, setParsing] = useState(false)
   const [importing, setImporting] = useState(false)
@@ -163,7 +164,10 @@ export default function VideoImport({ clients, onClose, onImported }: { clients:
       const recorderName = String(get(cRec) ?? '').trim()
       const ref = String(get(cRef) ?? '').trim()
       const priceRaw = get(cPrice)
-      const date = parseDateCell(get(cDate), defaultYear)
+      let date = parseDateCell(get(cDate), defaultYear)
+      // Forzar el año elegido en todas las fechas (útil cuando la hoja guardó
+      // algunas fechas con un año equivocado, ej. 2001).
+      if (date && forceYear) date = `${defaultYear}-${date.slice(5)}`
       // Saltar la fila de "TOTAL" (en cualquier columna, con o sin signos).
       const looksTotal = row.some(c => norm(String(c ?? '')).replace(/[^a-z]/g, '') === 'total')
       if (looksTotal) continue
@@ -172,9 +176,11 @@ export default function VideoImport({ clients, onClose, onImported }: { clients:
     }
     return out
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rawRows, headerIdx, columns, defaultYear])
+  }, [rawRows, headerIdx, columns, defaultYear, forceYear])
 
   const total = parsedRows.reduce((s, r) => s + r.price, 0)
+  // ¿Hay fechas con un año distinto al elegido? (posible mala detección)
+  const yearsOff = parsedRows.some(r => r.videoDate && r.videoDate.slice(0, 4) !== String(defaultYear))
 
   const doImport = async () => {
     if (importing || parsedRows.length === 0) return
@@ -261,8 +267,18 @@ export default function VideoImport({ clients, onClose, onImported }: { clients:
               {/* Opciones */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="label">Año para fechas sin año (ej. 15/05)</label>
+                  <label className="label">Año para las fechas (ej. 15/05)</label>
                   <input type="number" value={defaultYear} onChange={e => setDefaultYear(Number(e.target.value) || new Date().getFullYear())} className="input" />
+                  <label className="flex items-center gap-2 mt-2 text-sm text-gray-700 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={forceYear}
+                      onChange={e => setForceYear(e.target.checked)}
+                      className="h-4 w-4 rounded border-gray-300"
+                      style={{ accentColor: 'var(--p-600)' }}
+                    />
+                    Usar este año en <strong>todas</strong> las fechas
+                  </label>
                 </div>
                 {clients.length > 0 && (
                   <div>
@@ -281,6 +297,15 @@ export default function VideoImport({ clients, onClose, onImported }: { clients:
                   <p className="text-sm font-medium text-gray-900">Vista previa</p>
                   <p className="text-xs text-gray-500">{parsedRows.length} videos · Total {total.toLocaleString('es-DO')}</p>
                 </div>
+                {yearsOff && !forceYear && (
+                  <button
+                    onClick={() => setForceYear(true)}
+                    className="w-full text-left flex items-start gap-2 text-sm text-amber-700 bg-amber-50 rounded-lg p-3 mb-2 hover:bg-amber-100 transition-colors"
+                  >
+                    <AlertCircle className="h-4 w-4 flex-shrink-0 mt-0.5" />
+                    <span>Algunas fechas tienen un año distinto a {defaultYear} (ej. 2001). Toca aquí para usar {defaultYear} en todas.</span>
+                  </button>
+                )}
                 {parsedRows.length === 0 ? (
                   <div className="flex items-center gap-2 text-sm text-amber-700 bg-amber-50 rounded-lg p-3">
                     <AlertCircle className="h-4 w-4 flex-shrink-0" />
