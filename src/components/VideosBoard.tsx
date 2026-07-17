@@ -8,6 +8,7 @@ import {
   Film,
   Users,
   Upload,
+  CheckSquare,
   Edit,
   Trash2,
   Loader2,
@@ -88,6 +89,7 @@ export default function VideosBoard() {
   const [reports, setReports] = useState<Report[]>([])
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [selectMode, setSelectMode] = useState(false)
 
   const [mounted, setMounted] = useState(false)
   const [menu, setMenu] = useState<{ item: Video; top: number; left: number } | null>(null)
@@ -207,7 +209,13 @@ export default function VideosBoard() {
     } else {
       toast.error('No se pudieron eliminar')
     }
+    setSelectMode(false)
     await loadVideos()
+  }
+
+  const exitSelectMode = () => {
+    setSelectMode(false)
+    clearSelection()
   }
 
   const setPreset = (offset: number) => {
@@ -292,6 +300,14 @@ export default function VideosBoard() {
           </div>
         </div>
         <div className="flex gap-2 print:hidden">
+          <button
+            onClick={() => (selectMode ? exitSelectMode() : setSelectMode(true))}
+            disabled={videos.length === 0}
+            className={`btn flex items-center justify-center gap-1.5 disabled:opacity-50 ${selectMode ? 'btn-primary' : 'btn-secondary'}`}
+            title="Seleccionar varios"
+          >
+            <CheckSquare className="h-4 w-4" /> <span className="hidden sm:inline">Seleccionar</span>
+          </button>
           <button onClick={exportCsv} disabled={videos.length === 0} className="btn btn-secondary flex items-center justify-center gap-1.5 disabled:opacity-50" title="Exportar CSV">
             <Download className="h-4 w-4" /> CSV
           </button>
@@ -320,14 +336,20 @@ export default function VideosBoard() {
         </div>
       ) : (
         <>
-          {/* Barra de selección */}
-          {selected.size > 0 && (
+          {/* Barra de selección (solo en modo seleccionar) */}
+          {selectMode && (
             <div className="flex items-center gap-3 bg-primary-50 border border-primary-200 rounded-xl px-4 py-2.5 print:hidden">
-              <span className="text-sm font-medium text-primary-700">{selected.size} seleccionado{selected.size === 1 ? '' : 's'}</span>
-              <button onClick={bulkDelete} className="btn btn-danger text-sm flex items-center gap-1.5 ml-auto">
-                <Trash2 className="h-4 w-4" /> Eliminar
+              <span className="text-sm font-medium text-primary-700">
+                {selected.size > 0 ? `${selected.size} seleccionado${selected.size === 1 ? '' : 's'}` : 'Marca los videos que quieras'}
+              </span>
+              <button
+                onClick={bulkDelete}
+                disabled={selected.size === 0}
+                className="btn btn-danger text-sm flex items-center gap-1.5 ml-auto disabled:opacity-50"
+              >
+                <Trash2 className="h-4 w-4" /> Eliminar{selected.size > 0 ? ` (${selected.size})` : ''}
               </button>
-              <button onClick={clearSelection} className="text-sm text-gray-600 hover:text-gray-900">Quitar selección</button>
+              <button onClick={exitSelectMode} className="text-sm text-gray-600 hover:text-gray-900">Cancelar</button>
             </div>
           )}
 
@@ -335,16 +357,18 @@ export default function VideosBoard() {
             <table className="min-w-full text-sm">
               <thead>
                 <tr className="border-b border-gray-200 text-gray-500 bg-gray-50">
-                  <th className="py-2.5 pl-3 pr-1 print:hidden w-8">
-                    <input
-                      type="checkbox"
-                      checked={allSelected}
-                      onChange={toggleAll}
-                      aria-label="Seleccionar todo"
-                      className="h-4 w-4 rounded border-gray-300 cursor-pointer"
-                      style={{ accentColor: 'var(--p-600)' }}
-                    />
-                  </th>
+                  {selectMode && (
+                    <th className="py-2.5 pl-3 pr-1 print:hidden w-8">
+                      <input
+                        type="checkbox"
+                        checked={allSelected}
+                        onChange={toggleAll}
+                        aria-label="Seleccionar todo"
+                        className="h-4 w-4 rounded border-gray-300 cursor-pointer"
+                        style={{ accentColor: 'var(--p-600)' }}
+                      />
+                    </th>
+                  )}
                   <th className="text-left py-2.5 px-3 font-medium">#</th>
                   <th className="text-left py-2.5 px-3 font-medium">Fecha</th>
                   <th className="text-left py-2.5 px-3 font-medium">ID Video</th>
@@ -356,17 +380,19 @@ export default function VideosBoard() {
               </thead>
               <tbody>
                 {videos.map((v, i) => (
-                  <tr key={v.id} className={`border-b border-gray-100 last:border-0 ${selected.has(v.id) ? 'bg-primary-50' : ''}`}>
-                    <td className="py-2.5 pl-3 pr-1 print:hidden">
-                      <input
-                        type="checkbox"
-                        checked={selected.has(v.id)}
-                        onChange={() => toggleOne(v.id)}
-                        aria-label="Seleccionar video"
-                        className="h-4 w-4 rounded border-gray-300 cursor-pointer"
-                        style={{ accentColor: 'var(--p-600)' }}
-                      />
-                    </td>
+                  <tr key={v.id} className={`border-b border-gray-100 last:border-0 ${selectMode && selected.has(v.id) ? 'bg-primary-50' : ''}`}>
+                    {selectMode && (
+                      <td className="py-2.5 pl-3 pr-1 print:hidden">
+                        <input
+                          type="checkbox"
+                          checked={selected.has(v.id)}
+                          onChange={() => toggleOne(v.id)}
+                          aria-label="Seleccionar video"
+                          className="h-4 w-4 rounded border-gray-300 cursor-pointer"
+                          style={{ accentColor: 'var(--p-600)' }}
+                        />
+                      </td>
+                    )}
                     <td className="py-2.5 px-3 text-gray-500">{i + 1}</td>
                     <td className="py-2.5 px-3 text-gray-600 whitespace-nowrap">{dmy(v.videoDate)}</td>
                     <td className="py-2.5 px-3 text-gray-600 whitespace-nowrap font-mono text-xs">{v.videoRef}</td>
@@ -383,7 +409,7 @@ export default function VideosBoard() {
               </tbody>
               <tfoot>
                 <tr className="bg-success-50 font-semibold">
-                  <td colSpan={6} className="py-2.5 px-3 text-right text-gray-700">TOTAL:</td>
+                  <td colSpan={selectMode ? 6 : 5} className="py-2.5 px-3 text-right text-gray-700">TOTAL:</td>
                   <td className="py-2.5 px-3 text-right text-gray-900 whitespace-nowrap">{format(total)}</td>
                   <td className="print:hidden"></td>
                 </tr>
