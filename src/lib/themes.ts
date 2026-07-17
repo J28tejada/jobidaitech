@@ -69,8 +69,17 @@ export const ACCENTS: Accent[] = [
     '249 115 22', '#fdba74', '#fed7aa'),
 ]
 
-export const DEFAULT_ACCENT = 'violet'
+export const DEFAULT_ACCENT = 'emerald'
 export const ACCENT_STORAGE_KEY = 'contataller_accent'
+
+// Modo claro / oscuro.
+export type ThemeMode = 'light' | 'dark'
+export const DEFAULT_MODE: ThemeMode = 'dark'
+export const THEME_MODE_KEY = 'contataller_theme'
+
+export function applyMode(mode: ThemeMode) {
+  document.documentElement.setAttribute('data-theme', mode)
+}
 
 // Mapa key -> vars, para el script inline anti-parpadeo del layout.
 export const ACCENT_VARS: Record<string, AccentVars> = ACCENTS.reduce(

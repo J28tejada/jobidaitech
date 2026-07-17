@@ -2,11 +2,12 @@ import type { Metadata, Viewport } from 'next'
 import { Inter } from 'next/font/google'
 import Providers from '@/components/Providers'
 import ServiceWorkerRegister from '@/components/ServiceWorkerRegister'
-import { ACCENT_VARS, DEFAULT_ACCENT, ACCENT_STORAGE_KEY } from '@/lib/themes'
+import { ACCENT_VARS, DEFAULT_ACCENT, ACCENT_STORAGE_KEY, DEFAULT_MODE, THEME_MODE_KEY } from '@/lib/themes'
 import './globals.css'
 
-// Aplica el acento guardado antes de pintar, para evitar parpadeo.
-const accentBootstrap = `(function(){try{var A=${JSON.stringify(ACCENT_VARS)};var k=localStorage.getItem(${JSON.stringify(ACCENT_STORAGE_KEY)})||${JSON.stringify(DEFAULT_ACCENT)};var v=A[k]||A[${JSON.stringify(DEFAULT_ACCENT)}];if(v){var r=document.documentElement;for(var p in v){r.style.setProperty(p,v[p]);}}}catch(e){}})();`
+// Aplica el tema (claro/oscuro) y el acento guardados antes de pintar, para
+// evitar parpadeo.
+const accentBootstrap = `(function(){try{var r=document.documentElement;var m=localStorage.getItem(${JSON.stringify(THEME_MODE_KEY)})||${JSON.stringify(DEFAULT_MODE)};r.setAttribute('data-theme',m==='light'?'light':'dark');var A=${JSON.stringify(ACCENT_VARS)};var k=localStorage.getItem(${JSON.stringify(ACCENT_STORAGE_KEY)})||${JSON.stringify(DEFAULT_ACCENT)};var v=A[k]||A[${JSON.stringify(DEFAULT_ACCENT)}];if(v){for(var p in v){r.style.setProperty(p,v[p]);}}}catch(e){}})();`
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -39,7 +40,7 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="es" suppressHydrationWarning>
+    <html lang="es" data-theme="dark" suppressHydrationWarning>
       <body className={inter.className}>
         <script dangerouslySetInnerHTML={{ __html: accentBootstrap }} />
         <ServiceWorkerRegister />
