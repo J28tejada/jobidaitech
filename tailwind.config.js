@@ -7,18 +7,19 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        // Acento principal: violeta/índigo eléctrico (vivo sobre fondo oscuro)
+        // Acento principal: enrutado por variables CSS para poder cambiarlo
+        // en vivo desde el selector de colores (ver src/lib/themes.ts).
         primary: {
-          50: '#f2f0ff',
-          100: '#e7e2ff',
-          200: '#cec4ff',
-          300: '#ad9dff',
-          400: '#8f78ff',
-          500: '#7857ff',
-          600: '#6a44f5',
-          700: '#5a33d8',
-          800: '#492bad',
-          900: '#3a2388',
+          50: 'var(--p-50)',
+          100: 'var(--p-100)',
+          200: 'var(--p-200)',
+          300: 'var(--p-300)',
+          400: 'var(--p-400)',
+          500: 'var(--p-500)',
+          600: 'var(--p-600)',
+          700: 'var(--p-700)',
+          800: 'var(--p-800)',
+          900: 'var(--p-900)',
         },
         // Verde esmeralda vivo
         success: {

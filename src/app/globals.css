@@ -15,6 +15,22 @@
   :root {
     /* Controles nativos (date, select, scrollbars) en modo oscuro */
     color-scheme: dark;
+
+    /* Acento por defecto (violeta). El selector de colores reasigna estas
+       variables en vivo; ver src/lib/themes.ts. */
+    --p-50: #f2f0ff;
+    --p-100: #e7e2ff;
+    --p-200: #cec4ff;
+    --p-300: #ad9dff;
+    --p-400: #8f78ff;
+    --p-500: #7857ff;
+    --p-600: #6a44f5;
+    --p-700: #5a33d8;
+    --p-800: #492bad;
+    --p-900: #3a2388;
+    --accent-rgb: 120 87 255;
+    --accent-text: #ad9dff;
+    --accent-text-strong: #c8bfff;
   }
 
   body {
@@ -54,7 +70,7 @@
 
   .btn-primary {
     @apply bg-primary-600 text-white hover:bg-primary-500 focus:ring-primary-500;
-    box-shadow: 0 4px 14px -4px rgba(120, 87, 255, 0.5);
+    box-shadow: 0 4px 14px -4px rgb(var(--accent-rgb) / 0.5);
   }
 
   .btn-secondary {
@@ -116,8 +132,8 @@
   }
 
   .badge-info {
-    background-color: rgba(120, 87, 255, 0.18);
-    color: #ad9dff;
+    background-color: rgb(var(--accent-rgb) / 0.18);
+    color: var(--accent-text);
   }
 }
 
@@ -165,8 +181,8 @@
 .divide-gray-200 > :not([hidden]) ~ :not([hidden]) { border-color: #262633 !important; }
 
 /* --- Fondos de color (pasteles claros -> tintes translúcidos) --- */
-.bg-primary-50 { background-color: rgba(120, 87, 255, 0.10) !important; }
-.bg-primary-100 { background-color: rgba(120, 87, 255, 0.17) !important; }
+.bg-primary-50 { background-color: rgb(var(--accent-rgb) / 0.10) !important; }
+.bg-primary-100 { background-color: rgb(var(--accent-rgb) / 0.17) !important; }
 .bg-success-50 { background-color: rgba(16, 217, 138, 0.10) !important; }
 .bg-success-100 { background-color: rgba(16, 217, 138, 0.17) !important; }
 .bg-green-100 { background-color: rgba(16, 217, 138, 0.17) !important; }
@@ -184,10 +200,10 @@
 .bg-purple-100 { background-color: rgba(168, 85, 247, 0.17) !important; }
 
 /* --- Texto de color (oscuros -> claros y legibles en dark) --- */
-.text-primary-600 { color: #9d8cff !important; }
-.text-primary-700 { color: #b3a6ff !important; }
-.text-primary-800 { color: #c8bfff !important; }
-.text-primary-900 { color: #d9d3ff !important; }
+.text-primary-600 { color: var(--accent-text) !important; }
+.text-primary-700 { color: var(--accent-text-strong) !important; }
+.text-primary-800 { color: var(--accent-text-strong) !important; }
+.text-primary-900 { color: var(--accent-text-strong) !important; }
 .text-success-600 { color: #34d399 !important; }
 .text-success-700 { color: #6ee7b7 !important; }
 .text-success-800 { color: #a7f3d0 !important; }

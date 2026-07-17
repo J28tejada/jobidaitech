@@ -7,6 +7,7 @@ import { createPagesBrowserClient } from '@supabase/auth-helpers-nextjs'
 import { CurrencyProvider } from './CurrencyProvider'
 import { ToastProvider } from './Toaster'
 import { ConfirmProvider } from './ConfirmDialog'
+import ThemePicker from './ThemePicker'
 
 interface ProvidersProps {
   children: ReactNode
@@ -31,7 +32,10 @@ export default function Providers({ children }: ProvidersProps) {
     <SessionContextProvider supabaseClient={supabaseClient}>
       <CurrencyProvider>
         <ToastProvider>
-          <ConfirmProvider>{children}</ConfirmProvider>
+          <ConfirmProvider>
+            {children}
+            <ThemePicker />
+          </ConfirmProvider>
         </ToastProvider>
       </CurrencyProvider>
     </SessionContextProvider>
