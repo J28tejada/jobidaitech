@@ -87,6 +87,7 @@ export default function VideosBoard() {
   const [clients, setClients] = useState<ClientOption[]>([])
   const [reports, setReports] = useState<Report[]>([])
   const [loading, setLoading] = useState(true)
+  const [selected, setSelected] = useState<Set<string>>(new Set())
 
   const [mounted, setMounted] = useState(false)
   const [menu, setMenu] = useState<{ item: Video; top: number; left: number } | null>(null)
@@ -151,6 +152,7 @@ export default function VideosBoard() {
       setVideos([])
     } finally {
       setLoading(false)
+      setSelected(new Set())
     }
   }
 
@@ -170,6 +172,43 @@ export default function VideosBoard() {
   }
 
   const total = videos.reduce((sum, v) => sum + v.price, 0)
+
+  const allSelected = videos.length > 0 && videos.every(v => selected.has(v.id))
+  const toggleOne = (id: string) =>
+    setSelected(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  const toggleAll = () =>
+    setSelected(prev => (prev.size >= videos.length ? new Set() : new Set(videos.map(v => v.id))))
+  const clearSelection = () => setSelected(new Set())
+
+  const bulkDelete = async () => {
+    const ids = Array.from(selected)
+    if (ids.length === 0) return
+    const ok = await confirm({
+      title: 'Eliminar videos',
+      message: `¿Eliminar ${ids.length} video${ids.length === 1 ? '' : 's'} seleccionado${ids.length === 1 ? '' : 's'}? Esta acción no se puede deshacer.`,
+      confirmText: 'Eliminar',
+      danger: true,
+    })
+    if (!ok) return
+    const res = await fetch('/api/videos/bulk-delete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ ids }),
+    })
+    if (res.ok) {
+      const data = await res.json().catch(() => null)
+      toast.success(`${data?.deleted ?? ids.length} videos eliminados`)
+    } else {
+      toast.error('No se pudieron eliminar')
+    }
+    await loadVideos()
+  }
 
   const setPreset = (offset: number) => {
     const r = monthRange(offset)
@@ -280,45 +319,78 @@ export default function VideosBoard() {
           <button onClick={() => { setEditing(null); setShowForm(true) }} className="btn btn-primary text-sm">Nuevo video</button>
         </div>
       ) : (
-        <div className="card p-0 overflow-x-auto">
-          <table className="min-w-full text-sm">
-            <thead>
-              <tr className="border-b border-gray-200 text-gray-500 bg-gray-50">
-                <th className="text-left py-2.5 px-3 font-medium">#</th>
-                <th className="text-left py-2.5 px-3 font-medium">Fecha</th>
-                <th className="text-left py-2.5 px-3 font-medium">ID Video</th>
-                <th className="text-left py-2.5 px-3 font-medium">Tema</th>
-                <th className="text-left py-2.5 px-3 font-medium">Grabó</th>
-                <th className="text-right py-2.5 px-3 font-medium">Precio</th>
-                <th className="py-2.5 px-2 print:hidden"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {videos.map((v, i) => (
-                <tr key={v.id} className="border-b border-gray-100 last:border-0">
-                  <td className="py-2.5 px-3 text-gray-500">{i + 1}</td>
-                  <td className="py-2.5 px-3 text-gray-600 whitespace-nowrap">{dmy(v.videoDate)}</td>
-                  <td className="py-2.5 px-3 text-gray-600 whitespace-nowrap font-mono text-xs">{v.videoRef}</td>
-                  <td className="py-2.5 px-3 text-gray-900 min-w-[10rem]">{v.topic}</td>
-                  <td className="py-2.5 px-3 text-gray-600 whitespace-nowrap">{v.recorderName}</td>
-                  <td className="py-2.5 px-3 text-right font-medium text-gray-900 whitespace-nowrap">{format(v.price)}</td>
-                  <td className="py-2 px-2 print:hidden">
-                    <button onClick={e => openMenu(e, v)} className="text-gray-400 hover:text-gray-600 p-1">
-                      <MoreVertical className="h-4 w-4" />
-                    </button>
-                  </td>
+        <>
+          {/* Barra de selección */}
+          {selected.size > 0 && (
+            <div className="flex items-center gap-3 bg-primary-50 border border-primary-200 rounded-xl px-4 py-2.5 print:hidden">
+              <span className="text-sm font-medium text-primary-700">{selected.size} seleccionado{selected.size === 1 ? '' : 's'}</span>
+              <button onClick={bulkDelete} className="btn btn-danger text-sm flex items-center gap-1.5 ml-auto">
+                <Trash2 className="h-4 w-4" /> Eliminar
+              </button>
+              <button onClick={clearSelection} className="text-sm text-gray-600 hover:text-gray-900">Quitar selección</button>
+            </div>
+          )}
+
+          <div className="card p-0 overflow-x-auto">
+            <table className="min-w-full text-sm">
+              <thead>
+                <tr className="border-b border-gray-200 text-gray-500 bg-gray-50">
+                  <th className="py-2.5 pl-3 pr-1 print:hidden w-8">
+                    <input
+                      type="checkbox"
+                      checked={allSelected}
+                      onChange={toggleAll}
+                      aria-label="Seleccionar todo"
+                      className="h-4 w-4 rounded border-gray-300 cursor-pointer"
+                      style={{ accentColor: 'var(--p-600)' }}
+                    />
+                  </th>
+                  <th className="text-left py-2.5 px-3 font-medium">#</th>
+                  <th className="text-left py-2.5 px-3 font-medium">Fecha</th>
+                  <th className="text-left py-2.5 px-3 font-medium">ID Video</th>
+                  <th className="text-left py-2.5 px-3 font-medium">Tema</th>
+                  <th className="text-left py-2.5 px-3 font-medium">Grabó</th>
+                  <th className="text-right py-2.5 px-3 font-medium">Precio</th>
+                  <th className="py-2.5 px-2 print:hidden"></th>
                 </tr>
-              ))}
-            </tbody>
-            <tfoot>
-              <tr className="bg-success-50 font-semibold">
-                <td colSpan={5} className="py-2.5 px-3 text-right text-gray-700">TOTAL:</td>
-                <td className="py-2.5 px-3 text-right text-gray-900 whitespace-nowrap">{format(total)}</td>
-                <td className="print:hidden"></td>
-              </tr>
-            </tfoot>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {videos.map((v, i) => (
+                  <tr key={v.id} className={`border-b border-gray-100 last:border-0 ${selected.has(v.id) ? 'bg-primary-50' : ''}`}>
+                    <td className="py-2.5 pl-3 pr-1 print:hidden">
+                      <input
+                        type="checkbox"
+                        checked={selected.has(v.id)}
+                        onChange={() => toggleOne(v.id)}
+                        aria-label="Seleccionar video"
+                        className="h-4 w-4 rounded border-gray-300 cursor-pointer"
+                        style={{ accentColor: 'var(--p-600)' }}
+                      />
+                    </td>
+                    <td className="py-2.5 px-3 text-gray-500">{i + 1}</td>
+                    <td className="py-2.5 px-3 text-gray-600 whitespace-nowrap">{dmy(v.videoDate)}</td>
+                    <td className="py-2.5 px-3 text-gray-600 whitespace-nowrap font-mono text-xs">{v.videoRef}</td>
+                    <td className="py-2.5 px-3 text-gray-900 min-w-[10rem]">{v.topic}</td>
+                    <td className="py-2.5 px-3 text-gray-600 whitespace-nowrap">{v.recorderName}</td>
+                    <td className="py-2.5 px-3 text-right font-medium text-gray-900 whitespace-nowrap">{format(v.price)}</td>
+                    <td className="py-2 px-2 print:hidden">
+                      <button onClick={e => openMenu(e, v)} className="text-gray-400 hover:text-gray-600 p-1">
+                        <MoreVertical className="h-4 w-4" />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr className="bg-success-50 font-semibold">
+                  <td colSpan={6} className="py-2.5 px-3 text-right text-gray-700">TOTAL:</td>
+                  <td className="py-2.5 px-3 text-right text-gray-900 whitespace-nowrap">{format(total)}</td>
+                  <td className="print:hidden"></td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </>
       )}
 
       {/* Reportes generados */}
