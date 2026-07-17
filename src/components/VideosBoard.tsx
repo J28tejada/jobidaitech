@@ -64,7 +64,6 @@ interface Report {
 const pad = (n: number) => String(n).padStart(2, '0')
 const ymd = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
 const dmy = (s: string | null) => (s ? new Date(`${s}T00:00:00`).toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '')
-const dmShort = (s: string | null) => (s ? new Date(`${s}T00:00:00`).toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit' }) : '')
 
 function monthRange(offset = 0) {
   const now = new Date()
@@ -298,7 +297,7 @@ export default function VideosBoard() {
               {videos.map((v, i) => (
                 <tr key={v.id} className="border-b border-gray-100 last:border-0">
                   <td className="py-2.5 px-3 text-gray-500">{i + 1}</td>
-                  <td className="py-2.5 px-3 text-gray-600 whitespace-nowrap">{dmShort(v.videoDate)}</td>
+                  <td className="py-2.5 px-3 text-gray-600 whitespace-nowrap">{dmy(v.videoDate)}</td>
                   <td className="py-2.5 px-3 text-gray-600 whitespace-nowrap font-mono text-xs">{v.videoRef}</td>
                   <td className="py-2.5 px-3 text-gray-900 min-w-[10rem]">{v.topic}</td>
                   <td className="py-2.5 px-3 text-gray-600 whitespace-nowrap">{v.recorderName}</td>
