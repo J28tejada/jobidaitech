@@ -4,10 +4,11 @@ import { useEffect, useMemo, useState } from 'react'
 import { Loader2, Scissors, CalendarCheck, CheckCircle2, Clock, Check, CalendarPlus, MapPin, ChevronRight } from 'lucide-react'
 
 import { formatCurrency } from '@/lib/format'
+import type { BookingHours } from '@/lib/booking'
 
 interface Service { id: string; name: string; durationMin: number; price: number }
 interface Staff { id: string; name: string }
-interface Config { openTime: string; closeTime: string; slotMin: number; days: number[]; deposit: number }
+interface Config { slotMin: number; deposit: number; hours: BookingHours }
 interface BookingData {
   enabled: boolean
   business: { name: string }
@@ -75,16 +76,16 @@ export default function BookingPage({ params }: { params: { token: string } }) {
   const hasStaff = (data?.staff?.length ?? 0) > 0
   const selectedStaff = data?.staff?.find(s => s.id === staffId)
 
-  // Próximos días abiertos (según los días configurados) como fichas horizontales.
+  // Próximos días abiertos (según el horario por día del negocio) como fichas.
   const openDays = useMemo(() => {
-    if (!data?.config) return []
-    const allowed = data.config.days
+    const hours = data?.config?.hours
+    if (!hours) return []
     const out: Date[] = []
     const cursor = new Date()
     cursor.setHours(0, 0, 0, 0)
     let guard = 0
     while (out.length < 14 && guard < 90) {
-      if (allowed.includes(cursor.getDay())) out.push(new Date(cursor))
+      if (hours[String(cursor.getDay())]) out.push(new Date(cursor))
       cursor.setDate(cursor.getDate() + 1)
       guard++
     }
@@ -100,13 +101,14 @@ export default function BookingPage({ params }: { params: { token: string } }) {
   const durationFor = service?.durationMin || data?.config?.slotMin || 30
 
   const slots = useMemo(() => {
-    if (!data?.config) return []
+    if (!data?.config?.hours) return []
     if (hasServices && !service) return [] // con catálogo, primero el servicio
     const cfg = data.config
     const weekday = new Date(`${date}T00:00:00`).getDay()
-    if (!cfg.days.includes(weekday)) return []
-    const [oh, om] = cfg.openTime.split(':').map(Number)
-    const [ch, cm] = cfg.closeTime.split(':').map(Number)
+    const dayHours = cfg.hours[String(weekday)]
+    if (!dayHours) return []
+    const [oh, om] = dayHours.open.split(':').map(Number)
+    const [ch, cm] = dayHours.close.split(':').map(Number)
     const openMin = oh * 60 + om
     const closeMin = ch * 60 + cm
     const dur = durationFor
@@ -271,16 +273,11 @@ export default function BookingPage({ params }: { params: { token: string } }) {
                 <h1 className="text-2xl font-bold text-white leading-tight truncate">{data.business.name}</h1>
               </div>
             </div>
-            {data.config && (
-              <div className="mt-4 flex flex-wrap gap-2">
-                <span className="inline-flex items-center gap-1.5 text-[12px] text-white/90 bg-black/20 rounded-full px-3 py-1">
-                  <Clock className="h-3.5 w-3.5" /> {data.config.openTime}–{data.config.closeTime}
-                </span>
-                <span className="inline-flex items-center gap-1.5 text-[12px] text-white/90 bg-black/20 rounded-full px-3 py-1">
-                  <MapPin className="h-3.5 w-3.5" /> Reserva en segundos
-                </span>
-              </div>
-            )}
+            <div className="mt-4 flex flex-wrap gap-2">
+              <span className="inline-flex items-center gap-1.5 text-[12px] text-white/90 bg-black/20 rounded-full px-3 py-1">
+                <MapPin className="h-3.5 w-3.5" /> Reserva en segundos
+              </span>
+            </div>
           </div>
         </div>
 

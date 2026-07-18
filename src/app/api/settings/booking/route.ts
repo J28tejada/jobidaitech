@@ -2,17 +2,7 @@ import { NextResponse } from 'next/server'
 
 import { getSupabaseClient } from '@/lib/supabase'
 import { canManageWorkspace, getWorkspaceContext, READ_ONLY_ERROR } from '@/lib/workspaces'
-
-const parseDays = (raw: unknown): number[] => {
-  if (Array.isArray(raw)) return raw.map(Number).filter(n => n >= 0 && n <= 6)
-  if (typeof raw === 'string') return raw.split(',').map(s => Number(s.trim())).filter(n => Number.isFinite(n) && n >= 0 && n <= 6)
-  return [1, 2, 3, 4, 5, 6]
-}
-
-const clampTime = (v: unknown, fallback: string): string => {
-  if (typeof v === 'string' && /^\d{2}:\d{2}$/.test(v)) return v
-  return fallback
-}
+import { effectiveHours, normalizeHours, legacyFromHours } from '@/lib/booking'
 
 export async function GET() {
   const ctx = await getWorkspaceContext()
@@ -21,7 +11,7 @@ export async function GET() {
   const supabase = getSupabaseClient()
   const { data, error } = await supabase
     .from('workspaces')
-    .select('booking_token, booking_enabled, booking_open_time, booking_close_time, booking_slot_min, booking_days, booking_deposit')
+    .select('booking_token, booking_enabled, booking_open_time, booking_close_time, booking_slot_min, booking_days, booking_deposit, booking_hours')
     .eq('id', ctx.workspaceId)
     .maybeSingle()
   if (error) return NextResponse.json({ error: 'Error al obtener la configuración' }, { status: 500 })
@@ -29,11 +19,10 @@ export async function GET() {
   return NextResponse.json({
     token: data?.booking_token ?? null,
     enabled: data?.booking_enabled ?? false,
-    openTime: data?.booking_open_time ?? '09:00',
-    closeTime: data?.booking_close_time ?? '19:00',
     slotMin: data?.booking_slot_min ?? 30,
-    days: parseDays(data?.booking_days),
     deposit: Number(data?.booking_deposit ?? 0),
+    // Horario por día (efectivo): usa booking_hours o cae al legado.
+    hours: effectiveHours(data ?? {}),
   })
 }
 
@@ -49,19 +38,23 @@ export async function POST(request: Request) {
     const body = await request.json()
     const patch: Record<string, unknown> = {}
     if (typeof body.enabled === 'boolean') patch.booking_enabled = body.enabled
-    if (body.openTime !== undefined) patch.booking_open_time = clampTime(body.openTime, '09:00')
-    if (body.closeTime !== undefined) patch.booking_close_time = clampTime(body.closeTime, '19:00')
     if (body.slotMin !== undefined) {
       const s = Number(body.slotMin)
       patch.booking_slot_min = [15, 20, 30, 45, 60].includes(s) ? s : 30
     }
-    if (body.days !== undefined) {
-      const days = parseDays(body.days)
-      patch.booking_days = (days.length ? days : [1, 2, 3, 4, 5, 6]).join(',')
-    }
     if (body.deposit !== undefined) {
       const d = Number(body.deposit)
       patch.booking_deposit = Number.isFinite(d) && d >= 0 ? d : 0
+    }
+    // Horario por día: fuente de verdad. También sincronizamos los campos
+    // legados (días + rango) para cualquier consumidor antiguo.
+    if (body.hours !== undefined) {
+      const hours = normalizeHours(body.hours)
+      patch.booking_hours = hours
+      const legacy = legacyFromHours(hours)
+      patch.booking_days = legacy.days.join(',')
+      patch.booking_open_time = legacy.open
+      patch.booking_close_time = legacy.close
     }
 
     const supabase = getSupabaseClient()

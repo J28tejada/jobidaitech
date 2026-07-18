@@ -4,15 +4,17 @@ import { useEffect, useState } from 'react'
 import { Loader2, Copy, Check, ExternalLink, CalendarCheck } from 'lucide-react'
 
 import { useToast } from './Toaster'
+import type { BookingHours } from '@/lib/booking'
 
+// Orden de presentación (Lun→Dom). La clave numérica sigue 0=Dom..6=Sáb.
 const DAYS = [
-  { n: 1, label: 'Lun' },
-  { n: 2, label: 'Mar' },
-  { n: 3, label: 'Mié' },
-  { n: 4, label: 'Jue' },
-  { n: 5, label: 'Vie' },
-  { n: 6, label: 'Sáb' },
-  { n: 0, label: 'Dom' },
+  { n: 1, label: 'Lunes' },
+  { n: 2, label: 'Martes' },
+  { n: 3, label: 'Miércoles' },
+  { n: 4, label: 'Jueves' },
+  { n: 5, label: 'Viernes' },
+  { n: 6, label: 'Sábado' },
+  { n: 0, label: 'Domingo' },
 ]
 
 export default function BookingSettings() {
@@ -23,11 +25,9 @@ export default function BookingSettings() {
 
   const [token, setToken] = useState<string | null>(null)
   const [enabled, setEnabled] = useState(false)
-  const [openTime, setOpenTime] = useState('09:00')
-  const [closeTime, setCloseTime] = useState('19:00')
   const [slotMin, setSlotMin] = useState(30)
-  const [days, setDays] = useState<number[]>([1, 2, 3, 4, 5, 6])
   const [deposit, setDeposit] = useState('')
+  const [hours, setHours] = useState<BookingHours>({})
 
   useEffect(() => {
     fetch('/api/settings/booking', { credentials: 'include' })
@@ -36,11 +36,9 @@ export default function BookingSettings() {
         if (!d) return
         setToken(d.token ?? null)
         setEnabled(!!d.enabled)
-        setOpenTime(d.openTime ?? '09:00')
-        setCloseTime(d.closeTime ?? '19:00')
         setSlotMin(d.slotMin ?? 30)
-        setDays(Array.isArray(d.days) ? d.days : [1, 2, 3, 4, 5, 6])
         setDeposit(d.deposit ? String(d.deposit) : '')
+        setHours(d.hours && typeof d.hours === 'object' ? d.hours : {})
       })
       .catch(() => {})
       .finally(() => setLoading(false))
@@ -65,11 +63,29 @@ export default function BookingSettings() {
     }
   }
 
+  // Activa/desactiva un día. Al activarlo, propone un horario inicial (que el
+  // negocio ajusta); no hay días predefinidos: solo trabajan los que marque.
   const toggleDay = (n: number) => {
-    const next = days.includes(n) ? days.filter(d => d !== n) : [...days, n]
-    setDays(next)
-    save({ days: next })
+    const key = String(n)
+    const next: BookingHours = { ...hours }
+    if (next[key]) {
+      delete next[key]
+    } else {
+      // Copia el horario de algún día ya activo, o propone uno por defecto.
+      const anyDay = Object.keys(hours)[0]
+      next[key] = anyDay ? { ...hours[anyDay] } : { open: '09:00', close: '18:00' }
+    }
+    setHours(next)
+    save({ hours: next })
   }
+
+  const changeTime = (n: number, field: 'open' | 'close', value: string) => {
+    const key = String(n)
+    if (!hours[key]) return
+    setHours({ ...hours, [key]: { ...hours[key], [field]: value } })
+  }
+
+  const commitHours = () => save({ hours })
 
   const copy = async () => {
     try {
@@ -82,6 +98,7 @@ export default function BookingSettings() {
   }
 
   const wa = link ? `https://wa.me/?text=${encodeURIComponent(`Reserva tu cita aquí: ${link}`)}` : ''
+  const openCount = Object.keys(hours).length
 
   return (
     <div className="card">
@@ -114,7 +131,7 @@ export default function BookingSettings() {
               <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
                 <p className="text-xs text-gray-500 mb-1.5">Tu enlace de reservas</p>
                 <p className="text-sm text-gray-900 break-all mb-2">{link}</p>
-                <div className="flex gap-2">
+                <div className="flex gap-2 flex-wrap">
                   <button onClick={copy} className="btn btn-secondary text-sm flex items-center gap-1.5">
                     {copied ? <Check className="h-4 w-4 text-success-600" /> : <Copy className="h-4 w-4" />} Copiar
                   </button>
@@ -127,39 +144,63 @@ export default function BookingSettings() {
                 </div>
               </div>
 
-              {/* Horario */}
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                <div>
-                  <label className="label">Abre</label>
-                  <input type="time" className="input" value={openTime} onChange={e => setOpenTime(e.target.value)} onBlur={() => save({ openTime })} />
+              {/* Horario por día */}
+              <div>
+                <label className="label">Tus días y horarios de trabajo</label>
+                <p className="text-xs text-gray-500 mb-2">Marca los días que trabajas y define el horario de cada uno. El cliente solo verá disponibilidad en esos días y horas.</p>
+                <div className="space-y-2">
+                  {DAYS.map(d => {
+                    const key = String(d.n)
+                    const on = !!hours[key]
+                    return (
+                      <div key={d.n} className="flex items-center gap-3 py-1">
+                        <label className="flex items-center gap-2 cursor-pointer w-32 flex-shrink-0">
+                          <input
+                            type="checkbox"
+                            checked={on}
+                            onChange={() => toggleDay(d.n)}
+                            className="h-4 w-4 rounded border-gray-300"
+                            style={{ accentColor: 'var(--p-600)' }}
+                          />
+                          <span className={`text-sm ${on ? 'font-medium text-gray-900' : 'text-gray-500'}`}>{d.label}</span>
+                        </label>
+                        {on ? (
+                          <div className="flex items-center gap-2 text-sm">
+                            <input
+                              type="time"
+                              className="input py-1.5 w-28"
+                              value={hours[key].open}
+                              onChange={e => changeTime(d.n, 'open', e.target.value)}
+                              onBlur={commitHours}
+                            />
+                            <span className="text-gray-400">a</span>
+                            <input
+                              type="time"
+                              className="input py-1.5 w-28"
+                              value={hours[key].close}
+                              onChange={e => changeTime(d.n, 'close', e.target.value)}
+                              onBlur={commitHours}
+                            />
+                          </div>
+                        ) : (
+                          <span className="text-sm text-gray-400">Cerrado</span>
+                        )}
+                      </div>
+                    )
+                  })}
                 </div>
-                <div>
-                  <label className="label">Cierra</label>
-                  <input type="time" className="input" value={closeTime} onChange={e => setCloseTime(e.target.value)} onBlur={() => save({ closeTime })} />
-                </div>
-                <div>
-                  <label className="label">Cada</label>
-                  <select className="input" value={slotMin} onChange={e => { const v = Number(e.target.value); setSlotMin(v); save({ slotMin: v }) }}>
-                    {[15, 20, 30, 45, 60].map(v => <option key={v} value={v}>{v} min</option>)}
-                  </select>
-                </div>
+                {openCount === 0 && (
+                  <p className="text-xs text-amber-600 mt-2">Marca al menos un día para que los clientes puedan reservar.</p>
+                )}
               </div>
 
-              {/* Días */}
+              {/* Duración de turno */}
               <div>
-                <label className="label">Días que abres</label>
-                <div className="flex flex-wrap gap-2">
-                  {DAYS.map(d => (
-                    <button
-                      key={d.n}
-                      type="button"
-                      onClick={() => toggleDay(d.n)}
-                      className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${days.includes(d.n) ? 'bg-primary-600 text-white border-primary-600' : 'bg-gray-100 text-gray-600 border-transparent hover:bg-gray-200'}`}
-                    >
-                      {d.label}
-                    </button>
-                  ))}
-                </div>
+                <label className="label">Duración de cada turno</label>
+                <select className="input max-w-xs" value={slotMin} onChange={e => { const v = Number(e.target.value); setSlotMin(v); save({ slotMin: v }) }}>
+                  {[15, 20, 30, 45, 60].map(v => <option key={v} value={v}>Cada {v} min</option>)}
+                </select>
+                <p className="text-xs text-gray-500 mt-1">Intervalo entre horarios disponibles (si un servicio dura más, se ajusta solo).</p>
               </div>
 
               {/* Seña */}

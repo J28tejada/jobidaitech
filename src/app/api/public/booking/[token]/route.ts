@@ -2,17 +2,13 @@ import { NextRequest, NextResponse } from 'next/server'
 
 import { getSupabaseClient } from '@/lib/supabase'
 import { track } from '@/lib/analytics'
-
-const parseDays = (raw: unknown): number[] => {
-  if (typeof raw === 'string') return raw.split(',').map(s => Number(s.trim())).filter(n => Number.isFinite(n) && n >= 0 && n <= 6)
-  return [1, 2, 3, 4, 5, 6]
-}
+import { effectiveHours } from '@/lib/booking'
 
 async function findWorkspace(token: string) {
   const supabase = getSupabaseClient()
   const { data } = await supabase
     .from('workspaces')
-    .select('id, name, currency, locale, booking_enabled, booking_open_time, booking_close_time, booking_slot_min, booking_days, booking_deposit')
+    .select('id, name, currency, locale, booking_enabled, booking_open_time, booking_close_time, booking_slot_min, booking_days, booking_deposit, booking_hours')
     .eq('booking_token', token)
     .maybeSingle()
   return data
@@ -37,11 +33,10 @@ export async function GET(_request: NextRequest, { params }: { params: { token: 
       currency: ws.currency ?? 'DOP',
       locale: ws.locale ?? 'es-DO',
       config: {
-        openTime: ws.booking_open_time ?? '09:00',
-        closeTime: ws.booking_close_time ?? '19:00',
         slotMin: ws.booking_slot_min ?? 30,
-        days: parseDays(ws.booking_days),
         deposit: Number(ws.booking_deposit ?? 0),
+        // Horario por día (efectivo): booking_hours o legado.
+        hours: effectiveHours(ws),
       },
       services: (services ?? []).map(s => ({ id: s.id, name: s.name, durationMin: Number(s.duration_min ?? 30), price: Number(s.price ?? 0) })),
       staff: (staff ?? []).map(s => ({ id: s.id, name: s.name })),
