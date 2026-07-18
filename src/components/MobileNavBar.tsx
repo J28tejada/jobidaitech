@@ -2,22 +2,37 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Home, FolderOpen, DollarSign, BarChart3, Settings, Plus } from 'lucide-react';
+import { Home, FolderOpen, DollarSign, BarChart3, Settings, Plus, Film, CalendarClock, Boxes, Contact } from 'lucide-react';
 
-const links = [
-  { href: '/', label: 'Inicio', icon: Home },
-  { href: '/proyectos', label: 'Proyectos', icon: FolderOpen },
-  { href: '/transacciones', label: 'Movimientos', icon: DollarSign },
-  { href: '/reportes', label: 'Reportes', icon: BarChart3 },
-  { href: '/configuracion', label: 'Ajustes', icon: Settings },
-];
+import { primaryActionForBusiness } from '@/lib/moduleProfiles';
+
+// Segundo botón del navbar según el negocio (el resto es general).
+const MODULE_NAV: Record<string, { label: string; icon: typeof Home }> = {
+  '/proyectos': { label: 'Proyectos', icon: FolderOpen },
+  '/videos': { label: 'Videos', icon: Film },
+  '/agenda': { label: 'Agenda', icon: CalendarClock },
+  '/inventario': { label: 'Inventario', icon: Boxes },
+  '/clientes': { label: 'Clientes', icon: Contact },
+};
 
 interface MobileNavBarProps {
   onQuickAction?: () => void;
+  businessType?: string | null;
 }
 
-export default function MobileNavBar({ onQuickAction }: MobileNavBarProps) {
+export default function MobileNavBar({ onQuickAction, businessType }: MobileNavBarProps) {
   const pathname = usePathname();
+
+  const primary = primaryActionForBusiness(businessType);
+  const primaryNav = MODULE_NAV[primary.href] ?? MODULE_NAV['/proyectos'];
+
+  const links = [
+    { href: '/', label: 'Inicio', icon: Home },
+    { href: primary.href, label: primaryNav.label, icon: primaryNav.icon },
+    { href: '/transacciones', label: 'Movimientos', icon: DollarSign },
+    { href: '/reportes', label: 'Reportes', icon: BarChart3 },
+    { href: '/configuracion', label: 'Ajustes', icon: Settings },
+  ];
 
   return (
     <div className="lg:hidden print:hidden">
@@ -53,7 +68,7 @@ export default function MobileNavBar({ onQuickAction }: MobileNavBarProps) {
         }}
         className="fixed right-4 z-50 inline-flex items-center justify-center w-14 h-14 rounded-full bg-primary-600 text-white shadow-xl hover:bg-primary-700 transition-colors"
         style={{ bottom: 'calc(5rem + env(safe-area-inset-bottom, 0px))' }}
-        aria-label="Registrar proyecto nuevo"
+        aria-label={primary.label}
       >
         <Plus className="h-6 w-6" />
       </button>

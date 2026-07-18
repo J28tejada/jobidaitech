@@ -234,7 +234,7 @@ export default function Dashboard() {
       <div className="mb-6">
         <h1 className="text-3xl font-bold text-gray-900 mb-2">Panel de control</h1>
         <p className="text-gray-600 text-sm">
-          Resumen general de tus proyectos y trabajos en el taller
+          Resumen general de tu negocio
         </p>
       </div>
 

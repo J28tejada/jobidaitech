@@ -97,7 +97,7 @@ export default function Layout({ children }: LayoutProps) {
           </div>
         </main>
       </div>
-      <MobileNavBar onQuickAction={quickAction} />
+      <MobileNavBar onQuickAction={quickAction} businessType={businessType} />
     </div>
   )
 }
