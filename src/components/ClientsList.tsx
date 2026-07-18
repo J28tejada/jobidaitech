@@ -2,7 +2,9 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
-import { Plus, Search, MoreVertical, Users, Edit, Trash2, MessageCircle, Loader2, X } from 'lucide-react'
+import { Plus, Search, MoreVertical, Users, Edit, Trash2, MessageCircle, Loader2, X, ClipboardList, Scissors, CalendarClock } from 'lucide-react'
+
+import { useCurrency } from './CurrencyProvider'
 
 import { useToast } from './Toaster'
 import { useConfirm } from './ConfirmDialog'
@@ -33,6 +35,7 @@ export default function ClientsList() {
   const menuRef = useRef<HTMLDivElement>(null)
   const [showForm, setShowForm] = useState(false)
   const [editing, setEditing] = useState<Client | null>(null)
+  const [historyClient, setHistoryClient] = useState<Client | null>(null)
 
   useEffect(() => {
     setMounted(true)
@@ -190,6 +193,12 @@ export default function ClientsList() {
             className="bg-white rounded-xl shadow-lg border border-gray-200 py-1.5 z-[80]"
           >
             <button
+              onClick={() => { const it = menu.item; setMenu(null); setHistoryClient(it) }}
+              className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 text-left"
+            >
+              <ClipboardList className="h-4 w-4 text-gray-400" /> Ficha / historial
+            </button>
+            <button
               onClick={() => { const it = menu.item; setMenu(null); setEditing(it); setShowForm(true) }}
               className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 text-left"
             >
@@ -219,7 +228,117 @@ export default function ClientsList() {
           }}
         />
       )}
+
+      {historyClient && (
+        <ClientHistorySheet
+          client={historyClient}
+          onClose={() => setHistoryClient(null)}
+          onEdit={() => { const c = historyClient; setHistoryClient(null); setEditing(c); setShowForm(true) }}
+        />
+      )}
     </div>
+  )
+}
+
+interface ApptLite {
+  id: string
+  startsAt: string
+  title: string
+  staffName: string
+  price: number
+  tip: number
+  status: string
+}
+const STATUS_LABEL: Record<string, string> = {
+  scheduled: 'Agendada', confirmed: 'Confirmada', done: 'Atendida', cancelled: 'Cancelada', no_show: 'No asistió',
+}
+
+function ClientHistorySheet({ client, onClose, onEdit }: { client: Client; onClose: () => void; onEdit: () => void }) {
+  const { format } = useCurrency()
+  const [loading, setLoading] = useState(true)
+  const [appts, setAppts] = useState<ApptLite[]>([])
+  const [summary, setSummary] = useState<{ visitCount: number; totalSpent: number; lastVisit: string | null; favoriteBarber: string | null } | null>(null)
+
+  useEffect(() => {
+    fetch(`/api/clients/${client.id}/history`, { credentials: 'include' })
+      .then(r => (r.ok ? r.json() : null))
+      .then(d => { if (d) { setAppts(d.appointments || []); setSummary(d.summary || null) } })
+      .catch(() => {})
+      .finally(() => setLoading(false))
+  }, [client.id])
+
+  const dt = (iso: string) => new Date(iso).toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' })
+
+  return createPortal(
+    <div className="fixed inset-0 z-[90] flex items-end sm:items-center justify-center">
+      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
+      <div className="relative bg-white w-full sm:max-w-md rounded-t-2xl sm:rounded-2xl shadow-xl max-h-[92vh] overflow-y-auto">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 sticky top-0 bg-white z-10">
+          <h2 className="text-lg font-semibold text-gray-900 truncate">{client.name}</h2>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 p-1"><X className="h-5 w-5" /></button>
+        </div>
+        <div className="p-5 space-y-4">
+          {/* Resumen */}
+          <div className="grid grid-cols-3 gap-2">
+            <div className="bg-gray-50 border border-gray-200 rounded-lg p-2.5 text-center">
+              <p className="text-lg font-bold text-gray-900">{summary?.visitCount ?? 0}</p>
+              <p className="text-[11px] text-gray-500">Visitas</p>
+            </div>
+            <div className="bg-gray-50 border border-gray-200 rounded-lg p-2.5 text-center">
+              <p className="text-lg font-bold text-gray-900">{format(summary?.totalSpent ?? 0)}</p>
+              <p className="text-[11px] text-gray-500">Gastado</p>
+            </div>
+            <div className="bg-gray-50 border border-gray-200 rounded-lg p-2.5 text-center">
+              <p className="text-sm font-bold text-gray-900 truncate">{summary?.lastVisit ? dt(summary.lastVisit) : '—'}</p>
+              <p className="text-[11px] text-gray-500">Última</p>
+            </div>
+          </div>
+
+          {summary?.favoriteBarber && (
+            <p className="text-sm text-gray-600 flex items-center gap-1.5">
+              <Scissors className="h-4 w-4 text-primary-600" /> Barbero habitual: <strong className="text-gray-900">{summary.favoriteBarber}</strong>
+            </p>
+          )}
+
+          {/* Preferencias / notas */}
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <p className="text-sm font-medium text-gray-700">Preferencias / notas</p>
+              <button onClick={onEdit} className="text-xs text-primary-600 hover:underline">Editar</button>
+            </div>
+            <p className="text-sm text-gray-600 bg-gray-50 border border-gray-200 rounded-lg p-3 min-h-[2.5rem] whitespace-pre-line">
+              {client.notes || <span className="text-gray-400">Sin notas. Anota el corte preferido, número de guía, etc.</span>}
+            </p>
+          </div>
+
+          {/* Historial */}
+          <div>
+            <p className="text-sm font-medium text-gray-700 mb-2 flex items-center gap-1.5"><CalendarClock className="h-4 w-4 text-gray-400" /> Historial de visitas</p>
+            {loading ? (
+              <div className="flex justify-center py-6"><Loader2 className="h-5 w-5 animate-spin text-primary-600" /></div>
+            ) : appts.length === 0 ? (
+              <p className="text-sm text-gray-500 text-center py-4">Aún no tiene citas registradas.</p>
+            ) : (
+              <div className="space-y-2">
+                {appts.map(a => (
+                  <div key={a.id} className={`flex items-center justify-between border border-gray-200 rounded-lg p-2.5 ${a.status === 'cancelled' || a.status === 'no_show' ? 'opacity-60' : ''}`}>
+                    <div className="min-w-0">
+                      <p className="text-sm text-gray-900 truncate">{a.title || 'Cita'}{a.staffName ? ` · ✂ ${a.staffName}` : ''}</p>
+                      <p className="text-xs text-gray-500">{dt(a.startsAt)} · {STATUS_LABEL[a.status] || a.status}</p>
+                    </div>
+                    <div className="text-right flex-shrink-0">
+                      <p className="text-sm font-medium text-gray-900">{format(a.price)}</p>
+                      {a.tip > 0 && <p className="text-[11px] text-gray-500">+{format(a.tip)} prop.</p>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>,
+    document.body
   )
 }
 

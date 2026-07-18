@@ -11,6 +11,7 @@ import {
   Scissors,
   Settings2,
   Users,
+  UserPlus,
   Coins,
   Check,
   CheckCircle2,
@@ -114,6 +115,7 @@ export default function AgendaBoard() {
   const [showServices, setShowServices] = useState(false)
   const [showStaff, setShowStaff] = useState(false)
   const [showCommissions, setShowCommissions] = useState(false)
+  const [showWalkIn, setShowWalkIn] = useState(false)
   const [doneTarget, setDoneTarget] = useState<Appointment | null>(null)
 
   useEffect(() => {
@@ -239,6 +241,10 @@ export default function AgendaBoard() {
     g.list.push(a)
   }
 
+  // Fila de espera de hoy (walk-ins y citas aún no atendidas).
+  const todayKey = dateKey(new Date().toISOString())
+  const waitingToday = items.filter(a => dateKey(a.startsAt) === todayKey && (a.status === 'scheduled' || a.status === 'confirmed')).length
+
   if (loading && items.length === 0 && !summary) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -287,6 +293,14 @@ export default function AgendaBoard() {
             <button onClick={() => setDayFilter('')} className="text-xs text-primary-600 mt-1">Ver próximas</button>
           )}
         </div>
+      </div>
+
+      {/* Walk-in / fila de espera */}
+      <div className="flex items-center gap-3">
+        <button onClick={() => setShowWalkIn(true)} className="btn btn-secondary text-sm flex items-center gap-1.5">
+          <UserPlus className="h-4 w-4" /> Sin cita (walk-in)
+        </button>
+        {waitingToday > 0 && <span className="text-sm text-gray-500">{waitingToday} en espera hoy</span>}
       </div>
 
       {/* Agenda por día */}
@@ -386,6 +400,16 @@ export default function AgendaBoard() {
       )}
 
       {showCommissions && <CommissionsSheet onClose={() => setShowCommissions(false)} />}
+
+      {showWalkIn && (
+        <WalkInForm
+          services={services}
+          staff={staff}
+          clients={clients}
+          onClose={() => setShowWalkIn(false)}
+          onSaved={async () => { setShowWalkIn(false); await refreshAll(); toast.success('Walk-in agregado a la fila') }}
+        />
+      )}
 
       {doneTarget && (
         <DoneDialog
@@ -816,6 +840,91 @@ function CommissionsSheet({ onClose }: { onClose: () => void }) {
           </div>
         </div>
       )}
+    </Sheet>
+  )
+}
+
+function WalkInForm({ services, staff, clients, onClose, onSaved }: { services: Service[]; staff: Staff[]; clients: ClientOption[]; onClose: () => void; onSaved: () => void }) {
+  const [clientId, setClientId] = useState('')
+  const [clientName, setClientName] = useState('')
+  const [serviceId, setServiceId] = useState('')
+  const [staffId, setStaffId] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (saving) return
+    setSaving(true)
+    setError(null)
+    try {
+      const payload = {
+        clientId: clientId || null,
+        clientName: clientId ? undefined : (clientName.trim() || 'Cliente sin cita'),
+        serviceId: serviceId || null,
+        staffId: staffId || null,
+        startsAt: new Date().toISOString(),
+      }
+      const res = await fetch('/api/appointments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify(payload),
+      })
+      if (!res.ok) {
+        const b = await res.json().catch(() => null)
+        throw new Error(b?.error || 'No se pudo agregar')
+      }
+      onSaved()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error al agregar')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <Sheet title="Sin cita (walk-in)" onClose={onClose}>
+      <form onSubmit={submit} className="space-y-4">
+        <p className="text-sm text-gray-600">Se agrega a la fila de hoy con la hora actual.</p>
+        <div>
+          <label className="label">Cliente</label>
+          {clients.length > 0 && (
+            <select className="input mb-2" value={clientId} onChange={e => { setClientId(e.target.value); if (e.target.value) setClientName('') }}>
+              <option value="">— Escribir a mano —</option>
+              {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          )}
+          {!clientId && (
+            <input value={clientName} onChange={e => setClientName(e.target.value)} className="input" placeholder="Nombre (o déjalo vacío)" />
+          )}
+        </div>
+
+        {services.length > 0 && (
+          <div>
+            <label className="label">Servicio</label>
+            <select className="input" value={serviceId} onChange={e => setServiceId(e.target.value)}>
+              <option value="">— Sin servicio —</option>
+              {services.filter(s => s.active).map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+            </select>
+          </div>
+        )}
+
+        {staff.length > 0 && (
+          <div>
+            <label className="label">Barbero</label>
+            <select className="input" value={staffId} onChange={e => setStaffId(e.target.value)}>
+              <option value="">— Sin asignar —</option>
+              {staff.filter(s => s.active).map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+            </select>
+          </div>
+        )}
+
+        {error && <p className="text-sm text-red-600">{error}</p>}
+        <button type="submit" disabled={saving} className="btn btn-primary w-full flex items-center justify-center gap-2 disabled:opacity-60">
+          {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserPlus className="h-4 w-4" />} Agregar a la fila
+        </button>
+      </form>
     </Sheet>
   )
 }
