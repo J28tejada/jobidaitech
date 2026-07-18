@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Home, FolderOpen, DollarSign, BarChart3, Settings, Plus, Film, CalendarClock, Boxes, Contact } from 'lucide-react';
+import { Home, FolderOpen, DollarSign, BarChart3, Settings, Plus, Film, CalendarClock, CalendarCheck, Boxes, Contact } from 'lucide-react';
 
 import { primaryActionForBusiness } from '@/lib/moduleProfiles';
 
@@ -25,11 +25,16 @@ export default function MobileNavBar({ onQuickAction, businessType }: MobileNavB
 
   const primary = primaryActionForBusiness(businessType);
   const primaryNav = MODULE_NAV[primary.href] ?? MODULE_NAV['/proyectos'];
+  // Negocios con agenda (barbería, salón, etc.): Reservas a la mano para
+  // compartir el enlace; sustituye "Movimientos" en el nav móvil.
+  const isAppointments = primary.href === '/agenda';
 
   const links = [
     { href: '/', label: 'Inicio', icon: Home },
     { href: primary.href, label: primaryNav.label, icon: primaryNav.icon },
-    { href: '/transacciones', label: 'Movimientos', icon: DollarSign },
+    isAppointments
+      ? { href: '/reservas', label: 'Reservas', icon: CalendarCheck }
+      : { href: '/transacciones', label: 'Movimientos', icon: DollarSign },
     { href: '/reportes', label: 'Reportes', icon: BarChart3 },
     { href: '/configuracion', label: 'Ajustes', icon: Settings },
   ];

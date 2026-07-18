@@ -22,7 +22,14 @@ interface BookingData {
 const pad = (n: number) => String(n).padStart(2, '0')
 const dateKey = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
 const todayStr = () => dateKey(new Date())
-const hm = (min: number) => `${pad(Math.floor(min / 60))}:${pad(min % 60)}`
+// Formato 12 horas con am/pm (ej. 9:00 am, 2:30 pm).
+const hm12 = (min: number) => {
+  const h = Math.floor(min / 60)
+  const m = min % 60
+  const ap = h < 12 ? 'am' : 'pm'
+  const hh = h % 12 === 0 ? 12 : h % 12
+  return `${hh}:${pad(m)} ${ap}`
+}
 
 const WEEKDAYS = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb']
 const MONTHS = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic']
@@ -113,7 +120,7 @@ export default function BookingPage({ params }: { params: { token: string } }) {
     const closeMin = ch * 60 + cm
     const dur = durationFor
     const now = Date.now()
-    const out: { label: string; iso: string }[] = []
+    const out: { label: string; iso: string; hour: number }[] = []
     for (let t = openMin; t + dur <= closeMin; t += cfg.slotMin) {
       const start = new Date(`${date}T00:00:00`)
       start.setMinutes(t)
@@ -125,22 +132,21 @@ export default function BookingPage({ params }: { params: { token: string } }) {
         const e = s + iv.durationMin * 60000
         return startMs < e && s < endMs
       })
-      if (!overlap) out.push({ label: hm(t), iso: start.toISOString() })
+      if (!overlap) out.push({ label: hm12(t), iso: start.toISOString(), hour: Math.floor(t / 60) })
     }
     return out
   }, [data, service, hasServices, date, taken, durationFor])
 
   // Agrupar horarios por franja para lectura rápida.
   const slotGroups = useMemo(() => {
-    const g: { key: string; label: string; items: { label: string; iso: string }[] }[] = [
+    const g: { key: string; label: string; items: { label: string; iso: string; hour: number }[] }[] = [
       { key: 'am', label: 'Mañana', items: [] },
       { key: 'pm', label: 'Tarde', items: [] },
       { key: 'ev', label: 'Noche', items: [] },
     ]
     slots.forEach(sl => {
-      const h = Number(sl.label.split(':')[0])
-      if (h < 12) g[0].items.push(sl)
-      else if (h < 18) g[1].items.push(sl)
+      if (sl.hour < 12) g[0].items.push(sl)
+      else if (sl.hour < 18) g[1].items.push(sl)
       else g[2].items.push(sl)
     })
     return g.filter(x => x.items.length > 0)
@@ -158,7 +164,7 @@ export default function BookingPage({ params }: { params: { token: string } }) {
       })
       const b = await res.json().catch(() => null)
       if (!res.ok) throw new Error(b?.error || 'No se pudo reservar')
-      const when = new Date(slotIso).toLocaleString('es-ES', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })
+      const when = new Date(slotIso).toLocaleString('es-ES', { weekday: 'long', day: 'numeric', month: 'long', hour: 'numeric', minute: '2-digit', hour12: true })
       setDone({ when, iso: slotIso, durationMin: durationFor, serviceName: service?.name || 'Cita' })
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Error al reservar')
@@ -414,7 +420,7 @@ export default function BookingPage({ params }: { params: { token: string } }) {
             <div className="flex items-center justify-between mb-2 text-sm">
               <span className="text-neutral-400 truncate">
                 {service ? service.name : 'Cita'}
-                {slotIso && <span className="text-neutral-500"> · {new Date(slotIso).toLocaleString('es-ES', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>}
+                {slotIso && <span className="text-neutral-500"> · {new Date(slotIso).toLocaleString('es-ES', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit', hour12: true })}</span>}
               </span>
               {service && service.price > 0 && <span className="font-semibold text-emerald-400 flex-shrink-0 ml-2">{fmt(service.price)}</span>}
             </div>

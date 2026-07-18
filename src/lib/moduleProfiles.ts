@@ -10,6 +10,7 @@ export const ORGANIZABLE_HREFS = [
   '/clientes',
   '/oportunidades',
   '/agenda',
+  '/reservas',
   '/videos',
   '/cotizaciones',
   '/cobros',
@@ -21,7 +22,7 @@ type Archetype = 'appointments' | 'retail' | 'food' | 'projects' | 'creative' | 
 
 // Módulos relevantes por arquetipo, en orden de importancia.
 const ARCHETYPE_HREFS: Record<Archetype, string[]> = {
-  appointments: ['/agenda', '/clientes', '/cobros', '/cotizaciones'],
+  appointments: ['/agenda', '/reservas', '/clientes', '/cobros', '/cotizaciones'],
   retail: ['/inventario', '/clientes', '/cobros'],
   food: ['/inventario', '/cobros', '/clientes'],
   projects: ['/proyectos', '/cotizaciones', '/cobros', '/clientes'],

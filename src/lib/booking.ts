@@ -10,6 +10,17 @@ export type BookingHours = Record<string, DayHours>
 
 const TIME_RE = /^\d{2}:\d{2}$/
 
+// Horario por defecto cuando el negocio aún no lo ha configurado: TODOS los
+// días de la semana (incluye domingo) habilitados. El negocio luego desmarca
+// los días que no trabaja y ajusta las horas.
+export const DEFAULT_OPEN = '09:00'
+export const DEFAULT_CLOSE = '19:00'
+export function defaultHours(): BookingHours {
+  const out: BookingHours = {}
+  for (let d = 0; d <= 6; d++) out[String(d)] = { open: DEFAULT_OPEN, close: DEFAULT_CLOSE }
+  return out
+}
+
 export function parseDays(raw: unknown): number[] {
   if (Array.isArray(raw)) return raw.map(Number).filter(n => Number.isFinite(n) && n >= 0 && n <= 6)
   if (typeof raw === 'string') return raw.split(',').map(s => Number(s.trim())).filter(n => Number.isFinite(n) && n >= 0 && n <= 6)
@@ -59,17 +70,12 @@ export function hoursFromLegacy(days: number[], open: string, close: string): Bo
  * Horario efectivo de un espacio: usa booking_hours si está definido; si no,
  * cae al formato legado para no romper configuraciones existentes.
  */
-export function effectiveHours(row: {
-  booking_hours?: unknown
-  booking_days?: unknown
-  booking_open_time?: unknown
-  booking_close_time?: unknown
-}): BookingHours {
+export function effectiveHours(row: { booking_hours?: unknown }): BookingHours {
+  // Si el negocio ya definió su horario por día, se usa tal cual. Si no,
+  // el default es TODA la semana (incluye domingo); el negocio luego ajusta.
   const explicit = normalizeHours(row.booking_hours)
   if (Object.keys(explicit).length > 0) return explicit
-  const days = parseDays(row.booking_days)
-  if (days.length === 0) return {}
-  return hoursFromLegacy(days, clampTime(row.booking_open_time, '09:00'), clampTime(row.booking_close_time, '19:00'))
+  return defaultHours()
 }
 
 /** Deriva los campos legados (días + rango) desde el mapa por día. */
