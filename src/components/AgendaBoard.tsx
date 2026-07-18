@@ -10,6 +10,8 @@ import {
   Clock,
   Scissors,
   Settings2,
+  Users,
+  Coins,
   Check,
   CheckCircle2,
   XCircle,
@@ -41,16 +43,25 @@ interface Service {
   price: number
   active: boolean
 }
+interface Staff {
+  id: string
+  name: string
+  commissionPct: number
+  active: boolean
+}
 interface Appointment {
   id: string
   clientId: string | null
   clientName: string
   clientPhone: string | null
   serviceId: string | null
+  staffId: string | null
+  staffName: string
   title: string
   startsAt: string
   durationMin: number
   price: number
+  tip: number
   status: Status
   notes: string
 }
@@ -88,6 +99,7 @@ export default function AgendaBoard() {
 
   const [items, setItems] = useState<Appointment[]>([])
   const [services, setServices] = useState<Service[]>([])
+  const [staff, setStaff] = useState<Staff[]>([])
   const [clients, setClients] = useState<ClientOption[]>([])
   const [summary, setSummary] = useState<{ todayCount: number; upcomingCount: number; todayIncome: number } | null>(null)
   const [loading, setLoading] = useState(true)
@@ -100,6 +112,9 @@ export default function AgendaBoard() {
   const [showForm, setShowForm] = useState(false)
   const [editing, setEditing] = useState<Appointment | null>(null)
   const [showServices, setShowServices] = useState(false)
+  const [showStaff, setShowStaff] = useState(false)
+  const [showCommissions, setShowCommissions] = useState(false)
+  const [doneTarget, setDoneTarget] = useState<Appointment | null>(null)
 
   useEffect(() => {
     setMounted(true)
@@ -133,11 +148,13 @@ export default function AgendaBoard() {
   }, [menu])
 
   const loadStatic = async () => {
-    const [s, c] = await Promise.all([
+    const [s, c, st] = await Promise.all([
       fetch('/api/services', { credentials: 'include' }).then(r => (r.ok ? r.json() : [])),
       fetch('/api/clients', { credentials: 'include' }).then(r => (r.ok ? r.json() : [])),
+      fetch('/api/staff', { credentials: 'include' }).then(r => (r.ok ? r.json() : [])),
     ])
     setServices(Array.isArray(s) ? s : [])
+    setStaff(Array.isArray(st) ? st : [])
     setClients(Array.isArray(c) ? c.map((x: any) => ({ id: x.id, name: x.name, phone: x.phone })) : [])
     fetch('/api/appointments/summary', { credentials: 'include' })
       .then(r => (r.ok ? r.json() : null))
@@ -183,12 +200,14 @@ export default function AgendaBoard() {
     setMenu({ item, top: rect.bottom + 6, left: Math.max(rect.right - 220, 8) })
   }
 
-  const setStatus = async (item: Appointment, status: Status, msg: string) => {
+  const setStatus = async (item: Appointment, status: Status, msg: string, tip?: number) => {
+    const body: Record<string, unknown> = { status }
+    if (tip !== undefined) body.tip = tip
     const res = await fetch(`/api/appointments/${item.id}/status`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
-      body: JSON.stringify({ status }),
+      body: JSON.stringify(body),
     })
     if (res.ok) toast.success(msg)
     else toast.error('No se pudo actualizar la cita')
@@ -235,9 +254,15 @@ export default function AgendaBoard() {
           <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Agenda</h1>
           <p className="text-gray-600 mt-1 sm:mt-2">Tus citas del día y de los próximos días.</p>
         </div>
-        <div className="flex gap-2 w-full sm:w-auto">
-          <button onClick={() => setShowServices(true)} className="btn btn-secondary flex items-center justify-center">
-            <Settings2 className="h-4 w-4 mr-1.5" /> Servicios
+        <div className="flex gap-2 w-full sm:w-auto flex-wrap justify-end">
+          <button onClick={() => setShowCommissions(true)} className="btn btn-secondary flex items-center justify-center" title="Comisiones por barbero">
+            <Coins className="h-4 w-4 sm:mr-1.5" /> <span className="hidden sm:inline">Comisiones</span>
+          </button>
+          <button onClick={() => setShowStaff(true)} className="btn btn-secondary flex items-center justify-center" title="Barberos">
+            <Users className="h-4 w-4 sm:mr-1.5" /> <span className="hidden sm:inline">Barberos</span>
+          </button>
+          <button onClick={() => setShowServices(true)} className="btn btn-secondary flex items-center justify-center" title="Servicios">
+            <Settings2 className="h-4 w-4 sm:mr-1.5" /> <span className="hidden sm:inline">Servicios</span>
           </button>
           <button onClick={() => { setEditing(null); setShowForm(true) }} className="btn btn-primary flex items-center justify-center flex-1 sm:flex-none">
             <Plus className="h-4 w-4 mr-1.5" /> Nueva cita
@@ -295,6 +320,8 @@ export default function AgendaBoard() {
                       </div>
                       <p className="text-xs text-gray-500 truncate">
                         {item.title || 'Cita'} · {item.durationMin} min{item.price > 0 ? ` · ${format(item.price)}` : ''}
+                        {item.staffName ? ` · ✂ ${item.staffName}` : ''}
+                        {item.tip > 0 ? ` · propina ${format(item.tip)}` : ''}
                       </p>
                     </div>
                     <button onClick={e => openMenu(e, item)} className="text-gray-400 hover:text-gray-600 p-1 flex-shrink-0">
@@ -315,7 +342,7 @@ export default function AgendaBoard() {
             <MessageCircle className="h-4 w-4 text-green-500" /> Recordar por WhatsApp
           </a>
           {menu.item.status === 'scheduled' && <Btn icon={Check} color="text-primary-600" label="Confirmar" onClick={() => { const it = menu.item; setMenu(null); setStatus(it, 'confirmed', 'Cita confirmada') }} />}
-          {menu.item.status !== 'done' && <Btn icon={CheckCircle2} color="text-success-600" label="Marcar atendida" onClick={() => { const it = menu.item; setMenu(null); setStatus(it, 'done', 'Cita atendida') }} />}
+          {menu.item.status !== 'done' && <Btn icon={CheckCircle2} color="text-success-600" label="Marcar atendida" onClick={() => { const it = menu.item; setMenu(null); setDoneTarget(it) }} />}
           {menu.item.status !== 'cancelled' && <Btn icon={XCircle} label="Cancelar" onClick={() => { const it = menu.item; setMenu(null); setStatus(it, 'cancelled', 'Cita cancelada') }} />}
           {menu.item.status !== 'no_show' && <Btn icon={Ban} label="No asistió" onClick={() => { const it = menu.item; setMenu(null); setStatus(it, 'no_show', 'Marcada: no asistió') }} />}
           <div className="border-t border-gray-100 my-1" />
@@ -329,6 +356,7 @@ export default function AgendaBoard() {
         <AppointmentForm
           appointment={editing}
           services={services}
+          staff={staff}
           clients={clients}
           onClose={() => { setShowForm(false); setEditing(null) }}
           onSaved={async () => {
@@ -346,6 +374,28 @@ export default function AgendaBoard() {
           services={services}
           onClose={() => setShowServices(false)}
           onChanged={async () => { await loadStatic() }}
+        />
+      )}
+
+      {showStaff && (
+        <StaffManager
+          staff={staff}
+          onClose={() => setShowStaff(false)}
+          onChanged={async () => { await loadStatic() }}
+        />
+      )}
+
+      {showCommissions && <CommissionsSheet onClose={() => setShowCommissions(false)} />}
+
+      {doneTarget && (
+        <DoneDialog
+          appointment={doneTarget}
+          onClose={() => setDoneTarget(null)}
+          onConfirm={async (tip) => {
+            const it = doneTarget
+            setDoneTarget(null)
+            await setStatus(it, 'done', 'Cita atendida', tip)
+          }}
         />
       )}
     </div>
@@ -376,7 +426,7 @@ function Sheet({ title, onClose, children }: { title: string; onClose: () => voi
   )
 }
 
-function AppointmentForm({ appointment, services, clients, onClose, onSaved }: { appointment: Appointment | null; services: Service[]; clients: ClientOption[]; onClose: () => void; onSaved: () => void }) {
+function AppointmentForm({ appointment, services, staff, clients, onClose, onSaved }: { appointment: Appointment | null; services: Service[]; staff: Staff[]; clients: ClientOption[]; onClose: () => void; onSaved: () => void }) {
   const defaultWhen = () => {
     const d = new Date()
     d.setMinutes(0, 0, 0)
@@ -387,10 +437,12 @@ function AppointmentForm({ appointment, services, clients, onClose, onSaved }: {
   const [clientName, setClientName] = useState(appointment?.clientId ? '' : appointment?.clientName ?? '')
   const [clientPhone, setClientPhone] = useState(appointment?.clientPhone ?? '')
   const [serviceId, setServiceId] = useState(appointment?.serviceId ?? '')
+  const [staffId, setStaffId] = useState(appointment?.staffId ?? '')
   const [title, setTitle] = useState(appointment?.title ?? '')
   const [when, setWhen] = useState(appointment ? toLocalInput(appointment.startsAt) : defaultWhen())
   const [durationMin, setDurationMin] = useState(String(appointment?.durationMin ?? 30))
   const [price, setPrice] = useState(String(appointment?.price ?? ''))
+  const [tip, setTip] = useState(appointment?.tip ? String(appointment.tip) : '')
   const [notes, setNotes] = useState(appointment?.notes ?? '')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -417,10 +469,12 @@ function AppointmentForm({ appointment, services, clients, onClose, onSaved }: {
         clientName: clientId ? undefined : clientName,
         clientPhone,
         serviceId: serviceId || null,
+        staffId: staffId || null,
         title,
         startsAt: new Date(when).toISOString(),
         durationMin: Number(durationMin) || 30,
         price: Number(price) || 0,
+        tip: tip === '' ? undefined : Number(tip) || 0,
         notes,
       }
       const res = appointment
@@ -467,6 +521,16 @@ function AppointmentForm({ appointment, services, clients, onClose, onSaved }: {
           </div>
         )}
 
+        {staff.length > 0 && (
+          <div>
+            <label className="label">Barbero</label>
+            <select className="input" value={staffId} onChange={e => setStaffId(e.target.value)}>
+              <option value="">— Sin asignar —</option>
+              {staff.filter(s => s.active).map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+            </select>
+          </div>
+        )}
+
         <div>
           <label className="label">Título</label>
           <input value={title} onChange={e => setTitle(e.target.value)} className="input" placeholder="Ej. Corte de cabello" />
@@ -486,6 +550,11 @@ function AppointmentForm({ appointment, services, clients, onClose, onSaved }: {
             <label className="label">Precio</label>
             <input value={price} onChange={e => setPrice(e.target.value)} type="number" step="0.01" min="0" className="input" placeholder="0.00" />
           </div>
+        </div>
+
+        <div>
+          <label className="label">Propina (opcional)</label>
+          <input value={tip} onChange={e => setTip(e.target.value)} type="number" step="0.01" min="0" className="input" placeholder="0.00" />
         </div>
 
         <div>
@@ -581,6 +650,170 @@ function ServicesManager({ services, onClose, onChanged }: { services: Service[]
               </button>
             </div>
           ))}
+        </div>
+      )}
+    </Sheet>
+  )
+}
+
+function StaffManager({ staff, onClose, onChanged }: { staff: Staff[]; onClose: () => void; onChanged: () => void }) {
+  const toast = useToast()
+  const confirm = useConfirm()
+  const [list, setList] = useState<Staff[]>(staff)
+  const [name, setName] = useState('')
+  const [pct, setPct] = useState('')
+  const [saving, setSaving] = useState(false)
+
+  const reload = async () => {
+    const s = await fetch('/api/staff', { credentials: 'include' }).then(r => (r.ok ? r.json() : []))
+    setList(Array.isArray(s) ? s : [])
+    onChanged()
+  }
+
+  const add = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!name.trim() || saving) return
+    setSaving(true)
+    try {
+      const res = await fetch('/api/staff', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ name, commissionPct: Number(pct) || 0 }),
+      })
+      if (res.ok) {
+        setName(''); setPct('')
+        await reload()
+        toast.success('Barbero agregado')
+      } else {
+        toast.error('No se pudo agregar')
+      }
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const del = async (s: Staff) => {
+    const ok = await confirm({ title: 'Eliminar barbero', message: `¿Eliminar "${s.name}"? Las citas ya registradas conservan su nombre.`, confirmText: 'Eliminar', danger: true })
+    if (!ok) return
+    const res = await fetch(`/api/staff/${s.id}`, { method: 'DELETE', credentials: 'include' })
+    if (res.ok) { toast.success('Barbero eliminado'); await reload() }
+    else toast.error('No se pudo eliminar')
+  }
+
+  return (
+    <Sheet title="Barberos" onClose={onClose}>
+      <form onSubmit={add} className="space-y-3 mb-5">
+        <input value={name} onChange={e => setName(e.target.value)} className="input" placeholder="Nombre del barbero" />
+        <input value={pct} onChange={e => setPct(e.target.value)} type="number" step="1" min="0" max="100" className="input" placeholder="Comisión % (ej. 40)" />
+        <button type="submit" disabled={saving || !name.trim()} className="btn btn-primary w-full flex items-center justify-center gap-2 disabled:opacity-60">
+          {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} Agregar barbero
+        </button>
+      </form>
+
+      {list.length === 0 ? (
+        <p className="text-sm text-gray-500 text-center py-4 flex flex-col items-center gap-2">
+          <Users className="h-6 w-6 text-gray-300" />
+          Agrega a tus barberos con su % de comisión. Al asignarlos a una cita calculamos su pago.
+        </p>
+      ) : (
+        <div className="space-y-2">
+          {list.map(s => (
+            <div key={s.id} className="flex items-center justify-between bg-gray-50 border border-gray-200 rounded-lg p-3">
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-gray-900 truncate">{s.name}</p>
+                <p className="text-xs text-gray-500">{s.commissionPct}% de comisión</p>
+              </div>
+              <button onClick={() => del(s)} className="text-danger-500 hover:text-danger-700 p-1 flex-shrink-0" aria-label="Eliminar">
+                <Trash2 className="h-4 w-4" />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </Sheet>
+  )
+}
+
+function DoneDialog({ appointment, onClose, onConfirm }: { appointment: Appointment; onClose: () => void; onConfirm: (tip?: number) => void }) {
+  const { format } = useCurrency()
+  const [tip, setTip] = useState(appointment.tip ? String(appointment.tip) : '')
+  return (
+    <Sheet title="Marcar como atendida" onClose={onClose}>
+      <div className="space-y-4">
+        <p className="text-sm text-gray-600">
+          {appointment.clientName}
+          {appointment.staffName ? ` · ✂ ${appointment.staffName}` : ''}
+          {appointment.price > 0 ? ` · ${format(appointment.price)}` : ''}
+        </p>
+        <div>
+          <label className="label">Propina (opcional)</label>
+          <input value={tip} onChange={e => setTip(e.target.value)} type="number" step="0.01" min="0" className="input" placeholder="0.00" autoFocus />
+        </div>
+        <button onClick={() => onConfirm(tip === '' ? undefined : Number(tip) || 0)} className="btn btn-success w-full flex items-center justify-center gap-2">
+          <CheckCircle2 className="h-4 w-4" /> Confirmar atendida
+        </button>
+      </div>
+    </Sheet>
+  )
+}
+
+interface CommissionRow {
+  staffId: string | null
+  staffName: string
+  count: number
+  serviceIncome: number
+  commission: number
+  tips: number
+  total: number
+}
+
+function CommissionsSheet({ onClose }: { onClose: () => void }) {
+  const { format } = useCurrency()
+  const now = new Date()
+  const [from, setFrom] = useState(`${now.getFullYear()}-${pad(now.getMonth() + 1)}-01`)
+  const [to, setTo] = useState(`${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`)
+  const [rows, setRows] = useState<CommissionRow[]>([])
+  const [loading, setLoading] = useState(false)
+
+  useEffect(() => {
+    setLoading(true)
+    fetch(`/api/appointments/commissions?from=${from}&to=${to}`, { credentials: 'include' })
+      .then(r => (r.ok ? r.json() : null))
+      .then(d => { if (d) setRows(d.rows || []) })
+      .catch(() => {})
+      .finally(() => setLoading(false))
+  }, [from, to])
+
+  const totalPay = rows.reduce((s, r) => s + r.total, 0)
+
+  return (
+    <Sheet title="Comisiones por barbero" onClose={onClose}>
+      <div className="grid grid-cols-2 gap-3 mb-4">
+        <div><label className="label">Desde</label><input type="date" className="input" value={from} onChange={e => setFrom(e.target.value)} /></div>
+        <div><label className="label">Hasta</label><input type="date" className="input" value={to} onChange={e => setTo(e.target.value)} /></div>
+      </div>
+      {loading ? (
+        <div className="flex justify-center py-6"><Loader2 className="h-5 w-5 animate-spin text-primary-600" /></div>
+      ) : rows.length === 0 ? (
+        <p className="text-sm text-gray-500 text-center py-6">No hay citas atendidas en este rango.</p>
+      ) : (
+        <div className="space-y-2">
+          {rows.map(r => (
+            <div key={r.staffId || 'none'} className="bg-gray-50 border border-gray-200 rounded-lg p-3">
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-semibold text-gray-900">{r.staffName}</p>
+                <p className="text-sm font-bold text-gray-900">{format(r.total)}</p>
+              </div>
+              <p className="text-xs text-gray-500 mt-0.5">
+                {r.count} servicios · ingreso {format(r.serviceIncome)} · comisión {format(r.commission)} · propinas {format(r.tips)}
+              </p>
+            </div>
+          ))}
+          <div className="flex items-center justify-between pt-2 border-t border-gray-200">
+            <span className="text-sm font-semibold text-gray-700">Total a pagar</span>
+            <span className="text-base font-bold text-gray-900">{format(totalPay)}</span>
+          </div>
         </div>
       )}
     </Sheet>

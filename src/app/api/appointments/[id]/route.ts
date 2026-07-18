@@ -68,6 +68,22 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
       updates.client_phone = clientPhone || null
     }
     if (body.serviceId !== undefined) updates.service_id = body.serviceId || null
+    if (body.staffId !== undefined) {
+      if (body.staffId) {
+        const { data: st } = await supabase
+          .from('staff')
+          .select('id, name')
+          .eq('id', body.staffId)
+          .eq('workspace_id', ctx.workspaceId)
+          .maybeSingle()
+        updates.staff_id = st ? st.id : null
+        updates.staff_name = st ? st.name : ''
+      } else {
+        updates.staff_id = null
+        updates.staff_name = ''
+      }
+    }
+    if (body.tip !== undefined) updates.tip = Number(body.tip) || 0
     if (body.title !== undefined) updates.title = body.title ? String(body.title).trim() : null
     if (body.startsAt !== undefined) {
       const d = new Date(body.startsAt)

@@ -104,6 +104,23 @@ export async function POST(request: NextRequest) {
     if (!Number.isFinite(durationMin) || durationMin <= 0) durationMin = 30
     if (!Number.isFinite(price)) price = 0
 
+    // Barbero / personal (opcional): guarda snapshot del nombre.
+    let staffId: string | null = null
+    let staffName = ''
+    if (body.staffId) {
+      const { data: st } = await supabase
+        .from('staff')
+        .select('id, name')
+        .eq('id', body.staffId)
+        .eq('workspace_id', ctx.workspaceId)
+        .maybeSingle()
+      if (st) {
+        staffId = st.id
+        staffName = st.name
+      }
+    }
+    const tip = Number(body.tip)
+
     const { data, error } = await supabase
       .from('appointments')
       .insert({
@@ -113,10 +130,13 @@ export async function POST(request: NextRequest) {
         client_name: clientName,
         client_phone: clientPhone || null,
         service_id: serviceId,
+        staff_id: staffId,
+        staff_name: staffName,
         title: title || null,
         starts_at: starts.toISOString(),
         duration_min: Math.round(durationMin),
         price,
+        tip: Number.isFinite(tip) ? tip : 0,
         status: 'scheduled',
         notes: typeof body.notes === 'string' ? body.notes.trim() || null : null,
       })

@@ -25,10 +25,17 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     const status = body.status
     if (!STATUSES.includes(status)) return NextResponse.json({ error: 'Estado inválido' }, { status: 400 })
 
+    const patch: Record<string, unknown> = { status }
+    // Propina opcional al marcar atendida.
+    if (body.tip !== undefined) {
+      const tip = Number(body.tip)
+      if (Number.isFinite(tip) && tip >= 0) patch.tip = tip
+    }
+
     const supabase = getSupabaseClient()
     const { data, error } = await supabase
       .from('appointments')
-      .update({ status })
+      .update(patch)
       .eq('id', params.id)
       .eq('workspace_id', ctx.workspaceId)
       .select('id')
