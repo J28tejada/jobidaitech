@@ -77,7 +77,15 @@ const toLocalInput = (iso: string) => {
   const d = new Date(iso)
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
 }
-const timeLabel = (iso: string) => new Date(iso).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })
+// Formato 12 horas con am/pm (ej. 8:00 pm).
+const timeLabel = (iso: string) => {
+  const d = new Date(iso)
+  let h = d.getHours()
+  const m = d.getMinutes()
+  const ap = h < 12 ? 'am' : 'pm'
+  h = h % 12 === 0 ? 12 : h % 12
+  return `${h}:${pad(m)} ${ap}`
+}
 const dateKey = (iso: string) => {
   const d = new Date(iso)
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
@@ -107,7 +115,7 @@ export default function AgendaBoard() {
   const [dayFilter, setDayFilter] = useState('')
 
   const [mounted, setMounted] = useState(false)
-  const [menu, setMenu] = useState<{ item: Appointment; top: number; left: number } | null>(null)
+  const [menu, setMenu] = useState<{ item: Appointment; top?: number; bottom?: number; left: number } | null>(null)
   const menuRef = useRef<HTMLDivElement>(null)
 
   const [showForm, setShowForm] = useState(false)
@@ -158,7 +166,12 @@ export default function AgendaBoard() {
     setServices(Array.isArray(s) ? s : [])
     setStaff(Array.isArray(st) ? st : [])
     setClients(Array.isArray(c) ? c.map((x: any) => ({ id: x.id, name: x.name, phone: x.phone })) : [])
-    fetch('/api/appointments/summary', { credentials: 'include' })
+    fetchSummary()
+  }
+
+  const fetchSummary = () => {
+    const tz = new Date().getTimezoneOffset()
+    fetch(`/api/appointments/summary?tzOffset=${tz}`, { credentials: 'include' })
       .then(r => (r.ok ? r.json() : null))
       .then(d => d && setSummary(d))
       .catch(() => {})
@@ -190,16 +203,20 @@ export default function AgendaBoard() {
 
   const refreshAll = async () => {
     await loadAppointments()
-    fetch('/api/appointments/summary', { credentials: 'include' })
-      .then(r => (r.ok ? r.json() : null))
-      .then(d => d && setSummary(d))
-      .catch(() => {})
+    fetchSummary()
   }
 
   const openMenu = (e: React.MouseEvent, item: Appointment) => {
     e.stopPropagation()
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
-    setMenu({ item, top: rect.bottom + 6, left: Math.max(rect.right - 220, 8) })
+    const left = Math.max(rect.right - 220, 8)
+    const menuH = 300 // estimado; si no cabe abajo, se abre hacia arriba
+    if (window.innerHeight - rect.bottom < menuH + 16) {
+      // Anclamos el borde inferior del menú justo encima del botón.
+      setMenu({ item, bottom: window.innerHeight - rect.top + 6, left })
+    } else {
+      setMenu({ item, top: rect.bottom + 6, left })
+    }
   }
 
   const setStatus = async (item: Appointment, status: Status, msg: string, tip?: number) => {
@@ -277,7 +294,7 @@ export default function AgendaBoard() {
       </div>
 
       {/* Resumen de hoy */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+      <div className="grid grid-cols-2 gap-3">
         <div className="card border-l-4 border-l-primary-600">
           <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Citas hoy</p>
           <p className="text-2xl font-bold text-gray-900">{summary?.todayCount ?? 0}</p>
@@ -286,21 +303,21 @@ export default function AgendaBoard() {
           <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Ingreso estimado hoy</p>
           <p className="text-2xl font-bold text-gray-900">{format(summary?.todayIncome ?? 0)}</p>
         </div>
-        <div className="card">
-          <label className="label">Ver un día</label>
-          <input type="date" className="input" value={dayFilter} onChange={e => setDayFilter(e.target.value)} />
-          {dayFilter && (
-            <button onClick={() => setDayFilter('')} className="text-xs text-primary-600 mt-1">Ver próximas</button>
-          )}
-        </div>
       </div>
 
-      {/* Walk-in / fila de espera */}
-      <div className="flex items-center gap-3">
+      {/* Controles: walk-in + ver un día */}
+      <div className="flex flex-wrap items-center gap-3">
         <button onClick={() => setShowWalkIn(true)} className="btn btn-secondary text-sm flex items-center gap-1.5">
           <UserPlus className="h-4 w-4" /> Sin cita (walk-in)
         </button>
         {waitingToday > 0 && <span className="text-sm text-gray-500">{waitingToday} en espera hoy</span>}
+        <div className="flex items-center gap-2 ml-auto">
+          <label className="text-sm text-gray-500 whitespace-nowrap">Ver un día</label>
+          <input type="date" className="input py-1.5 w-auto" value={dayFilter} onChange={e => setDayFilter(e.target.value)} />
+          {dayFilter && (
+            <button onClick={() => setDayFilter('')} className="text-xs text-primary-600 whitespace-nowrap">Próximas</button>
+          )}
+        </div>
       </div>
 
       {/* Agenda por día */}
@@ -351,7 +368,7 @@ export default function AgendaBoard() {
 
       {/* Menú */}
       {mounted && menu && createPortal(
-        <div ref={menuRef} style={{ position: 'fixed', top: menu.top, left: menu.left, width: 220 }} className="bg-white rounded-xl shadow-lg border border-gray-200 py-1.5 z-[80]">
+        <div ref={menuRef} style={{ position: 'fixed', top: menu.top, bottom: menu.bottom, left: menu.left, width: 220 }} className="bg-white rounded-xl shadow-lg border border-gray-200 py-1.5 z-[80] max-h-[80vh] overflow-y-auto">
           <a href={reminderLink(menu.item)} target="_blank" rel="noopener noreferrer" onClick={() => setMenu(null)} className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 text-left">
             <MessageCircle className="h-4 w-4 text-green-500" /> Recordar por WhatsApp
           </a>
@@ -508,6 +525,17 @@ function AppointmentForm({ appointment, services, staff, clients, onClose, onSav
         const b = await res.json().catch(() => null)
         throw new Error(b?.error || 'No se pudo guardar')
       }
+      // Si hay un cliente vinculado y cambió su teléfono, lo actualizamos en su
+      // ficha para que reservas, recordatorios e historial queden al día.
+      const originalPhone = appointment?.clientPhone ?? ''
+      if (clientId && clientPhone.trim() && clientPhone.trim() !== originalPhone) {
+        fetch(`/api/clients/${clientId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ phone: clientPhone.trim() }),
+        }).catch(() => {})
+      }
       onSaved()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error al guardar')
@@ -522,17 +550,28 @@ function AppointmentForm({ appointment, services, staff, clients, onClose, onSav
         <div>
           <label className="label">Cliente *</label>
           {clients.length > 0 && (
-            <select className="input mb-2" value={clientId} onChange={e => { setClientId(e.target.value); if (e.target.value) setClientName('') }}>
+            <select
+              className="input mb-2"
+              value={clientId}
+              onChange={e => {
+                const id = e.target.value
+                setClientId(id)
+                if (id) {
+                  setClientName('')
+                  const c = clients.find(x => x.id === id)
+                  setClientPhone(c?.phone ?? '')
+                }
+              }}
+            >
               <option value="">— Escribir a mano —</option>
               {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
           )}
           {!clientId && (
-            <div className="grid grid-cols-2 gap-2">
-              <input value={clientName} onChange={e => setClientName(e.target.value)} className="input" placeholder="Nombre" />
-              <input value={clientPhone} onChange={e => setClientPhone(e.target.value)} className="input" placeholder="WhatsApp" inputMode="tel" />
-            </div>
+            <input value={clientName} onChange={e => setClientName(e.target.value)} className="input mb-2" placeholder="Nombre del cliente" />
           )}
+          <input value={clientPhone} onChange={e => setClientPhone(e.target.value)} className="input" placeholder="WhatsApp / teléfono" inputMode="tel" />
+          {clientId && <p className="text-xs text-gray-500 mt-1">Si cambias el número, se actualiza también en la ficha del cliente.</p>}
         </div>
 
         {services.length > 0 && (

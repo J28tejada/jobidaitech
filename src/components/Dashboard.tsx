@@ -70,7 +70,8 @@ export default function Dashboard() {
 
   const fetchAgenda = async () => {
     try {
-      const response = await fetch('/api/appointments/summary', { credentials: 'include' });
+      const tz = new Date().getTimezoneOffset();
+      const response = await fetch(`/api/appointments/summary?tzOffset=${tz}`, { credentials: 'include' });
       if (!response.ok) return;
       const data = await response.json();
       if (data && typeof data.todayCount === 'number') {

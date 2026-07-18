@@ -4,17 +4,27 @@ import { getSupabaseClient } from '@/lib/supabase'
 import { getWorkspaceContext, MODULE_LOCKED_ERROR } from '@/lib/workspaces'
 
 // Resumen de la agenda: citas de hoy, próximas 7 días e ingreso estimado de hoy.
-export async function GET() {
+export async function GET(request: Request) {
   try {
     const ctx = await getWorkspaceContext()
     if (!ctx) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
     if (!ctx.hasModule('agenda')) return NextResponse.json(MODULE_LOCKED_ERROR, { status: 403 })
 
+    // El servidor corre en UTC; para que "hoy" sea el día LOCAL del negocio,
+    // el cliente envía su offset (Date.getTimezoneOffset(), minutos). Sin él,
+    // caemos a UTC. RD no tiene horario de verano, así que un offset fijo basta.
+    const tzOffsetMin = Number(new URL(request.url).searchParams.get('tzOffset'))
+    const offMs = (Number.isFinite(tzOffsetMin) ? tzOffsetMin : 0) * 60_000
     const now = new Date()
-    const startToday = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+    // Fecha local (Y/M/D) leyendo el instante desplazado por el offset.
+    const shifted = new Date(now.getTime() - offMs)
+    const ly = shifted.getUTCFullYear()
+    const lm = shifted.getUTCMonth()
+    const ld = shifted.getUTCDate()
+    const startToday = new Date(Date.UTC(ly, lm, ld) + offMs)
     const endToday = new Date(startToday.getTime() + 86_400_000)
     const in7 = new Date(startToday.getTime() + 7 * 86_400_000)
-    const startMonth = new Date(now.getFullYear(), now.getMonth(), 1)
+    const startMonth = new Date(Date.UTC(ly, lm, 1) + offMs)
 
     const supabase = getSupabaseClient()
     const [{ data, error }, { data: monthData, error: monthErr }] = await Promise.all([
