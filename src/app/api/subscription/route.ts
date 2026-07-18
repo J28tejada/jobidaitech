@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 
 import { getSupabaseClient } from '@/lib/supabase'
 import { getWorkspaceContext } from '@/lib/workspaces'
+import { describeError } from '@/lib/errors'
 import { modulesForTier } from '@/lib/modules'
 
 // Estado de la suscripción del usuario autenticado (para el aviso/banner).
@@ -11,8 +12,7 @@ export async function GET() {
     ctx = await getWorkspaceContext()
   } catch (error) {
     console.error('GET /api/subscription getWorkspaceContext', error)
-    const detail = error instanceof Error ? error.message : 'error desconocido'
-    return NextResponse.json({ error: `No se pudo preparar tu cuenta: ${detail}` }, { status: 500 })
+    return NextResponse.json({ error: `No se pudo preparar tu cuenta: ${describeError(error)}` }, { status: 500 })
   }
   if (!ctx) {
     return NextResponse.json({ error: 'No autorizado' }, { status: 401 })

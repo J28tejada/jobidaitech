@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 
 import { getSupabaseClient } from '@/lib/supabase'
 import { canManageWorkspace, getWorkspaceContext, seedCategoriesForWorkspace, READ_ONLY_ERROR } from '@/lib/workspaces'
+import { describeError } from '@/lib/errors'
 import { CATEGORY_TEMPLATES } from '@/types'
 
 export async function GET() {
@@ -32,8 +33,7 @@ export async function POST(request: Request) {
     ctx = await getWorkspaceContext()
   } catch (error) {
     console.error('POST /api/settings/business-type getWorkspaceContext', error)
-    const detail = error instanceof Error ? error.message : 'error desconocido'
-    return NextResponse.json({ error: `No se pudo preparar tu cuenta: ${detail}` }, { status: 500 })
+    return NextResponse.json({ error: `No se pudo preparar tu cuenta: ${describeError(error)}` }, { status: 500 })
   }
   if (!ctx) {
     return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
