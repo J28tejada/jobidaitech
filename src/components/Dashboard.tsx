@@ -716,6 +716,7 @@ export default function Dashboard() {
 
       {/* Onboarding */}
       <Onboarding
+        businessType={businessType}
         hasProjects={(stats?.totalProjects ?? 0) > 0}
         onComplete={() => {
           // Refrescar datos después de completar el onboarding
