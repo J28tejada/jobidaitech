@@ -94,7 +94,9 @@ export default function WorkspaceSwitcher() {
         body: JSON.stringify({ workspaceId }),
       })
       if (!res.ok) throw new Error('No se pudo cambiar de espacio')
-      window.location.reload()
+      // Ir al Panel de control (general a todos los negocios) en vez de quedar
+      // en una ruta que quizá no aplica al nuevo negocio (ej. /videos).
+      window.location.href = '/'
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error al cambiar de espacio')
       setBusy(false)
@@ -116,7 +118,7 @@ export default function WorkspaceSwitcher() {
         const data = await res.json().catch(() => ({}))
         throw new Error(data.error ?? 'No se pudo crear el negocio')
       }
-      window.location.reload()
+      window.location.href = '/'
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error al crear el negocio')
       setCreating(false)
