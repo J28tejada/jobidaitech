@@ -60,7 +60,7 @@ export default function InstallPrompt() {
         <Download className="h-5 w-5 text-white" />
       </div>
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-semibold text-gray-900">Instala ContaTaller en tu teléfono</p>
+        <p className="text-sm font-semibold text-gray-900">Instala Jobidai en tu teléfono</p>
         <p className="text-xs text-gray-600">Ábrela como una app, a pantalla completa y con un toque.</p>
       </div>
       <button onClick={install} className="btn btn-primary text-sm flex-shrink-0">

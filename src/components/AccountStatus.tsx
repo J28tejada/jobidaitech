@@ -22,7 +22,7 @@ function ContactLines() {
   if (!hasSupportContact()) {
     return <p className="text-sm text-gray-500">Contáctanos para adquirir tu suscripción.</p>
   }
-  const wa = whatsappLink('Hola, quiero información sobre la suscripción de ContaTaller.')
+  const wa = whatsappLink('Hola, quiero información sobre la suscripción de Jobidai.')
   return (
     <div className="space-y-1.5 text-sm">
       {wa && (
@@ -118,7 +118,7 @@ export default function AccountStatus() {
               <div className="p-2 bg-primary-100 rounded-lg">
                 <Sparkles className="h-5 w-5 text-primary-600" />
               </div>
-              <h3 className="text-lg font-semibold text-gray-900">¡Bienvenido a ContaTaller!</h3>
+              <h3 className="text-lg font-semibold text-gray-900">¡Bienvenido a Jobidai!</h3>
             </div>
             <p className="text-gray-700 mb-2">
               Tienes <strong>30 días de prueba</strong> con acceso completo a todas las funciones.

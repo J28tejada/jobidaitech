@@ -1,4 +1,4 @@
-// Service worker de ContaTaller (PWA).
+// Service worker de Jobidai (PWA).
 // Estrategia: network-first para páginas y estáticos (siempre fresco online,
 // con respaldo desde caché si no hay conexión). Las rutas /api NO se cachean
 // (datos privados y siempre en vivo).

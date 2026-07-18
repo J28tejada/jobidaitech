@@ -12,14 +12,14 @@ const accentBootstrap = `(function(){try{var r=document.documentElement;var m=lo
 const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
-  title: 'ContaTaller',
-  description: 'Controla ingresos, gastos y ganancia de tu negocio.',
+  title: 'Jobidai',
+  description: 'Todo tu negocio en una sola app: agenda, clientes, cobros, inventario y reportes.',
   manifest: '/manifest.json',
-  applicationName: 'ContaTaller',
+  applicationName: 'Jobidai',
   appleWebApp: {
     capable: true,
     statusBarStyle: 'default',
-    title: 'ContaTaller',
+    title: 'Jobidai',
   },
   icons: {
     icon: '/icon-192.png',
@@ -31,7 +31,7 @@ export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
   viewportFit: 'cover',
-  themeColor: '#0284c7',
+  themeColor: '#059669',
 }
 
 export default function RootLayout({

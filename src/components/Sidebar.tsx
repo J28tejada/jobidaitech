@@ -112,7 +112,7 @@ export default function Sidebar() {
         lg:translate-x-0 flex flex-col`}
       >
         <div className="flex items-center justify-center h-16 bg-primary-600">
-          <h1 className="text-xl font-bold text-white">ContaTaller</h1>
+          <h1 className="text-xl font-bold text-white">Jobidai</h1>
         </div>
 
         <nav className="mt-6 lg:mt-8 px-4 flex-1 overflow-y-auto">

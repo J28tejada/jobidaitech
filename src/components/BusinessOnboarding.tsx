@@ -2,7 +2,6 @@
 
 import { useState } from 'react'
 import {
-  Hammer,
   CalendarClock,
   Store,
   Utensils,
@@ -74,10 +73,10 @@ export default function BusinessOnboarding() {
         <div className="w-full max-w-lg bg-white rounded-2xl shadow-xl border border-gray-200 p-6 sm:p-8">
           {/* Marca */}
           <div className="flex items-center gap-2 mb-6">
-            <div className="p-2 bg-primary-600 rounded-xl">
-              <Hammer className="h-5 w-5 text-white" />
+            <div className="h-9 w-9 flex items-center justify-center bg-primary-600 rounded-xl">
+              <span className="text-lg font-bold text-white">J</span>
             </div>
-            <span className="text-lg font-bold text-gray-900">ContaTaller</span>
+            <span className="text-lg font-bold text-gray-900">Jobidai</span>
           </div>
 
           {view === 'main' ? (

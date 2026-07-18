@@ -183,7 +183,7 @@ export default function PublicQuotePage({ params }: { params: { token: string } 
             </div>
           </div>
         </div>
-        <p className="text-center text-xs text-gray-400 mt-4 print:hidden">Hecho con ContaTaller</p>
+        <p className="text-center text-xs text-gray-400 mt-4 print:hidden">Hecho con Jobidai</p>
       </div>
     </div>
   )

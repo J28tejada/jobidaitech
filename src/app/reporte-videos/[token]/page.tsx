@@ -140,7 +140,7 @@ export default function PublicVideoReportPage({ params }: { params: { token: str
             </div>
           </div>
         </div>
-        <p className="text-center text-xs text-gray-400 mt-4 print:hidden">Hecho con ContaTaller</p>
+        <p className="text-center text-xs text-gray-400 mt-4 print:hidden">Hecho con Jobidai</p>
       </div>
     </div>
   )

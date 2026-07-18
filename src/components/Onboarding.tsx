@@ -13,7 +13,7 @@ const ONBOARDING_STORAGE_KEY = 'contataller_onboarding_completed';
 const steps = [
   {
     id: 1,
-    title: '¡Bienvenido a ContaTaller!',
+    title: '¡Bienvenido a Jobidai!',
     content: (
       <div className="space-y-4">
         <div className="flex justify-center mb-4">
@@ -45,7 +45,7 @@ const steps = [
           </div>
         </div>
         <p className="text-gray-700">
-          Los <strong>proyectos</strong> son el corazón de ContaTaller. Cada proyecto representa un trabajo o pedido que estás realizando.
+          Los <strong>proyectos</strong> son el corazón de Jobidai. Cada proyecto representa un trabajo o pedido que estás realizando.
         </p>
         <ul className="space-y-2 text-sm text-gray-600 list-disc list-inside">
           <li>Registra el nombre del proyecto, cliente y presupuesto</li>
@@ -142,7 +142,7 @@ const steps = [
           </div>
         </div>
         <p className="text-gray-700">
-          Adapta ContaTaller a las necesidades específicas de tu taller.
+          Adapta Jobidai a las necesidades específicas de tu taller.
         </p>
         <ul className="space-y-2 text-sm text-gray-600 list-disc list-inside">
           <li>Crea categorías personalizadas de ingresos y gastos</li>
@@ -169,7 +169,7 @@ const steps = [
           </div>
         </div>
         <p className="text-gray-700 text-center">
-          Ya conoces las funcionalidades principales de ContaTaller. 
+          Ya conoces las funcionalidades principales de Jobidai. 
           ¡Es hora de empezar a gestionar tus proyectos de manera profesional!
         </p>
         <div className="bg-gradient-to-r from-primary-50 to-primary-100 rounded-lg p-4 mt-6">

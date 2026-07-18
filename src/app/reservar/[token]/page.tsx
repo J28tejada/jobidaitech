@@ -246,7 +246,7 @@ export default function BookingPage({ params }: { params: { token: string } }) {
             </button>
           </div>
         </div>
-        <p className="text-center text-xs text-gray-400 mt-4">Hecho con ContaTaller</p>
+        <p className="text-center text-xs text-gray-400 mt-4">Hecho con Jobidai</p>
       </div>
     </div>
   )

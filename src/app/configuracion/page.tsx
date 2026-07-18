@@ -205,7 +205,7 @@ export default function ConfigurationPage() {
             <h2 className="text-lg font-semibold text-gray-900">Ayuda y Tutorial</h2>
           </div>
           <p className="text-gray-600 mb-4">
-            Vuelve a ver el tutorial interactivo que explica cómo usar todas las funcionalidades de ContaTaller.
+            Vuelve a ver el tutorial interactivo que explica cómo usar todas las funcionalidades de Jobidai.
           </p>
           <button
             onClick={handleShowOnboarding}

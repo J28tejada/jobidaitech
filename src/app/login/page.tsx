@@ -3,7 +3,7 @@
 import { useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useSessionContext } from '@supabase/auth-helpers-react'
-import { Hammer, TrendingUp, DollarSign, BarChart3 } from 'lucide-react'
+import { TrendingUp, DollarSign, BarChart3 } from 'lucide-react'
 
 import LoginButton from '@/components/LoginButton'
 
@@ -35,13 +35,13 @@ export default function LoginPage() {
         <div className="hidden md:block space-y-8">
           <div className="space-y-4">
             <div className="flex items-center space-x-3">
-              <div className="p-3 bg-primary-600 rounded-xl shadow-lg">
-                <Hammer className="h-8 w-8 text-white" />
+              <div className="h-14 w-14 flex items-center justify-center bg-primary-600 rounded-xl shadow-lg">
+                <span className="text-3xl font-bold text-white">J</span>
               </div>
-              <h1 className="text-4xl font-bold text-gray-900">ContaTaller</h1>
+              <h1 className="text-4xl font-bold text-gray-900">Jobidai</h1>
             </div>
             <p className="text-xl text-gray-600 leading-relaxed">
-              Sabé cuánto ganás en cada trabajo. Controla ingresos, gastos y ganancia por proyecto — para tu negocio.
+              Todo tu negocio en una sola app. Agenda, clientes, cobros, inventario y reportes — adaptado a tu tipo de negocio.
             </p>
           </div>
 
@@ -51,9 +51,9 @@ export default function LoginPage() {
                 <DollarSign className="h-6 w-6 text-primary-600" />
               </div>
               <div>
-                <h3 className="font-semibold text-gray-900 mb-1">Control de Finanzas</h3>
+                <h3 className="font-semibold text-gray-900 mb-1">Adaptado a tu negocio</h3>
                 <p className="text-sm text-gray-600">
-                  Registra ingresos y gastos de manera rápida y organizada
+                  El menú y las herramientas se ajustan a tu tipo de negocio
                 </p>
               </div>
             </div>
@@ -63,9 +63,9 @@ export default function LoginPage() {
                 <BarChart3 className="h-6 w-6 text-success-600" />
               </div>
               <div>
-                <h3 className="font-semibold text-gray-900 mb-1">Reportes Detallados</h3>
+                <h3 className="font-semibold text-gray-900 mb-1">Todo en un solo lugar</h3>
                 <p className="text-sm text-gray-600">
-                  Visualiza la rentabilidad de cada proyecto con gráficos claros
+                  Citas, clientes, cobros, inventario, ventas y más
                 </p>
               </div>
             </div>
@@ -75,9 +75,9 @@ export default function LoginPage() {
                 <TrendingUp className="h-6 w-6 text-yellow-600" />
               </div>
               <div>
-                <h3 className="font-semibold text-gray-900 mb-1">Optimización</h3>
+                <h3 className="font-semibold text-gray-900 mb-1">Decisiones con datos</h3>
                 <p className="text-sm text-gray-600">
-                  Toma decisiones informadas basadas en datos reales de tu taller
+                  Reportes claros para ver cómo va tu negocio en tiempo real
                 </p>
               </div>
             </div>
@@ -90,13 +90,13 @@ export default function LoginPage() {
             {/* Mobile Logo */}
             <div className="md:hidden text-center space-y-3">
               <div className="flex items-center justify-center space-x-3">
-                <div className="p-3 bg-primary-600 rounded-xl shadow-lg">
-                  <Hammer className="h-8 w-8 text-white" />
+                <div className="h-12 w-12 flex items-center justify-center bg-primary-600 rounded-xl shadow-lg">
+                  <span className="text-2xl font-bold text-white">J</span>
                 </div>
-                <h1 className="text-3xl font-bold text-gray-900">ContaTaller</h1>
+                <h1 className="text-3xl font-bold text-gray-900">Jobidai</h1>
               </div>
               <p className="text-gray-600">
-                Control financiero para tu taller
+                Todo tu negocio en una sola app
               </p>
             </div>
 
@@ -104,7 +104,7 @@ export default function LoginPage() {
             <div className="hidden md:block space-y-2">
               <h2 className="text-3xl font-bold text-gray-900">Bienvenido</h2>
               <p className="text-gray-600">
-                Inicia sesión para comenzar a gestionar tus proyectos y finanzas
+                Inicia sesión para gestionar y hacer crecer tu negocio
               </p>
             </div>
 

@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Check, Hammer, Loader2, MessageCircle, X, CheckCircle2, LayoutDashboard, LogIn } from 'lucide-react'
+import { Check, Loader2, MessageCircle, X, CheckCircle2, LayoutDashboard, LogIn } from 'lucide-react'
 
 import { PLANS_DISPLAY, ANNUAL_MONTHS_PAID, type PaidTier } from '@/lib/plans'
 import { formatCurrency } from '@/lib/format'
@@ -38,10 +38,10 @@ export default function PlanesPage() {
         {/* Barra superior */}
         <header className="flex items-center justify-between mb-8 sm:mb-10">
           <a href={loggedIn ? '/' : '/login'} className="inline-flex items-center gap-2">
-            <div className="p-2 bg-primary-600 rounded-xl">
-              <Hammer className="h-5 w-5 text-white" />
+            <div className="h-9 w-9 flex items-center justify-center bg-primary-600 rounded-xl">
+              <span className="text-lg font-bold text-white">J</span>
             </div>
-            <span className="text-lg font-bold text-gray-900">ContaTaller</span>
+            <span className="text-lg font-bold text-gray-900">Jobidai</span>
           </a>
           <a href={loggedIn ? '/' : '/login'} className="btn btn-primary text-sm inline-flex items-center gap-1.5">
             {loggedIn ? (
@@ -173,7 +173,7 @@ function RequestModal({ plan, cycle, onClose }: { plan: PaidTier; cycle: 'monthl
   }
 
   const waNumber = (SUPPORT.whatsapp || '').replace(/\D/g, '')
-  const waMsg = `Hola, quiero el plan ${planInfo.name} (${cycle === 'annual' ? 'anual' : 'mensual'}) de ContaTaller.`
+  const waMsg = `Hola, quiero el plan ${planInfo.name} (${cycle === 'annual' ? 'anual' : 'mensual'}) de Jobidai.`
   const waLink = waNumber ? `https://wa.me/${waNumber}?text=${encodeURIComponent(waMsg)}` : null
 
   return (
