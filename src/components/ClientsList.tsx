@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
-import { Plus, Search, MoreVertical, Users, Edit, Trash2, MessageCircle, Loader2, X, ClipboardList, Scissors, CalendarClock } from 'lucide-react'
+import { Plus, Search, MoreVertical, Users, Edit, Trash2, MessageCircle, Loader2, X, ClipboardList, Scissors, CalendarClock, Gift, HeartHandshake } from 'lucide-react'
 
 import { useCurrency } from './CurrencyProvider'
 
@@ -36,6 +36,7 @@ export default function ClientsList() {
   const [showForm, setShowForm] = useState(false)
   const [editing, setEditing] = useState<Client | null>(null)
   const [historyClient, setHistoryClient] = useState<Client | null>(null)
+  const [showInactive, setShowInactive] = useState(false)
 
   useEffect(() => {
     setMounted(true)
@@ -115,16 +116,18 @@ export default function ClientsList() {
           <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Clientes</h1>
           <p className="text-gray-600 mt-1 sm:mt-2">Tu libreta de clientes: contacto, RNC/cédula y notas.</p>
         </div>
-        <button
-          onClick={() => {
-            setEditing(null)
-            setShowForm(true)
-          }}
-          className="btn btn-primary flex items-center justify-center w-full sm:w-auto"
-        >
-          <Plus className="h-4 w-4 mr-1.5" />
-          Nuevo cliente
-        </button>
+        <div className="flex gap-2 w-full sm:w-auto">
+          <button onClick={() => setShowInactive(true)} className="btn btn-secondary flex items-center justify-center" title="Reactivar clientes">
+            <HeartHandshake className="h-4 w-4 sm:mr-1.5" /> <span className="hidden sm:inline">Reactivación</span>
+          </button>
+          <button
+            onClick={() => { setEditing(null); setShowForm(true) }}
+            className="btn btn-primary flex items-center justify-center flex-1 sm:flex-none"
+          >
+            <Plus className="h-4 w-4 mr-1.5" />
+            Nuevo cliente
+          </button>
+        </div>
       </div>
 
       <div className="card">
@@ -236,7 +239,76 @@ export default function ClientsList() {
           onEdit={() => { const c = historyClient; setHistoryClient(null); setEditing(c); setShowForm(true) }}
         />
       )}
+
+      {showInactive && <InactiveSheet onClose={() => setShowInactive(false)} />}
     </div>
+  )
+}
+
+interface InactiveClient { id: string; name: string; phone: string | null; lastVisit: string; daysSince: number }
+
+function InactiveSheet({ onClose }: { onClose: () => void }) {
+  const [days, setDays] = useState(30)
+  const [loading, setLoading] = useState(true)
+  const [list, setList] = useState<InactiveClient[]>([])
+
+  useEffect(() => {
+    setLoading(true)
+    fetch(`/api/clients/inactive?days=${days}`, { credentials: 'include' })
+      .then(r => (r.ok ? r.json() : null))
+      .then(d => { if (d) setList(d.clients || []) })
+      .catch(() => {})
+      .finally(() => setLoading(false))
+  }, [days])
+
+  const wa = (c: InactiveClient) => {
+    const digits = (c.phone || '').replace(/\D/g, '')
+    const msg = `Hola ${c.name}, ¡te extrañamos! ✂ Vuelve esta semana y te tenemos una sorpresa. ¿Te agendo?`
+    return digits ? `https://wa.me/${digits}?text=${encodeURIComponent(msg)}` : `https://wa.me/?text=${encodeURIComponent(msg)}`
+  }
+
+  return createPortal(
+    <div className="fixed inset-0 z-[90] flex items-end sm:items-center justify-center">
+      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
+      <div className="relative bg-white w-full sm:max-w-md rounded-t-2xl sm:rounded-2xl shadow-xl max-h-[92vh] overflow-y-auto">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 sticky top-0 bg-white z-10">
+          <h2 className="text-lg font-semibold text-gray-900">Reactivación</h2>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 p-1"><X className="h-5 w-5" /></button>
+        </div>
+        <div className="p-5 space-y-4">
+          <p className="text-sm text-gray-600">Clientes que no vienen hace tiempo. Escríbeles por WhatsApp para que vuelvan.</p>
+          <div className="flex gap-2">
+            {[30, 60, 90].map(d => (
+              <button key={d} onClick={() => setDays(d)} className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${days === d ? 'bg-primary-600 text-white border-primary-600' : 'bg-gray-100 text-gray-600 border-transparent hover:bg-gray-200'}`}>
+                +{d} días
+              </button>
+            ))}
+          </div>
+
+          {loading ? (
+            <div className="flex justify-center py-6"><Loader2 className="h-5 w-5 animate-spin text-primary-600" /></div>
+          ) : list.length === 0 ? (
+            <p className="text-sm text-gray-500 text-center py-6">Ningún cliente inactivo por más de {days} días. 🎉</p>
+          ) : (
+            <div className="space-y-2">
+              <p className="text-xs text-gray-500">{list.length} cliente{list.length === 1 ? '' : 's'} para reactivar</p>
+              {list.map(c => (
+                <div key={c.id} className="flex items-center justify-between gap-2 bg-gray-50 border border-gray-200 rounded-lg p-3">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-gray-900 truncate">{c.name}</p>
+                    <p className="text-xs text-gray-500">Hace {c.daysSince} días</p>
+                  </div>
+                  <a href={wa(c)} target="_blank" rel="noopener noreferrer" className="btn btn-success text-sm flex items-center gap-1.5 flex-shrink-0">
+                    <MessageCircle className="h-4 w-4" /> WhatsApp
+                  </a>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>,
+    document.body
   )
 }
 
@@ -253,11 +325,23 @@ const STATUS_LABEL: Record<string, string> = {
   scheduled: 'Agendada', confirmed: 'Confirmada', done: 'Atendida', cancelled: 'Cancelada', no_show: 'No asistió',
 }
 
+interface LoyaltyStatus { enabled: boolean; threshold: number; rewardPct: number; sinceRedemption: number; rewardAvailable: boolean }
+
 function ClientHistorySheet({ client, onClose, onEdit }: { client: Client; onClose: () => void; onEdit: () => void }) {
   const { format } = useCurrency()
+  const toast = useToast()
   const [loading, setLoading] = useState(true)
   const [appts, setAppts] = useState<ApptLite[]>([])
   const [summary, setSummary] = useState<{ visitCount: number; totalSpent: number; lastVisit: string | null; favoriteBarber: string | null } | null>(null)
+  const [loyalty, setLoyalty] = useState<LoyaltyStatus | null>(null)
+  const [redeeming, setRedeeming] = useState(false)
+
+  const loadLoyalty = () => {
+    fetch(`/api/clients/${client.id}/loyalty`, { credentials: 'include' })
+      .then(r => (r.ok ? r.json() : null))
+      .then(d => { if (d) setLoyalty(d) })
+      .catch(() => {})
+  }
 
   useEffect(() => {
     fetch(`/api/clients/${client.id}/history`, { credentials: 'include' })
@@ -265,7 +349,21 @@ function ClientHistorySheet({ client, onClose, onEdit }: { client: Client; onClo
       .then(d => { if (d) { setAppts(d.appointments || []); setSummary(d.summary || null) } })
       .catch(() => {})
       .finally(() => setLoading(false))
+    loadLoyalty()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [client.id])
+
+  const redeem = async () => {
+    if (redeeming) return
+    setRedeeming(true)
+    try {
+      const res = await fetch(`/api/clients/${client.id}/loyalty/redeem`, { method: 'POST', credentials: 'include' })
+      if (res.ok) { toast.success('Recompensa canjeada'); loadLoyalty() }
+      else toast.error('No se pudo canjear')
+    } finally {
+      setRedeeming(false)
+    }
+  }
 
   const dt = (iso: string) => new Date(iso).toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' })
 
@@ -298,6 +396,33 @@ function ClientHistorySheet({ client, onClose, onEdit }: { client: Client; onClo
             <p className="text-sm text-gray-600 flex items-center gap-1.5">
               <Scissors className="h-4 w-4 text-primary-600" /> Barbero habitual: <strong className="text-gray-900">{summary.favoriteBarber}</strong>
             </p>
+          )}
+
+          {/* Fidelidad */}
+          {loyalty?.enabled && (
+            <div className={`rounded-lg p-3 border ${loyalty.rewardAvailable ? 'bg-success-50 border-success-200' : 'bg-gray-50 border-gray-200'}`}>
+              <div className="flex items-center justify-between mb-1.5">
+                <p className="text-sm font-medium text-gray-900 flex items-center gap-1.5">
+                  <Gift className="h-4 w-4 text-primary-600" /> Fidelidad
+                </p>
+                <p className="text-xs text-gray-500">
+                  {Math.min(loyalty.sinceRedemption, loyalty.threshold)}/{loyalty.threshold}
+                </p>
+              </div>
+              <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
+                <div className="h-full bg-primary-600" style={{ width: `${Math.min(100, (loyalty.sinceRedemption / loyalty.threshold) * 100)}%` }} />
+              </div>
+              {loyalty.rewardAvailable ? (
+                <div className="mt-2.5 flex items-center justify-between gap-2">
+                  <p className="text-sm font-medium text-success-700">🎁 {loyalty.rewardPct >= 100 ? 'Servicio gratis' : `${loyalty.rewardPct}% de descuento`} disponible</p>
+                  <button onClick={redeem} disabled={redeeming} className="btn btn-success text-sm flex items-center gap-1.5 disabled:opacity-60">
+                    {redeeming ? <Loader2 className="h-4 w-4 animate-spin" /> : null} Canjear
+                  </button>
+                </div>
+              ) : (
+                <p className="text-xs text-gray-500 mt-1.5">Le faltan {loyalty.threshold - loyalty.sinceRedemption} visita{loyalty.threshold - loyalty.sinceRedemption === 1 ? '' : 's'} para {loyalty.rewardPct >= 100 ? 'un servicio gratis' : `${loyalty.rewardPct}% de descuento`}.</p>
+              )}
+            </div>
           )}
 
           {/* Preferencias / notas */}

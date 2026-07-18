@@ -8,6 +8,7 @@ import CategoryManager from '@/components/CategoryManager';
 import BusinessTypePicker from '@/components/BusinessTypePicker';
 import AppearanceSettings from '@/components/AppearanceSettings';
 import BookingSettings from '@/components/BookingSettings';
+import LoyaltySettings from '@/components/LoyaltySettings';
 import { BusinessType } from '@/types';
 import { CURRENCIES } from '@/lib/format';
 import { useCurrency } from '@/components/CurrencyProvider';
@@ -153,8 +154,9 @@ export default function ConfigurationPage() {
           )}
         </div>
 
-        {/* Reservas online (negocios con agenda) */}
+        {/* Reservas online + fidelidad (negocios con agenda) */}
         {hasAgenda && <BookingSettings />}
+        {hasAgenda && <LoyaltySettings />}
 
         {/* Apariencia */}
         <AppearanceSettings />

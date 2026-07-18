@@ -762,6 +762,16 @@ function StaffManager({ staff, onClose, onChanged }: { staff: Staff[]; onClose: 
 function DoneDialog({ appointment, onClose, onConfirm }: { appointment: Appointment; onClose: () => void; onConfirm: (tip?: number) => void }) {
   const { format } = useCurrency()
   const [tip, setTip] = useState(appointment.tip ? String(appointment.tip) : '')
+  const [reward, setReward] = useState<{ rewardPct: number } | null>(null)
+
+  useEffect(() => {
+    if (!appointment.clientId) return
+    fetch(`/api/clients/${appointment.clientId}/loyalty`, { credentials: 'include' })
+      .then(r => (r.ok ? r.json() : null))
+      .then(d => { if (d?.enabled && d.rewardAvailable) setReward({ rewardPct: d.rewardPct }) })
+      .catch(() => {})
+  }, [appointment.clientId])
+
   return (
     <Sheet title="Marcar como atendida" onClose={onClose}>
       <div className="space-y-4">
@@ -770,6 +780,12 @@ function DoneDialog({ appointment, onClose, onConfirm }: { appointment: Appointm
           {appointment.staffName ? ` · ✂ ${appointment.staffName}` : ''}
           {appointment.price > 0 ? ` · ${format(appointment.price)}` : ''}
         </p>
+
+        {reward && (
+          <div className="bg-success-50 border border-success-200 rounded-lg p-3 text-sm text-success-700">
+            🎁 Este cliente tiene recompensa: <strong>{reward.rewardPct >= 100 ? 'servicio gratis' : `${reward.rewardPct}% de descuento`}</strong>. Aplica el precio con el descuento y canjéala en su ficha.
+          </div>
+        )}
         <div>
           <label className="label">Propina (opcional)</label>
           <input value={tip} onChange={e => setTip(e.target.value)} type="number" step="0.01" min="0" className="input" placeholder="0.00" autoFocus />
