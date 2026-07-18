@@ -104,6 +104,12 @@ export default function AgendaBoard() {
   useEffect(() => {
     setMounted(true)
     loadStatic()
+    // Botón "+" flotante: abrir el formulario de nueva cita.
+    if (typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('new') === 'true') {
+      setEditing(null)
+      setShowForm(true)
+      window.history.replaceState({}, '', window.location.pathname)
+    }
   }, [])
 
   useEffect(() => {

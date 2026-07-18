@@ -6,6 +6,7 @@ import { Loader2, HelpCircle, Sparkles } from 'lucide-react';
 import Layout from '@/components/Layout';
 import CategoryManager from '@/components/CategoryManager';
 import BusinessTypePicker from '@/components/BusinessTypePicker';
+import AppearanceSettings from '@/components/AppearanceSettings';
 import { BusinessType } from '@/types';
 import { CURRENCIES } from '@/lib/format';
 import { useCurrency } from '@/components/CurrencyProvider';
@@ -145,6 +146,9 @@ export default function ConfigurationPage() {
             </div>
           )}
         </div>
+
+        {/* Apariencia */}
+        <AppearanceSettings />
 
         {/* Moneda */}
         <div className="card">

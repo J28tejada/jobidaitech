@@ -83,6 +83,12 @@ export default function InventoryList() {
   useEffect(() => {
     setMounted(true)
     load()
+    // Botón "+" flotante: abrir el formulario de nuevo producto.
+    if (typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('new') === 'true') {
+      setEditing(null)
+      setShowForm(true)
+      window.history.replaceState({}, '', window.location.pathname)
+    }
   }, [])
 
   useEffect(() => {

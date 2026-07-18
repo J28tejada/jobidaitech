@@ -61,3 +61,18 @@ export function archetypeFor(businessType: string | null | undefined): Archetype
 export function relevantHrefsForBusiness(businessType: string | null | undefined): string[] {
   return ARCHETYPE_HREFS[archetypeFor(businessType)]
 }
+
+// Acción principal (botón "+" flotante) por arquetipo: a qué crear va directo.
+const ARCHETYPE_PRIMARY: Record<Archetype, { href: string; label: string }> = {
+  appointments: { href: '/agenda', label: 'Nueva cita' },
+  retail: { href: '/inventario', label: 'Nuevo producto' },
+  food: { href: '/inventario', label: 'Nuevo producto' },
+  projects: { href: '/proyectos', label: 'Nuevo proyecto' },
+  creative: { href: '/videos', label: 'Nuevo video' },
+  general: { href: '/proyectos', label: 'Nuevo proyecto' },
+}
+
+/** Acción del botón "+" flotante según el tipo de negocio. */
+export function primaryActionForBusiness(businessType: string | null | undefined): { href: string; label: string } {
+  return ARCHETYPE_PRIMARY[archetypeFor(businessType)]
+}

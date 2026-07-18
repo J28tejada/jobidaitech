@@ -1,8 +1,10 @@
 'use client'
 
-import { ReactNode, useEffect } from 'react'
+import { ReactNode, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useSessionContext } from '@supabase/auth-helpers-react'
+
+import { primaryActionForBusiness } from '@/lib/moduleProfiles'
 
 import AccountStatus from './AccountStatus'
 import InstallPrompt from './InstallPrompt'
@@ -20,12 +22,32 @@ interface LayoutProps {
 export default function Layout({ children }: LayoutProps) {
   const { session, isLoading } = useSessionContext()
   const router = useRouter()
+  const [businessType, setBusinessType] = useState<string | null>(null)
 
   useEffect(() => {
     if (!isLoading && !session) {
       router.replace('/login')
     }
   }, [isLoading, session, router])
+
+  useEffect(() => {
+    if (!session) return
+    let active = true
+    fetch('/api/subscription')
+      .then(res => (res.ok ? res.json() : null))
+      .then(data => {
+        if (active && data && typeof data.businessType === 'string') setBusinessType(data.businessType)
+      })
+      .catch(() => {})
+    return () => {
+      active = false
+    }
+  }, [session])
+
+  const quickAction = () => {
+    const { href } = primaryActionForBusiness(businessType)
+    router.push(`${href}?new=true`)
+  }
 
   if (isLoading) {
     return (
@@ -63,7 +85,7 @@ export default function Layout({ children }: LayoutProps) {
           </div>
         </main>
       </div>
-      <MobileNavBar onQuickAction={() => router.push('/proyectos?new=true')} />
+      <MobileNavBar onQuickAction={quickAction} />
     </div>
   )
 }
