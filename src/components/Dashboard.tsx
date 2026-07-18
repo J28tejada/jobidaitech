@@ -13,9 +13,10 @@ import {
   Boxes,
   Target,
   CalendarClock,
-  Film
+  Film,
+  Plus
 } from 'lucide-react';
-import { archetypeFor, primaryActionForBusiness } from '@/lib/moduleProfiles';
+import { archetypeFor, primaryActionForBusiness, relevantHrefsForBusiness } from '@/lib/moduleProfiles';
 import ProjectForm from './ProjectForm';
 import TransactionForm from './TransactionForm';
 import Onboarding from './Onboarding';
@@ -242,8 +243,13 @@ export default function Dashboard() {
   // transacciones: ocultamos los KPIs de ingreso/ganancia por transacción
   // (saldrían en 0) y mostramos el ingreso de citas.
   const isAppointments = archetype === 'appointments';
-  const primaryHref = primaryActionForBusiness(businessType).href;
+  const primary = primaryActionForBusiness(businessType);
+  const primaryHref = primary.href;
   const ord = (href: string) => (href === primaryHref ? 'order-first ' : '');
+  // Solo mostramos KPIs de módulos relevantes al rubro (evita RD$0 de módulos
+  // que ese negocio no usa: inventario/embudo/videos en una barbería, etc.).
+  const relevant = relevantHrefsForBusiness(businessType);
+  const isRel = (href: string) => relevant.includes(href);
 
   return (
     <div className="space-y-6 w-full max-w-full overflow-x-hidden">
@@ -376,7 +382,7 @@ export default function Dashboard() {
           </div>
         )}
 
-        {receivables && (
+        {receivables && isRel('/cobros') && (
           <button
             onClick={() => router.push('/cobros')}
             className={`${ord('/cobros')}card cursor-pointer hover:shadow-lg transition-all duration-200 text-left border-l-4 border-l-yellow-500 w-full overflow-hidden group`}
@@ -404,7 +410,7 @@ export default function Dashboard() {
           </button>
         )}
 
-        {inventory && (
+        {inventory && isRel('/inventario') && (
           <button
             onClick={() => router.push('/inventario')}
             className={`${ord('/inventario')}card cursor-pointer hover:shadow-lg transition-all duration-200 text-left border-l-4 border-l-primary-600 w-full overflow-hidden group`}
@@ -432,7 +438,7 @@ export default function Dashboard() {
           </button>
         )}
 
-        {pipeline && (
+        {pipeline && isRel('/oportunidades') && (
           <button
             onClick={() => router.push('/oportunidades')}
             className={`${ord('/oportunidades')}card cursor-pointer hover:shadow-lg transition-all duration-200 text-left border-l-4 border-l-primary-600 w-full overflow-hidden group`}
@@ -460,7 +466,7 @@ export default function Dashboard() {
           </button>
         )}
 
-        {agenda && (
+        {agenda && isRel('/agenda') && (
           <button
             onClick={() => router.push('/agenda')}
             className={`${ord('/agenda')}card cursor-pointer hover:shadow-lg transition-all duration-200 text-left border-l-4 border-l-success-600 w-full overflow-hidden group`}
@@ -486,7 +492,7 @@ export default function Dashboard() {
           </button>
         )}
 
-        {videos && (
+        {videos && isRel('/videos') && (
           <button
             onClick={() => router.push('/videos')}
             className={`${ord('/videos')}card cursor-pointer hover:shadow-lg transition-all duration-200 text-left border-l-4 border-l-primary-600 w-full overflow-hidden group`}
@@ -516,17 +522,27 @@ export default function Dashboard() {
       {/* Quick Actions and Summary - Side by side */}
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
         {/* Quick Actions */}
-        <div className="lg:col-span-3">
+        <div className={showProjects ? 'lg:col-span-3' : 'lg:col-span-4'}>
           <div className="card">
             <h2 className="text-lg font-semibold text-gray-900 mb-4">Acciones Rápidas</h2>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <button 
-                onClick={() => setShowProjectForm(true)}
-                className="btn btn-primary flex items-center justify-center"
-              >
-                <FolderOpen className="h-4 w-4 mr-1.5" />
-                Nuevo Proyecto
-              </button>
+              {showProjects ? (
+                <button
+                  onClick={() => setShowProjectForm(true)}
+                  className="btn btn-primary flex items-center justify-center"
+                >
+                  <FolderOpen className="h-4 w-4 mr-1.5" />
+                  Nuevo Proyecto
+                </button>
+              ) : (
+                <button
+                  onClick={() => router.push(`${primaryHref}?new=true`)}
+                  className="btn btn-primary flex items-center justify-center"
+                >
+                  <Plus className="h-4 w-4 mr-1.5" />
+                  {primary.label}
+                </button>
+              )}
               <button 
                 onClick={() => setShowIncomeForm(true)}
                 className="btn btn-success flex items-center justify-center"
@@ -545,36 +561,39 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Summary Card */}
-        <div className="lg:col-span-1">
-          <div className="card bg-gradient-to-br from-primary-50 to-primary-100 border border-primary-200 h-full">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold text-gray-900">Resumen</h2>
-              <Activity className="h-5 w-5 text-primary-600" />
-            </div>
-            <div className="space-y-3">
-              <div className="flex justify-between items-center">
-                <span className="text-sm text-gray-600">Proyectos activos</span>
-                <span className="text-sm font-semibold text-gray-900">{stats.activeProjects}</span>
+        {/* Summary Card (solo negocios por proyecto) */}
+        {showProjects && (
+          <div className="lg:col-span-1">
+            <div className="card bg-gradient-to-br from-primary-50 to-primary-100 border border-primary-200 h-full">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-lg font-semibold text-gray-900">Resumen</h2>
+                <Activity className="h-5 w-5 text-primary-600" />
               </div>
-              <div className="flex justify-between items-center">
-                <span className="text-sm text-gray-600">Total proyectos</span>
-                <span className="text-sm font-semibold text-gray-900">{stats.totalProjects}</span>
-              </div>
-              <div className="pt-3 border-t border-primary-200">
+              <div className="space-y-3">
                 <div className="flex justify-between items-center">
-                  <span className="text-sm font-medium text-gray-700">Margen promedio</span>
-                  <span className="text-sm font-bold text-primary-700">
-                    {formatPercentage(stats.averageProfitMargin)}
-                  </span>
+                  <span className="text-sm text-gray-600">Proyectos activos</span>
+                  <span className="text-sm font-semibold text-gray-900">{stats.activeProjects}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-gray-600">Total proyectos</span>
+                  <span className="text-sm font-semibold text-gray-900">{stats.totalProjects}</span>
+                </div>
+                <div className="pt-3 border-t border-primary-200">
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm font-medium text-gray-700">Margen promedio</span>
+                    <span className="text-sm font-bold text-primary-700">
+                      {formatPercentage(stats.averageProfitMargin)}
+                    </span>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
-        </div>
+        )}
       </div>
 
-      {/* Recent Activity - Full Width */}
+      {/* Actividad reciente (proyectos) — solo negocios por proyecto */}
+      {showProjects && (
       <div className="card w-full">
         <div className="flex items-center justify-between mb-4">
           <div>
@@ -669,6 +688,7 @@ export default function Dashboard() {
           </div>
         )}
       </div>
+      )}
 
       {/* Forms */}
       <ProjectForm

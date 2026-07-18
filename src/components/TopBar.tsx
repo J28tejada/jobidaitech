@@ -43,7 +43,7 @@ export default function TopBar() {
       <div className="flex items-center gap-4">
         <div>
           <h2 className="text-lg font-semibold text-gray-900">Panel financiero</h2>
-          <p className="text-sm text-gray-500">Gestiona los ingresos y egresos de tus proyectos</p>
+          <p className="text-sm text-gray-500">Gestiona los ingresos y egresos de tu negocio</p>
         </div>
         <WorkspaceSwitcher />
       </div>
