@@ -3,7 +3,7 @@
 // con respaldo desde caché si no hay conexión). Las rutas /api NO se cachean
 // (datos privados y siempre en vivo).
 
-const CACHE = 'contataller-v1';
+const CACHE = 'jobidai-v2';
 const OFFLINE_FALLBACK = '/';
 
 self.addEventListener('install', () => {
