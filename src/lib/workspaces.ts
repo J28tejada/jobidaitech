@@ -208,6 +208,22 @@ export async function ensureUserAndPersonalWorkspace(profile: EnsureUserPayload)
     .single()
 
   if (createError || !created) {
+    // Condición de carrera: otra petición concurrente (varias APIs disparan a
+    // la vez en la primera carga) ya creó el espacio personal. Con el índice
+    // único (idx_workspaces_one_personal_per_owner) esto da 23505; en ese caso
+    // reutilizamos el existente en vez de fallar.
+    const { data: existing } = await supabase
+      .from('workspaces')
+      .select('id')
+      .eq('owner_id', profile.id)
+      .eq('type', 'personal')
+      .order('created_at', { ascending: true })
+      .limit(1)
+
+    if (existing && existing.length > 0) {
+      return existing[0].id
+    }
+
     throw createError ?? new Error('No se pudo crear el espacio personal')
   }
 
