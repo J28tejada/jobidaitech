@@ -12,8 +12,8 @@ const accentBootstrap = `(function(){try{var r=document.documentElement;var m=lo
 const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
-  title: 'Jobidai',
-  description: 'Todo tu negocio en una sola app: agenda, clientes, cobros, inventario y reportes.',
+  title: 'Jobidai — Todo tu negocio en una sola app',
+  description: 'Agenda, clientes, cobros e inventario — en una sola app.',
   manifest: '/manifest.json',
   applicationName: 'Jobidai',
   appleWebApp: {

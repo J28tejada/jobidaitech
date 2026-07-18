@@ -40,8 +40,11 @@ export default function LoginPage() {
               </div>
               <h1 className="text-4xl font-bold text-gray-900">Jobidai</h1>
             </div>
-            <p className="text-xl text-gray-600 leading-relaxed">
-              Todo tu negocio en una sola app. Agenda, clientes, cobros, inventario y reportes — adaptado a tu tipo de negocio.
+            <p className="text-xl text-gray-900 font-semibold leading-relaxed">
+              Todo tu negocio en una sola app.
+            </p>
+            <p className="text-lg text-gray-600 leading-relaxed">
+              Agenda, clientes, cobros e inventario — adaptado a tu tipo de negocio.
             </p>
           </div>
 
