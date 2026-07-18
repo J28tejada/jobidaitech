@@ -31,7 +31,7 @@ export default function Dashboard() {
   const [receivables, setReceivables] = useState<{ totalOutstanding: number; overdueAmount: number } | null>(null);
   const [inventory, setInventory] = useState<{ inventoryValue: number; lowStockCount: number } | null>(null);
   const [pipeline, setPipeline] = useState<{ openValue: number; followUpsDue: number } | null>(null);
-  const [agenda, setAgenda] = useState<{ todayCount: number; todayIncome: number } | null>(null);
+  const [agenda, setAgenda] = useState<{ todayCount: number; todayIncome: number; monthIncome: number; monthDone: number } | null>(null);
   const [videos, setVideos] = useState<{ monthCount: number; monthTotal: number } | null>(null);
   const [businessType, setBusinessType] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -73,7 +73,7 @@ export default function Dashboard() {
       if (!response.ok) return;
       const data = await response.json();
       if (data && typeof data.todayCount === 'number') {
-        setAgenda({ todayCount: data.todayCount, todayIncome: data.todayIncome ?? 0 });
+        setAgenda({ todayCount: data.todayCount, todayIncome: data.todayIncome ?? 0, monthIncome: data.monthIncome ?? 0, monthDone: data.monthDone ?? 0 });
       }
     } catch {
       // silencioso
@@ -238,6 +238,10 @@ export default function Dashboard() {
   // y destacar (primero) el KPI del módulo principal del rubro.
   const archetype = archetypeFor(businessType);
   const showProjects = archetype === 'projects' || archetype === 'general';
+  // En negocios de citas el ingreso viene de las citas atendidas, no de
+  // transacciones: ocultamos los KPIs de ingreso/ganancia por transacción
+  // (saldrían en 0) y mostramos el ingreso de citas.
+  const isAppointments = archetype === 'appointments';
   const primaryHref = primaryActionForBusiness(businessType).href;
   const ord = (href: string) => (href === primaryHref ? 'order-first ' : '');
 
@@ -279,26 +283,52 @@ export default function Dashboard() {
           </button>
         )}
 
-        <div className="card border-l-4 border-l-success-600 hover:shadow-lg transition-all duration-200 w-full overflow-hidden">
-          <div className="flex items-start justify-between w-full min-w-0">
-            <div className="flex items-center flex-1 min-w-0">
-              <div className="p-3 bg-success-100 rounded-lg">
-                <TrendingUp className="h-6 w-6 text-success-600" />
+        {isAppointments ? (
+          <button
+            onClick={() => router.push('/agenda')}
+            className={`${ord('/agenda')}card cursor-pointer hover:shadow-lg transition-all duration-200 text-left border-l-4 border-l-success-600 w-full overflow-hidden group`}
+          >
+            <div className="flex items-start justify-between w-full min-w-0">
+              <div className="flex items-center flex-1 min-w-0">
+                <div className="p-3 bg-success-100 rounded-lg group-hover:bg-success-200 transition-colors">
+                  <TrendingUp className="h-6 w-6 text-success-600" />
+                </div>
+                <div className="ml-4 flex-1 min-w-0">
+                  <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1 truncate">
+                    Ingreso del mes
+                  </p>
+                  <p className="text-xl font-bold text-gray-900 mb-1 break-words leading-tight">
+                    {formatCurrency(agenda?.monthIncome ?? 0)}
+                  </p>
+                  <p className="text-xs text-gray-500 truncate">
+                    {(agenda?.monthDone ?? 0)} citas atendidas
+                  </p>
+                </div>
               </div>
-              <div className="ml-4 flex-1 min-w-0">
-                <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1 truncate">
-                  Ingresos Totales
-                </p>
-                <p className="text-xl font-bold text-gray-900 mb-1 break-words leading-tight">
-                  {formatCurrency(stats.totalIncome)}
-                </p>
-                <p className="text-xs text-gray-500 truncate">
-                  {formatCurrency(stats.monthlyIncome)} este mes
-                </p>
+            </div>
+          </button>
+        ) : (
+          <div className="card border-l-4 border-l-success-600 hover:shadow-lg transition-all duration-200 w-full overflow-hidden">
+            <div className="flex items-start justify-between w-full min-w-0">
+              <div className="flex items-center flex-1 min-w-0">
+                <div className="p-3 bg-success-100 rounded-lg">
+                  <TrendingUp className="h-6 w-6 text-success-600" />
+                </div>
+                <div className="ml-4 flex-1 min-w-0">
+                  <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1 truncate">
+                    Ingresos Totales
+                  </p>
+                  <p className="text-xl font-bold text-gray-900 mb-1 break-words leading-tight">
+                    {formatCurrency(stats.totalIncome)}
+                  </p>
+                  <p className="text-xs text-gray-500 truncate">
+                    {formatCurrency(stats.monthlyIncome)} este mes
+                  </p>
+                </div>
               </div>
             </div>
           </div>
-        </div>
+        )}
 
         <div className="card border-l-4 border-l-danger-600 hover:shadow-lg transition-all duration-200 w-full overflow-hidden">
           <div className="flex items-start justify-between w-full min-w-0">
@@ -321,28 +351,30 @@ export default function Dashboard() {
           </div>
         </div>
 
-        <div className="card border-l-4 border-l-yellow-500 hover:shadow-lg transition-all duration-200 w-full overflow-hidden">
-          <div className="flex items-start justify-between w-full min-w-0">
-            <div className="flex items-center flex-1 min-w-0">
-              <div className="p-3 bg-yellow-100 rounded-lg">
-                <DollarSign className="h-6 w-6 text-yellow-600" />
-              </div>
-              <div className="ml-4 flex-1 min-w-0">
-                <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1 truncate">
-                  Ganancia Total
-                </p>
-                <p className={`text-xl font-bold mb-1 break-words leading-tight ${
-                  stats.totalProfit >= 0 ? 'text-success-600' : 'text-danger-600'
-                }`}>
-                  {formatCurrency(stats.totalProfit)}
-                </p>
-                <p className="text-xs text-gray-500 truncate">
-                  {formatPercentage(stats.averageProfitMargin)} margen promedio
-                </p>
+        {!isAppointments && (
+          <div className="card border-l-4 border-l-yellow-500 hover:shadow-lg transition-all duration-200 w-full overflow-hidden">
+            <div className="flex items-start justify-between w-full min-w-0">
+              <div className="flex items-center flex-1 min-w-0">
+                <div className="p-3 bg-yellow-100 rounded-lg">
+                  <DollarSign className="h-6 w-6 text-yellow-600" />
+                </div>
+                <div className="ml-4 flex-1 min-w-0">
+                  <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1 truncate">
+                    Ganancia Total
+                  </p>
+                  <p className={`text-xl font-bold mb-1 break-words leading-tight ${
+                    stats.totalProfit >= 0 ? 'text-success-600' : 'text-danger-600'
+                  }`}>
+                    {formatCurrency(stats.totalProfit)}
+                  </p>
+                  <p className="text-xs text-gray-500 truncate">
+                    {formatPercentage(stats.averageProfitMargin)} margen promedio
+                  </p>
+                </div>
               </div>
             </div>
           </div>
-        </div>
+        )}
 
         {receivables && (
           <button

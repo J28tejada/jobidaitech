@@ -14,15 +14,27 @@ export async function GET() {
     const startToday = new Date(now.getFullYear(), now.getMonth(), now.getDate())
     const endToday = new Date(startToday.getTime() + 86_400_000)
     const in7 = new Date(startToday.getTime() + 7 * 86_400_000)
+    const startMonth = new Date(now.getFullYear(), now.getMonth(), 1)
 
     const supabase = getSupabaseClient()
-    const { data, error } = await supabase
-      .from('appointments')
-      .select('starts_at, price, status')
-      .eq('workspace_id', ctx.workspaceId)
-      .gte('starts_at', startToday.toISOString())
-      .lt('starts_at', in7.toISOString())
+    const [{ data, error }, { data: monthData, error: monthErr }] = await Promise.all([
+      supabase
+        .from('appointments')
+        .select('starts_at, price, status')
+        .eq('workspace_id', ctx.workspaceId)
+        .gte('starts_at', startToday.toISOString())
+        .lt('starts_at', in7.toISOString()),
+      // Ingreso real del mes: citas atendidas (servicio + propina).
+      supabase
+        .from('appointments')
+        .select('price, tip')
+        .eq('workspace_id', ctx.workspaceId)
+        .eq('status', 'done')
+        .gte('starts_at', startMonth.toISOString())
+        .lte('starts_at', now.toISOString()),
+    ])
     if (error) throw error
+    if (monthErr) throw monthErr
 
     let todayCount = 0
     let upcomingCount = 0
@@ -38,10 +50,19 @@ export async function GET() {
       }
     }
 
+    let monthIncome = 0
+    let monthDone = 0
+    for (const a of monthData ?? []) {
+      monthIncome += Number(a.price ?? 0) + Number(a.tip ?? 0)
+      monthDone += 1
+    }
+
     return NextResponse.json({
       todayCount,
       upcomingCount,
       todayIncome: Number(todayIncome.toFixed(2)),
+      monthIncome: Number(monthIncome.toFixed(2)),
+      monthDone,
     })
   } catch (error) {
     console.error('GET /api/appointments/summary', error)
