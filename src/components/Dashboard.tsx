@@ -15,6 +15,7 @@ import {
   CalendarClock,
   Film
 } from 'lucide-react';
+import { archetypeFor, primaryActionForBusiness } from '@/lib/moduleProfiles';
 import ProjectForm from './ProjectForm';
 import TransactionForm from './TransactionForm';
 import Onboarding from './Onboarding';
@@ -32,6 +33,7 @@ export default function Dashboard() {
   const [pipeline, setPipeline] = useState<{ openValue: number; followUpsDue: number } | null>(null);
   const [agenda, setAgenda] = useState<{ todayCount: number; todayIncome: number } | null>(null);
   const [videos, setVideos] = useState<{ monthCount: number; monthTotal: number } | null>(null);
+  const [businessType, setBusinessType] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [showProjectForm, setShowProjectForm] = useState(false);
   const [showIncomeForm, setShowIncomeForm] = useState(false);
@@ -45,6 +47,10 @@ export default function Dashboard() {
     fetchPipeline();
     fetchAgenda();
     fetchVideos();
+    fetch('/api/subscription', { credentials: 'include' })
+      .then(r => (r.ok ? r.json() : null))
+      .then(d => { if (d && typeof d.businessType === 'string') setBusinessType(d.businessType); })
+      .catch(() => {});
   }, []);
 
   const fetchVideos = async () => {
@@ -228,6 +234,13 @@ export default function Dashboard() {
     return `${safeValue.toFixed(1)}%`;
   };
 
+  // KPIs según el negocio: mostrar "Proyectos" solo en negocios por proyecto,
+  // y destacar (primero) el KPI del módulo principal del rubro.
+  const archetype = archetypeFor(businessType);
+  const showProjects = archetype === 'projects' || archetype === 'general';
+  const primaryHref = primaryActionForBusiness(businessType).href;
+  const ord = (href: string) => (href === primaryHref ? 'order-first ' : '');
+
   return (
     <div className="space-y-6 w-full max-w-full overflow-x-hidden">
       {/* Header */}
@@ -240,29 +253,31 @@ export default function Dashboard() {
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-6 w-full max-w-full">
-        <button
-          onClick={() => router.push('/proyectos')}
-          className="card cursor-pointer hover:shadow-lg transition-all duration-200 text-left border-l-4 border-l-primary-600 hover:border-l-primary-700 group w-full"
-        >
-          <div className="flex items-start justify-between w-full min-w-0">
-            <div className="flex items-center flex-1 min-w-0">
-              <div className="p-3 bg-primary-100 rounded-lg group-hover:bg-primary-200 transition-colors">
-                <FolderOpen className="h-6 w-6 text-primary-600" />
-              </div>
-              <div className="ml-4 flex-1 min-w-0">
-                <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1 truncate">
-                  Total Proyectos
-                </p>
-                <p className="text-2xl font-bold text-gray-900 mb-1 break-words">
-                  {stats.totalProjects}
-                </p>
-                <p className="text-xs text-gray-500 truncate">
-                  {stats.activeProjects} activos
-                </p>
+        {showProjects && (
+          <button
+            onClick={() => router.push('/proyectos')}
+            className={`${ord('/proyectos')}card cursor-pointer hover:shadow-lg transition-all duration-200 text-left border-l-4 border-l-primary-600 hover:border-l-primary-700 group w-full`}
+          >
+            <div className="flex items-start justify-between w-full min-w-0">
+              <div className="flex items-center flex-1 min-w-0">
+                <div className="p-3 bg-primary-100 rounded-lg group-hover:bg-primary-200 transition-colors">
+                  <FolderOpen className="h-6 w-6 text-primary-600" />
+                </div>
+                <div className="ml-4 flex-1 min-w-0">
+                  <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1 truncate">
+                    Total Proyectos
+                  </p>
+                  <p className="text-2xl font-bold text-gray-900 mb-1 break-words">
+                    {stats.totalProjects}
+                  </p>
+                  <p className="text-xs text-gray-500 truncate">
+                    {stats.activeProjects} activos
+                  </p>
+                </div>
               </div>
             </div>
-          </div>
-        </button>
+          </button>
+        )}
 
         <div className="card border-l-4 border-l-success-600 hover:shadow-lg transition-all duration-200 w-full overflow-hidden">
           <div className="flex items-start justify-between w-full min-w-0">
@@ -332,7 +347,7 @@ export default function Dashboard() {
         {receivables && (
           <button
             onClick={() => router.push('/cobros')}
-            className="card cursor-pointer hover:shadow-lg transition-all duration-200 text-left border-l-4 border-l-yellow-500 w-full overflow-hidden group"
+            className={`${ord('/cobros')}card cursor-pointer hover:shadow-lg transition-all duration-200 text-left border-l-4 border-l-yellow-500 w-full overflow-hidden group`}
           >
             <div className="flex items-start justify-between w-full min-w-0">
               <div className="flex items-center flex-1 min-w-0">
@@ -360,7 +375,7 @@ export default function Dashboard() {
         {inventory && (
           <button
             onClick={() => router.push('/inventario')}
-            className="card cursor-pointer hover:shadow-lg transition-all duration-200 text-left border-l-4 border-l-primary-600 w-full overflow-hidden group"
+            className={`${ord('/inventario')}card cursor-pointer hover:shadow-lg transition-all duration-200 text-left border-l-4 border-l-primary-600 w-full overflow-hidden group`}
           >
             <div className="flex items-start justify-between w-full min-w-0">
               <div className="flex items-center flex-1 min-w-0">
@@ -388,7 +403,7 @@ export default function Dashboard() {
         {pipeline && (
           <button
             onClick={() => router.push('/oportunidades')}
-            className="card cursor-pointer hover:shadow-lg transition-all duration-200 text-left border-l-4 border-l-primary-600 w-full overflow-hidden group"
+            className={`${ord('/oportunidades')}card cursor-pointer hover:shadow-lg transition-all duration-200 text-left border-l-4 border-l-primary-600 w-full overflow-hidden group`}
           >
             <div className="flex items-start justify-between w-full min-w-0">
               <div className="flex items-center flex-1 min-w-0">
@@ -416,7 +431,7 @@ export default function Dashboard() {
         {agenda && (
           <button
             onClick={() => router.push('/agenda')}
-            className="card cursor-pointer hover:shadow-lg transition-all duration-200 text-left border-l-4 border-l-success-600 w-full overflow-hidden group"
+            className={`${ord('/agenda')}card cursor-pointer hover:shadow-lg transition-all duration-200 text-left border-l-4 border-l-success-600 w-full overflow-hidden group`}
           >
             <div className="flex items-start justify-between w-full min-w-0">
               <div className="flex items-center flex-1 min-w-0">
@@ -442,7 +457,7 @@ export default function Dashboard() {
         {videos && (
           <button
             onClick={() => router.push('/videos')}
-            className="card cursor-pointer hover:shadow-lg transition-all duration-200 text-left border-l-4 border-l-primary-600 w-full overflow-hidden group"
+            className={`${ord('/videos')}card cursor-pointer hover:shadow-lg transition-all duration-200 text-left border-l-4 border-l-primary-600 w-full overflow-hidden group`}
           >
             <div className="flex items-start justify-between w-full min-w-0">
               <div className="flex items-center flex-1 min-w-0">
