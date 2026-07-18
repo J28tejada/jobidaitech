@@ -176,19 +176,23 @@ export async function ensureUserAndPersonalWorkspace(profile: EnsureUserPayload)
   const businessType = await ensureUserRow(profile)
   const supabase = getSupabaseClient()
 
-  const { data: personal, error } = await supabase
+  // Nota: usamos limit(1) en vez de maybeSingle() para ser resilientes si un
+  // usuario quedó con varios espacios 'personal' duplicados (p. ej. tras una
+  // recuperación de datos). Tomamos el más antiguo (el original).
+  const { data: personals, error } = await supabase
     .from('workspaces')
     .select('id')
     .eq('owner_id', profile.id)
     .eq('type', 'personal')
-    .maybeSingle()
+    .order('created_at', { ascending: true })
+    .limit(1)
 
   if (error) {
     throw error
   }
 
-  if (personal?.id) {
-    return personal.id
+  if (personals && personals.length > 0) {
+    return personals[0].id
   }
 
   // Crear espacio personal + membresía + categorías
