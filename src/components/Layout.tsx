@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation'
 import { useSessionContext } from '@supabase/auth-helpers-react'
 
 import { primaryActionForBusiness } from '@/lib/moduleProfiles'
+import { isBusinessTypeUnset } from '@/lib/businessTypes'
+import BusinessOnboarding from './BusinessOnboarding'
 
 import AccountStatus from './AccountStatus'
 import InstallPrompt from './InstallPrompt'
@@ -23,6 +25,7 @@ export default function Layout({ children }: LayoutProps) {
   const { session, isLoading } = useSessionContext()
   const router = useRouter()
   const [businessType, setBusinessType] = useState<string | null>(null)
+  const [subLoaded, setSubLoaded] = useState(false)
 
   useEffect(() => {
     if (!isLoading && !session) {
@@ -36,9 +39,13 @@ export default function Layout({ children }: LayoutProps) {
     fetch('/api/subscription')
       .then(res => (res.ok ? res.json() : null))
       .then(data => {
-        if (active && data && typeof data.businessType === 'string') setBusinessType(data.businessType)
+        if (!active) return
+        if (data && typeof data.businessType === 'string') setBusinessType(data.businessType)
+        setSubLoaded(true)
       })
-      .catch(() => {})
+      .catch(() => {
+        if (active) setSubLoaded(true)
+      })
     return () => {
       active = false
     }
@@ -59,6 +66,11 @@ export default function Layout({ children }: LayoutProps) {
 
   if (!session) {
     return null
+  }
+
+  // Onboarding obligatorio: el usuario debe elegir su tipo de negocio.
+  if (subLoaded && isBusinessTypeUnset(businessType)) {
+    return <BusinessOnboarding />
   }
 
   return (

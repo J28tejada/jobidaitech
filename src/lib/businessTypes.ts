@@ -7,6 +7,15 @@ export interface BusinessTypeOption {
   label: string
 }
 
+// Marcador para usuarios recién registrados que aún no eligen su tipo de
+// negocio (dispara el onboarding obligatorio). Evita necesitar una migración.
+export const UNSET_BUSINESS_TYPE = 'unset'
+
+/** ¿El espacio todavía no tiene tipo de negocio definido? */
+export function isBusinessTypeUnset(value: string | null | undefined): boolean {
+  return !value || value === UNSET_BUSINESS_TYPE
+}
+
 export const BUSINESS_TYPES: BusinessTypeOption[] = [
   // Oficios / construcción
   { key: 'construction', label: 'Construcción' },
@@ -90,7 +99,7 @@ const norm = (s: string) =>
 
 /** Etiqueta legible para un valor guardado (key conocida o texto personalizado). */
 export function businessTypeLabel(value: string | null | undefined): string {
-  if (!value) return 'Otro'
+  if (!value || value === UNSET_BUSINESS_TYPE) return 'Sin definir'
   const found = BUSINESS_TYPES.find(b => b.key === value)
   return found ? found.label : value
 }

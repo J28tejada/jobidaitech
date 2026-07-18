@@ -2,6 +2,7 @@ import type { BusinessType } from '@/types'
 import { getSupabaseClient } from './supabase'
 import { notifyNewUserRegistered } from './email'
 import { track } from './analytics'
+import { UNSET_BUSINESS_TYPE } from './businessTypes'
 
 export interface EnsureUserPayload {
   id: string
@@ -37,12 +38,14 @@ export async function ensureUserRow(user: EnsureUserPayload): Promise<BusinessTy
   if (!existingUser) {
     const now = new Date()
     const trialEnds = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000) // 30 días de prueba
+    // Los usuarios nuevos NO traen tipo de negocio: deben elegirlo en el
+    // onboarding obligatorio (así asignamos el espacio que mejor les va).
     const { error: insertUserError } = await supabase.from('users').insert({
       id: userId,
       email: user.email?.toLowerCase() ?? null,
       name: user.name ?? null,
       image_url: user.image ?? null,
-      business_type: DEFAULT_BUSINESS_TYPE,
+      business_type: UNSET_BUSINESS_TYPE,
       access_enabled: true,
       access_until: trialEnds.toISOString(),
       trial_started_at: now.toISOString(),
@@ -57,7 +60,7 @@ export async function ensureUserRow(user: EnsureUserPayload): Promise<BusinessTy
     await notifyNewUserRegistered({ email: user.email, name: user.name })
     await track('signup', { userId, props: { email: user.email?.toLowerCase() ?? null } })
 
-    return DEFAULT_BUSINESS_TYPE
+    return UNSET_BUSINESS_TYPE
   }
 
   const { error: updateUserError } = await supabase

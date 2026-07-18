@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { Building2, User, Check, ChevronDown, Plus, Loader2 } from 'lucide-react'
+import { Building2, Check, ChevronDown, Plus, Loader2 } from 'lucide-react'
 
 import BusinessTypePicker from './BusinessTypePicker'
 
@@ -132,7 +132,7 @@ export default function WorkspaceSwitcher() {
     )
   }
 
-  const ActiveIcon = active?.type === 'business' ? Building2 : User
+  const ActiveIcon = Building2
 
   const dropdown =
     open && menuPos ? (
@@ -144,7 +144,6 @@ export default function WorkspaceSwitcher() {
         <p className="px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-gray-400">Espacios</p>
         <ul className="max-h-64 overflow-y-auto">
           {workspaces.map(ws => {
-            const Icon = ws.type === 'business' ? Building2 : User
             return (
               <li key={ws.id}>
                 <button
@@ -152,11 +151,8 @@ export default function WorkspaceSwitcher() {
                   onClick={() => handleSwitch(ws.id)}
                   className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors text-left"
                 >
-                  <Icon className="h-4 w-4 text-gray-400 flex-shrink-0" />
+                  <Building2 className="h-4 w-4 text-gray-400 flex-shrink-0" />
                   <span className="flex-1 truncate">{ws.name}</span>
-                  {ws.type === 'personal' && (
-                    <span className="text-[10px] uppercase tracking-wide text-gray-400">Personal</span>
-                  )}
                   {ws.isActive && <Check className="h-4 w-4 text-primary-600 flex-shrink-0" />}
                 </button>
               </li>

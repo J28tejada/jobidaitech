@@ -43,6 +43,7 @@ export async function POST(request: Request) {
   try {
     const body = await request.json()
     const businessType = typeof body.businessType === 'string' ? body.businessType.trim().slice(0, 80) : ''
+    const name = typeof body.name === 'string' ? body.name.trim().slice(0, 80) : ''
 
     if (!businessType) {
       return NextResponse.json({ error: 'Indica el tipo de negocio' }, { status: 400 })
@@ -50,9 +51,12 @@ export async function POST(request: Request) {
 
     const supabase = getSupabaseClient()
 
+    const patch: Record<string, unknown> = { business_type: businessType }
+    if (name) patch.name = name
+
     const { error: updateError } = await supabase
       .from('workspaces')
-      .update({ business_type: businessType })
+      .update(patch)
       .eq('id', ctx.workspaceId)
 
     if (updateError) {
