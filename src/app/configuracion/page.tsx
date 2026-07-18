@@ -7,6 +7,7 @@ import Layout from '@/components/Layout';
 import CategoryManager from '@/components/CategoryManager';
 import BusinessTypePicker from '@/components/BusinessTypePicker';
 import AppearanceSettings from '@/components/AppearanceSettings';
+import BookingSettings from '@/components/BookingSettings';
 import { BusinessType } from '@/types';
 import { CURRENCIES } from '@/lib/format';
 import { useCurrency } from '@/components/CurrencyProvider';
@@ -21,6 +22,7 @@ export default function ConfigurationPage() {
   const [currency, setCurrency] = useState<string>('DOP');
   const [savingCurrency, setSavingCurrency] = useState(false);
   const [currencyFeedback, setCurrencyFeedback] = useState<string | null>(null);
+  const [hasAgenda, setHasAgenda] = useState(false);
 
   const handleShowOnboarding = () => {
     // Establecer una señal para que se muestre el onboarding
@@ -53,6 +55,10 @@ export default function ConfigurationPage() {
 
   useEffect(() => {
     fetchSettings();
+    fetch('/api/subscription', { credentials: 'include' })
+      .then(r => (r.ok ? r.json() : null))
+      .then(d => { if (d && Array.isArray(d.modules)) setHasAgenda(d.modules.includes('agenda')); })
+      .catch(() => {});
   }, []);
 
   const handleCurrencyChange = async (value: string) => {
@@ -146,6 +152,9 @@ export default function ConfigurationPage() {
             </div>
           )}
         </div>
+
+        {/* Reservas online (negocios con agenda) */}
+        {hasAgenda && <BookingSettings />}
 
         {/* Apariencia */}
         <AppearanceSettings />
