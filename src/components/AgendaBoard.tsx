@@ -818,7 +818,10 @@ function CommissionsSheet({ onClose }: { onClose: () => void }) {
 
   useEffect(() => {
     setLoading(true)
-    fetch(`/api/appointments/commissions?from=${from}&to=${to}`, { credentials: 'include' })
+    // Límites ISO del día LOCAL (evita desfase de zona horaria en el corte).
+    const fromIso = new Date(`${from}T00:00:00`).toISOString()
+    const toIso = new Date(`${to}T23:59:59`).toISOString()
+    fetch(`/api/appointments/commissions?from=${encodeURIComponent(fromIso)}&to=${encodeURIComponent(toIso)}`, { credentials: 'include' })
       .then(r => (r.ok ? r.json() : null))
       .then(d => { if (d) setRows(d.rows || []) })
       .catch(() => {})

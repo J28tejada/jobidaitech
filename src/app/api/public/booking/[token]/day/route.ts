@@ -23,7 +23,7 @@ export async function GET(request: NextRequest, { params }: { params: { token: s
       .from('appointments')
       .select('starts_at, duration_min, staff_id')
       .eq('workspace_id', ws.id)
-      .not('status', 'in', '("cancelled","no_show")')
+      .in('status', ['scheduled', 'confirmed', 'done'])
       .gte('starts_at', from)
       .lte('starts_at', to)
     if (staffId) q.eq('staff_id', staffId)

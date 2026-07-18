@@ -95,6 +95,26 @@ export async function POST(request: NextRequest, { params }: { params: { token: 
       if (st) { staffId = st.id; staffName = st.name }
     }
 
+    // Vincular/crear cliente por teléfono, para que la reserva alimente
+    // historial, fidelidad y reactivación.
+    let clientId: string | null = null
+    const { data: existing } = await supabase
+      .from('clients')
+      .select('id')
+      .eq('workspace_id', ws.id)
+      .eq('phone', phone)
+      .limit(1)
+    if (existing && existing.length > 0) {
+      clientId = existing[0].id
+    } else {
+      const { data: created } = await supabase
+        .from('clients')
+        .insert({ workspace_id: ws.id, name, phone })
+        .select('id')
+        .single()
+      clientId = created?.id ?? null
+    }
+
     // Chequeo básico de solape (mismo barbero, o la barbería si no hay barbero).
     const windowStart = new Date(starts.getTime() - 4 * 3600_000).toISOString()
     const windowEnd = new Date(starts.getTime() + 4 * 3600_000).toISOString()
@@ -102,7 +122,7 @@ export async function POST(request: NextRequest, { params }: { params: { token: 
       .from('appointments')
       .select('starts_at, duration_min, staff_id')
       .eq('workspace_id', ws.id)
-      .not('status', 'in', '("cancelled","no_show")')
+      .in('status', ['scheduled', 'confirmed', 'done'])
       .gte('starts_at', windowStart)
       .lte('starts_at', windowEnd)
     if (staffId) q.eq('staff_id', staffId)
@@ -118,6 +138,7 @@ export async function POST(request: NextRequest, { params }: { params: { token: 
 
     const { error } = await supabase.from('appointments').insert({
       workspace_id: ws.id,
+      client_id: clientId,
       client_name: name,
       client_phone: phone,
       service_id: serviceId,

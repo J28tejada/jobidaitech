@@ -3,9 +3,6 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseClient } from '@/lib/supabase'
 import { getWorkspaceContext, MODULE_LOCKED_ERROR } from '@/lib/workspaces'
 
-const pad = (n: number) => String(n).padStart(2, '0')
-const ymd = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
-
 // Comisiones y propinas por barbero (citas atendidas en el rango).
 export async function GET(request: NextRequest) {
   try {
@@ -15,10 +12,10 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url)
     const now = new Date()
-    const from = searchParams.get('from') || ymd(new Date(now.getFullYear(), now.getMonth(), 1))
-    const to = searchParams.get('to') || ymd(now)
-    const fromIso = new Date(`${from}T00:00:00`).toISOString()
-    const toIso = new Date(`${to}T23:59:59`).toISOString()
+    // El cliente envía los límites ISO del día LOCAL (evita desfase de zona
+    // horaria); si faltan, usamos el mes en curso.
+    const fromIso = searchParams.get('from') || new Date(now.getFullYear(), now.getMonth(), 1).toISOString()
+    const toIso = searchParams.get('to') || now.toISOString()
 
     const supabase = getSupabaseClient()
 
@@ -68,7 +65,7 @@ export async function GET(request: NextRequest) {
       }))
       .sort((a, b) => b.total - a.total)
 
-    return NextResponse.json({ from, to, rows })
+    return NextResponse.json({ from: fromIso, to: toIso, rows })
   } catch (error) {
     console.error('GET /api/appointments/commissions', error)
     return NextResponse.json({ error: 'Error al calcular comisiones' }, { status: 500 })
