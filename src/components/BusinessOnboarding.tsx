@@ -56,8 +56,16 @@ export default function BusinessOnboarding() {
         body: JSON.stringify({ businessType: selected, name: name.trim() || undefined }),
       })
       if (!res.ok) {
-        const b = await res.json().catch(() => null)
-        throw new Error(b?.error || 'No se pudo guardar')
+        // Intenta leer el error como JSON; si no, cae al texto crudo para no
+        // ocultar la causa real (ej. un error de base de datos).
+        const raw = await res.text().catch(() => '')
+        let msg = ''
+        try {
+          msg = JSON.parse(raw)?.error || ''
+        } catch {
+          msg = raw.slice(0, 200)
+        }
+        throw new Error(msg || `No se pudo guardar (HTTP ${res.status})`)
       }
       // Recargar para aplicar el espacio configurado (menú, categorías, etc.)
       window.location.reload()

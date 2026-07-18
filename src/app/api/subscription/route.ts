@@ -6,7 +6,14 @@ import { modulesForTier } from '@/lib/modules'
 
 // Estado de la suscripción del usuario autenticado (para el aviso/banner).
 export async function GET() {
-  const ctx = await getWorkspaceContext()
+  let ctx
+  try {
+    ctx = await getWorkspaceContext()
+  } catch (error) {
+    console.error('GET /api/subscription getWorkspaceContext', error)
+    const detail = error instanceof Error ? error.message : 'error desconocido'
+    return NextResponse.json({ error: `No se pudo preparar tu cuenta: ${detail}` }, { status: 500 })
+  }
   if (!ctx) {
     return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
   }
