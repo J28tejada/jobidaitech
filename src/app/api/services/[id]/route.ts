@@ -7,7 +7,7 @@ import {
   READ_ONLY_ERROR,
   MODULE_LOCKED_ERROR,
 } from '@/lib/workspaces'
-import { mapServiceRow } from '@/lib/services'
+import { mapServiceRow, normalizeVariants } from '@/lib/services'
 
 export async function PUT(request: NextRequest, { params }: { params: { id: string } }) {
   try {
@@ -28,6 +28,7 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
     }
     if (body.durationMin !== undefined) updates.duration_min = Math.max(1, Math.round(Number(body.durationMin) || 30))
     if (body.price !== undefined) updates.price = Number(body.price) || 0
+    if (body.variants !== undefined) updates.variants = normalizeVariants(body.variants)
     if (body.active !== undefined) updates.active = !!body.active
 
     if (Object.keys(updates).length === 0) {

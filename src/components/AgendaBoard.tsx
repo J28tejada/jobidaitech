@@ -28,6 +28,7 @@ import { useToast } from './Toaster'
 import { useConfirm } from './ConfirmDialog'
 import { useCurrency } from './CurrencyProvider'
 import { verticalFor, type VerticalConfig } from '@/lib/verticals'
+import type { ServiceVariant } from '@/lib/services'
 
 type Status = 'scheduled' | 'confirmed' | 'done' | 'cancelled' | 'no_show'
 const STATUS_META: Record<Status, { label: string; badge: string }> = {
@@ -43,6 +44,7 @@ interface Service {
   name: string
   durationMin: number
   price: number
+  variants: ServiceVariant[]
   active: boolean
 }
 interface Staff {
@@ -479,6 +481,7 @@ function Sheet({ title, onClose, children }: { title: string; onClose: () => voi
 }
 
 function AppointmentForm({ appointment, services, staff, clients, vertical, onClose, onSaved }: { appointment: Appointment | null; services: Service[]; staff: Staff[]; clients: ClientOption[]; vertical: VerticalConfig; onClose: () => void; onSaved: () => void }) {
+  const { format } = useCurrency()
   const defaultWhen = () => {
     const d = new Date()
     d.setMinutes(0, 0, 0)
@@ -491,6 +494,7 @@ function AppointmentForm({ appointment, services, staff, clients, vertical, onCl
   const [serviceId, setServiceId] = useState(appointment?.serviceId ?? '')
   const [staffId, setStaffId] = useState(appointment?.staffId ?? '')
   const [title, setTitle] = useState(appointment?.title ?? '')
+  const [variantLabel, setVariantLabel] = useState('')
   const [when, setWhen] = useState(appointment ? toLocalInput(appointment.startsAt) : defaultWhen())
   const [durationMin, setDurationMin] = useState(String(appointment?.durationMin ?? 30))
   const [price, setPrice] = useState(String(appointment?.price ?? ''))
@@ -501,13 +505,35 @@ function AppointmentForm({ appointment, services, staff, clients, vertical, onCl
 
   const pickService = (id: string) => {
     setServiceId(id)
+    setVariantLabel('')
     const s = services.find(x => x.id === id)
     if (s) {
       setTitle(s.name)
       setDurationMin(String(s.durationMin))
-      setPrice(String(s.price))
+      // Si el servicio tiene variantes de precio, arranca con la primera.
+      if (s.variants.length > 0) {
+        setPrice(String(s.variants[0].price))
+        setVariantLabel(s.variants[0].label)
+        setTitle(`${s.name} (${s.variants[0].label})`)
+      } else {
+        setPrice(String(s.price))
+      }
     }
   }
+
+  const pickVariant = (svc: Service, v: ServiceVariant | null) => {
+    if (v) {
+      setVariantLabel(v.label)
+      setPrice(String(v.price))
+      setTitle(`${svc.name} (${v.label})`)
+    } else {
+      setVariantLabel('')
+      setPrice(String(svc.price))
+      setTitle(svc.name)
+    }
+  }
+
+  const selService = services.find(x => x.id === serviceId)
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -592,6 +618,27 @@ function AppointmentForm({ appointment, services, staff, clients, vertical, onCl
               <option value="">— Sin servicio —</option>
               {services.filter(s => s.active).map(s => <option key={s.id} value={s.id}>{s.name} ({s.durationMin} min)</option>)}
             </select>
+            {selService && selService.variants.length > 0 && (
+              <div className="flex flex-wrap gap-2 mt-2">
+                {selService.variants.map(v => (
+                  <button
+                    key={v.label}
+                    type="button"
+                    onClick={() => pickVariant(selService, v)}
+                    className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${variantLabel === v.label ? 'bg-primary-600 text-white border-primary-600' : 'bg-gray-100 text-gray-700 border-transparent hover:bg-gray-200'}`}
+                  >
+                    {v.label} · {format(v.price)}
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => pickVariant(selService, null)}
+                  className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${!variantLabel ? 'bg-primary-600 text-white border-primary-600' : 'bg-gray-100 text-gray-700 border-transparent hover:bg-gray-200'}`}
+                >
+                  General · {format(selService.price)}
+                </button>
+              </div>
+            )}
           </div>
         )}
 
@@ -651,15 +698,27 @@ function ServicesManager({ services, vertical, onClose, onChanged }: { services:
   const confirm = useConfirm()
   const { format } = useCurrency()
   const [list, setList] = useState<Service[]>(services)
+  const [editingId, setEditingId] = useState<string | null>(null)
   const [name, setName] = useState('')
   const [duration, setDuration] = useState('30')
   const [price, setPrice] = useState('')
+  const [variants, setVariants] = useState<{ label: string; price: string }[]>([])
   const [saving, setSaving] = useState(false)
 
   const reload = async () => {
     const s = await fetch('/api/services', { credentials: 'include' }).then(r => (r.ok ? r.json() : []))
     setList(Array.isArray(s) ? s : [])
     onChanged()
+  }
+
+  const resetForm = () => { setEditingId(null); setName(''); setDuration('30'); setPrice(''); setVariants([]) }
+
+  const startEdit = (s: Service) => {
+    setEditingId(s.id)
+    setName(s.name)
+    setDuration(String(s.durationMin))
+    setPrice(s.price ? String(s.price) : '')
+    setVariants(s.variants.map(v => ({ label: v.label, price: String(v.price) })))
   }
 
   // Sugerencias del rubro que aún no están en el catálogo (atajo para llenarlo).
@@ -678,23 +737,32 @@ function ServicesManager({ services, vertical, onClose, onChanged }: { services:
     else toast.error('No se pudo agregar')
   }
 
-  const add = async (e: React.FormEvent) => {
+  const addVariant = (label: string) => {
+    if (label && variants.some(v => v.label.toLowerCase() === label.toLowerCase())) return
+    setVariants([...variants, { label, price: '' }])
+  }
+  const updateVariant = (i: number, field: 'label' | 'price', value: string) =>
+    setVariants(variants.map((v, idx) => (idx === i ? { ...v, [field]: value } : v)))
+  const removeVariant = (i: number) => setVariants(variants.filter((_, idx) => idx !== i))
+
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!name.trim() || saving) return
     setSaving(true)
     try {
-      const res = await fetch('/api/services', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ name, durationMin: Number(duration) || 30, price: Number(price) || 0 }),
-      })
+      const cleanVariants = variants
+        .map(v => ({ label: v.label.trim(), price: Number(v.price) || 0 }))
+        .filter(v => v.label)
+      const payload = { name, durationMin: Number(duration) || 30, price: Number(price) || 0, variants: cleanVariants }
+      const res = editingId
+        ? await fetch(`/api/services/${editingId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify(payload) })
+        : await fetch('/api/services', { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify(payload) })
       if (res.ok) {
-        setName(''); setDuration('30'); setPrice('')
+        resetForm()
         await reload()
-        toast.success('Servicio agregado')
+        toast.success(editingId ? 'Servicio actualizado' : 'Servicio agregado')
       } else {
-        toast.error('No se pudo agregar el servicio')
+        toast.error('No se pudo guardar el servicio')
       }
     } finally {
       setSaving(false)
@@ -705,24 +773,54 @@ function ServicesManager({ services, vertical, onClose, onChanged }: { services:
     const ok = await confirm({ title: 'Eliminar servicio', message: `¿Eliminar "${s.name}"?`, confirmText: 'Eliminar', danger: true })
     if (!ok) return
     const res = await fetch(`/api/services/${s.id}`, { method: 'DELETE', credentials: 'include' })
-    if (res.ok) { toast.success('Servicio eliminado'); await reload() }
+    if (res.ok) { toast.success('Servicio eliminado'); if (editingId === s.id) resetForm(); await reload() }
     else toast.error('No se pudo eliminar')
   }
 
+  const AGE_CHIPS = ['Niño', 'Adolescente', 'Adulto']
+
   return (
     <Sheet title="Servicios" onClose={onClose}>
-      <form onSubmit={add} className="space-y-3 mb-5">
+      <form onSubmit={submit} className="space-y-3 mb-5">
         <input value={name} onChange={e => setName(e.target.value)} className="input" placeholder="Nombre del servicio" />
         <div className="grid grid-cols-2 gap-2">
           <input value={duration} onChange={e => setDuration(e.target.value)} type="number" min="1" className="input" placeholder="Duración (min)" />
-          <input value={price} onChange={e => setPrice(e.target.value)} type="number" step="0.01" min="0" className="input" placeholder="Precio" />
+          <input value={price} onChange={e => setPrice(e.target.value)} type="number" step="0.01" min="0" className="input" placeholder="Precio base" />
         </div>
-        <button type="submit" disabled={saving || !name.trim()} className="btn btn-primary w-full flex items-center justify-center gap-2 disabled:opacity-60">
-          {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} Agregar servicio
-        </button>
+
+        {/* Precios por tipo (ej. por edad) */}
+        <div className="rounded-lg border border-gray-200 p-3 space-y-2">
+          <p className="text-xs font-medium text-gray-600">Precios por tipo (opcional)</p>
+          {variants.length > 0 && (
+            <div className="space-y-2">
+              {variants.map((v, i) => (
+                <div key={i} className="flex items-center gap-2">
+                  <input value={v.label} onChange={e => updateVariant(i, 'label', e.target.value)} className="input py-1.5 flex-1" placeholder="Ej. Niño" />
+                  <input value={v.price} onChange={e => updateVariant(i, 'price', e.target.value)} type="number" step="0.01" min="0" className="input py-1.5 w-24" placeholder="Precio" />
+                  <button type="button" onClick={() => removeVariant(i)} className="text-danger-500 hover:text-danger-700 p-1" aria-label="Quitar"><X className="h-4 w-4" /></button>
+                </div>
+              ))}
+            </div>
+          )}
+          <div className="flex flex-wrap gap-2">
+            {AGE_CHIPS.filter(l => !variants.some(v => v.label.toLowerCase() === l.toLowerCase())).map(l => (
+              <button key={l} type="button" onClick={() => addVariant(l)} className="text-xs border border-gray-300 text-gray-600 rounded-full px-2.5 py-1 hover:bg-gray-50">+ {l}</button>
+            ))}
+            <button type="button" onClick={() => addVariant('')} className="text-xs border border-gray-300 text-gray-600 rounded-full px-2.5 py-1 hover:bg-gray-50">+ Otro</button>
+          </div>
+          <p className="text-[11px] text-gray-400">Con variantes, al crear la cita eliges el tipo y toma su precio. Sin variantes, se usa el precio base.</p>
+        </div>
+
+        <div className="flex gap-2">
+          <button type="submit" disabled={saving || !name.trim()} className="btn btn-primary flex-1 flex items-center justify-center gap-2 disabled:opacity-60">
+            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : editingId ? <Check className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
+            {editingId ? 'Guardar cambios' : 'Agregar servicio'}
+          </button>
+          {editingId && <button type="button" onClick={resetForm} className="btn btn-secondary">Cancelar</button>}
+        </div>
       </form>
 
-      {suggestions.length > 0 && (
+      {suggestions.length > 0 && !editingId && (
         <div className="mb-5">
           <p className="text-xs text-gray-500 mb-2">Sugerencias para tu negocio (toca para agregar):</p>
           <div className="flex flex-wrap gap-2">
@@ -748,14 +846,17 @@ function ServicesManager({ services, vertical, onClose, onChanged }: { services:
       ) : (
         <div className="space-y-2">
           {list.map(s => (
-            <div key={s.id} className="flex items-center justify-between bg-gray-50 border border-gray-200 rounded-lg p-3">
+            <div key={s.id} className={`flex items-center justify-between bg-gray-50 border rounded-lg p-3 ${editingId === s.id ? 'border-primary-400' : 'border-gray-200'}`}>
               <div className="min-w-0">
                 <p className="text-sm font-medium text-gray-900 truncate">{s.name}</p>
-                <p className="text-xs text-gray-500">{s.durationMin} min · {format(s.price)}</p>
+                <p className="text-xs text-gray-500 truncate">
+                  {s.durationMin} min · {s.variants.length > 0 ? s.variants.map(v => `${v.label} ${format(v.price)}`).join(' · ') : format(s.price)}
+                </p>
               </div>
-              <button onClick={() => del(s)} className="text-danger-500 hover:text-danger-700 p-1 flex-shrink-0" aria-label="Eliminar">
-                <Trash2 className="h-4 w-4" />
-              </button>
+              <div className="flex items-center gap-1 flex-shrink-0">
+                <button onClick={() => startEdit(s)} className="text-gray-400 hover:text-gray-600 p-1" aria-label="Editar"><Edit className="h-4 w-4" /></button>
+                <button onClick={() => del(s)} className="text-danger-500 hover:text-danger-700 p-1" aria-label="Eliminar"><Trash2 className="h-4 w-4" /></button>
+              </div>
             </div>
           ))}
         </div>

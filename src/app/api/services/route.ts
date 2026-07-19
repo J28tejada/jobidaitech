@@ -7,7 +7,7 @@ import {
   READ_ONLY_ERROR,
   MODULE_LOCKED_ERROR,
 } from '@/lib/workspaces'
-import { mapServiceRow } from '@/lib/services'
+import { mapServiceRow, normalizeVariants } from '@/lib/services'
 import { track } from '@/lib/analytics'
 
 export async function GET() {
@@ -53,6 +53,7 @@ export async function POST(request: NextRequest) {
         name,
         duration_min: Number.isFinite(Number(body.durationMin)) ? Math.max(1, Math.round(Number(body.durationMin))) : 30,
         price: Number.isFinite(Number(body.price)) ? Number(body.price) : 0,
+        variants: normalizeVariants(body.variants),
         active: true,
       })
       .select()
