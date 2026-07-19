@@ -40,8 +40,20 @@ export const VERTICALS: Record<string, VerticalConfig> = {
       { name: 'Diseño / líneas', durationMin: 15 },
     ],
   },
-  // NOTA: el vertical de "salon" (Salón de belleza) se agrega en su propio chat
-  // como una entrada nueva aquí. Ver handoff. (Estilistas, tinte, mechas, etc.)
+  salon: {
+    staffSingular: 'Estilista',
+    staffPlural: 'Estilistas',
+    serviceWord: 'servicio',
+    suggestedServices: [
+      { name: 'Corte y peinado', durationMin: 45 },
+      { name: 'Tinte', durationMin: 90 },
+      { name: 'Mechas / highlights', durationMin: 120 },
+      { name: 'Tratamiento / keratina', durationMin: 90 },
+      { name: 'Secado / blower', durationMin: 30 },
+      { name: 'Manicure', durationMin: 45 },
+      { name: 'Pedicure', durationMin: 60 },
+    ],
+  },
 }
 
 /** Devuelve la config del rubro (o el default si no tiene una específica). */
