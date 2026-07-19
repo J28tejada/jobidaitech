@@ -27,6 +27,7 @@ import {
 import { useToast } from './Toaster'
 import { useConfirm } from './ConfirmDialog'
 import { useCurrency } from './CurrencyProvider'
+import { verticalFor, type VerticalConfig } from '@/lib/verticals'
 
 type Status = 'scheduled' | 'confirmed' | 'done' | 'cancelled' | 'no_show'
 const STATUS_META: Record<Status, { label: string; badge: string }> = {
@@ -113,6 +114,8 @@ export default function AgendaBoard() {
   const [summary, setSummary] = useState<{ todayCount: number; upcomingCount: number; todayIncome: number } | null>(null)
   const [loading, setLoading] = useState(true)
   const [dayFilter, setDayFilter] = useState('')
+  const [businessType, setBusinessType] = useState<string | null>(null)
+  const vertical = verticalFor(businessType)
 
   const [mounted, setMounted] = useState(false)
   const [menu, setMenu] = useState<{ item: Appointment; top?: number; bottom?: number; left: number } | null>(null)
@@ -166,6 +169,10 @@ export default function AgendaBoard() {
     setServices(Array.isArray(s) ? s : [])
     setStaff(Array.isArray(st) ? st : [])
     setClients(Array.isArray(c) ? c.map((x: any) => ({ id: x.id, name: x.name, phone: x.phone })) : [])
+    fetch('/api/subscription', { credentials: 'include' })
+      .then(r => (r.ok ? r.json() : null))
+      .then(d => { if (d && typeof d.businessType === 'string') setBusinessType(d.businessType) })
+      .catch(() => {})
     fetchSummary()
   }
 
@@ -278,11 +285,11 @@ export default function AgendaBoard() {
           <p className="text-gray-600 mt-1 sm:mt-2">Tus citas del día y de los próximos días.</p>
         </div>
         <div className="flex gap-2 w-full sm:w-auto flex-wrap justify-end">
-          <button onClick={() => setShowCommissions(true)} className="btn btn-secondary flex items-center justify-center" title="Comisiones por barbero">
+          <button onClick={() => setShowCommissions(true)} className="btn btn-secondary flex items-center justify-center" title={`Comisiones por ${vertical.staffSingular.toLowerCase()}`}>
             <Coins className="h-4 w-4 sm:mr-1.5" /> <span className="hidden sm:inline">Comisiones</span>
           </button>
-          <button onClick={() => setShowStaff(true)} className="btn btn-secondary flex items-center justify-center" title="Barberos">
-            <Users className="h-4 w-4 sm:mr-1.5" /> <span className="hidden sm:inline">Barberos</span>
+          <button onClick={() => setShowStaff(true)} className="btn btn-secondary flex items-center justify-center" title={vertical.staffPlural}>
+            <Users className="h-4 w-4 sm:mr-1.5" /> <span className="hidden sm:inline">{vertical.staffPlural}</span>
           </button>
           <button onClick={() => setShowServices(true)} className="btn btn-secondary flex items-center justify-center" title="Servicios">
             <Settings2 className="h-4 w-4 sm:mr-1.5" /> <span className="hidden sm:inline">Servicios</span>
@@ -389,6 +396,7 @@ export default function AgendaBoard() {
           services={services}
           staff={staff}
           clients={clients}
+          vertical={vertical}
           onClose={() => { setShowForm(false); setEditing(null) }}
           onSaved={async () => {
             const wasEditing = !!editing
@@ -403,6 +411,7 @@ export default function AgendaBoard() {
       {showServices && (
         <ServicesManager
           services={services}
+          vertical={vertical}
           onClose={() => setShowServices(false)}
           onChanged={async () => { await loadStatic() }}
         />
@@ -411,18 +420,20 @@ export default function AgendaBoard() {
       {showStaff && (
         <StaffManager
           staff={staff}
+          vertical={vertical}
           onClose={() => setShowStaff(false)}
           onChanged={async () => { await loadStatic() }}
         />
       )}
 
-      {showCommissions && <CommissionsSheet onClose={() => setShowCommissions(false)} />}
+      {showCommissions && <CommissionsSheet vertical={vertical} onClose={() => setShowCommissions(false)} />}
 
       {showWalkIn && (
         <WalkInForm
           services={services}
           staff={staff}
           clients={clients}
+          vertical={vertical}
           onClose={() => setShowWalkIn(false)}
           onSaved={async () => { setShowWalkIn(false); await refreshAll(); toast.success('Walk-in agregado a la fila') }}
         />
@@ -467,7 +478,7 @@ function Sheet({ title, onClose, children }: { title: string; onClose: () => voi
   )
 }
 
-function AppointmentForm({ appointment, services, staff, clients, onClose, onSaved }: { appointment: Appointment | null; services: Service[]; staff: Staff[]; clients: ClientOption[]; onClose: () => void; onSaved: () => void }) {
+function AppointmentForm({ appointment, services, staff, clients, vertical, onClose, onSaved }: { appointment: Appointment | null; services: Service[]; staff: Staff[]; clients: ClientOption[]; vertical: VerticalConfig; onClose: () => void; onSaved: () => void }) {
   const defaultWhen = () => {
     const d = new Date()
     d.setMinutes(0, 0, 0)
@@ -586,7 +597,7 @@ function AppointmentForm({ appointment, services, staff, clients, onClose, onSav
 
         {staff.length > 0 && (
           <div>
-            <label className="label">Barbero</label>
+            <label className="label">{vertical.staffSingular}</label>
             <select className="input" value={staffId} onChange={e => setStaffId(e.target.value)}>
               <option value="">— Sin asignar —</option>
               {staff.filter(s => s.active).map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
@@ -635,7 +646,7 @@ function AppointmentForm({ appointment, services, staff, clients, onClose, onSav
   )
 }
 
-function ServicesManager({ services, onClose, onChanged }: { services: Service[]; onClose: () => void; onChanged: () => void }) {
+function ServicesManager({ services, vertical, onClose, onChanged }: { services: Service[]; vertical: VerticalConfig; onClose: () => void; onChanged: () => void }) {
   const toast = useToast()
   const confirm = useConfirm()
   const { format } = useCurrency()
@@ -649,6 +660,22 @@ function ServicesManager({ services, onClose, onChanged }: { services: Service[]
     const s = await fetch('/api/services', { credentials: 'include' }).then(r => (r.ok ? r.json() : []))
     setList(Array.isArray(s) ? s : [])
     onChanged()
+  }
+
+  // Sugerencias del rubro que aún no están en el catálogo (atajo para llenarlo).
+  const suggestions = vertical.suggestedServices.filter(
+    sug => !list.some(s => s.name.trim().toLowerCase() === sug.name.toLowerCase())
+  )
+
+  const quickAdd = async (sug: { name: string; durationMin: number }) => {
+    const res = await fetch('/api/services', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ name: sug.name, durationMin: sug.durationMin, price: 0 }),
+    })
+    if (res.ok) { await reload(); toast.success('Servicio agregado') }
+    else toast.error('No se pudo agregar')
   }
 
   const add = async (e: React.FormEvent) => {
@@ -695,6 +722,24 @@ function ServicesManager({ services, onClose, onChanged }: { services: Service[]
         </button>
       </form>
 
+      {suggestions.length > 0 && (
+        <div className="mb-5">
+          <p className="text-xs text-gray-500 mb-2">Sugerencias para tu negocio (toca para agregar):</p>
+          <div className="flex flex-wrap gap-2">
+            {suggestions.map(sug => (
+              <button
+                key={sug.name}
+                type="button"
+                onClick={() => quickAdd(sug)}
+                className="inline-flex items-center gap-1 text-sm border border-primary-200 text-primary-700 bg-primary-50 rounded-full px-3 py-1 hover:bg-primary-100"
+              >
+                <Plus className="h-3.5 w-3.5" /> {sug.name}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       {list.length === 0 ? (
         <p className="text-sm text-gray-500 text-center py-4 flex flex-col items-center gap-2">
           <Scissors className="h-6 w-6 text-gray-300" />
@@ -719,7 +764,7 @@ function ServicesManager({ services, onClose, onChanged }: { services: Service[]
   )
 }
 
-function StaffManager({ staff, onClose, onChanged }: { staff: Staff[]; onClose: () => void; onChanged: () => void }) {
+function StaffManager({ staff, vertical, onClose, onChanged }: { staff: Staff[]; vertical: VerticalConfig; onClose: () => void; onChanged: () => void }) {
   const toast = useToast()
   const confirm = useConfirm()
   const [list, setList] = useState<Staff[]>(staff)
@@ -747,7 +792,7 @@ function StaffManager({ staff, onClose, onChanged }: { staff: Staff[]; onClose: 
       if (res.ok) {
         setName(''); setPct('')
         await reload()
-        toast.success('Barbero agregado')
+        toast.success(`${vertical.staffSingular} agregado`)
       } else {
         toast.error('No se pudo agregar')
       }
@@ -757,27 +802,27 @@ function StaffManager({ staff, onClose, onChanged }: { staff: Staff[]; onClose: 
   }
 
   const del = async (s: Staff) => {
-    const ok = await confirm({ title: 'Eliminar barbero', message: `¿Eliminar "${s.name}"? Las citas ya registradas conservan su nombre.`, confirmText: 'Eliminar', danger: true })
+    const ok = await confirm({ title: `Eliminar ${vertical.staffSingular.toLowerCase()}`, message: `¿Eliminar "${s.name}"? Las citas ya registradas conservan su nombre.`, confirmText: 'Eliminar', danger: true })
     if (!ok) return
     const res = await fetch(`/api/staff/${s.id}`, { method: 'DELETE', credentials: 'include' })
-    if (res.ok) { toast.success('Barbero eliminado'); await reload() }
+    if (res.ok) { toast.success(`${vertical.staffSingular} eliminado`); await reload() }
     else toast.error('No se pudo eliminar')
   }
 
   return (
-    <Sheet title="Barberos" onClose={onClose}>
+    <Sheet title={vertical.staffPlural} onClose={onClose}>
       <form onSubmit={add} className="space-y-3 mb-5">
-        <input value={name} onChange={e => setName(e.target.value)} className="input" placeholder="Nombre del barbero" />
+        <input value={name} onChange={e => setName(e.target.value)} className="input" placeholder={`Nombre del ${vertical.staffSingular.toLowerCase()}`} />
         <input value={pct} onChange={e => setPct(e.target.value)} type="number" step="1" min="0" max="100" className="input" placeholder="Comisión % (ej. 40)" />
         <button type="submit" disabled={saving || !name.trim()} className="btn btn-primary w-full flex items-center justify-center gap-2 disabled:opacity-60">
-          {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} Agregar barbero
+          {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} Agregar {vertical.staffSingular.toLowerCase()}
         </button>
       </form>
 
       {list.length === 0 ? (
         <p className="text-sm text-gray-500 text-center py-4 flex flex-col items-center gap-2">
           <Users className="h-6 w-6 text-gray-300" />
-          Agrega a tus barberos con su % de comisión. Al asignarlos a una cita calculamos su pago.
+          Agrega a tus {vertical.staffPlural.toLowerCase()} con su % de comisión. Al asignarlos a una cita calculamos su pago.
         </p>
       ) : (
         <div className="space-y-2">
@@ -847,7 +892,7 @@ interface CommissionRow {
   total: number
 }
 
-function CommissionsSheet({ onClose }: { onClose: () => void }) {
+function CommissionsSheet({ vertical, onClose }: { vertical: VerticalConfig; onClose: () => void }) {
   const { format } = useCurrency()
   const now = new Date()
   const [from, setFrom] = useState(`${now.getFullYear()}-${pad(now.getMonth() + 1)}-01`)
@@ -870,7 +915,7 @@ function CommissionsSheet({ onClose }: { onClose: () => void }) {
   const totalPay = rows.reduce((s, r) => s + r.total, 0)
 
   return (
-    <Sheet title="Comisiones por barbero" onClose={onClose}>
+    <Sheet title={`Comisiones por ${vertical.staffSingular.toLowerCase()}`} onClose={onClose}>
       <div className="grid grid-cols-2 gap-3 mb-4">
         <div><label className="label">Desde</label><input type="date" className="input" value={from} onChange={e => setFrom(e.target.value)} /></div>
         <div><label className="label">Hasta</label><input type="date" className="input" value={to} onChange={e => setTo(e.target.value)} /></div>
@@ -902,7 +947,7 @@ function CommissionsSheet({ onClose }: { onClose: () => void }) {
   )
 }
 
-function WalkInForm({ services, staff, clients, onClose, onSaved }: { services: Service[]; staff: Staff[]; clients: ClientOption[]; onClose: () => void; onSaved: () => void }) {
+function WalkInForm({ services, staff, clients, vertical, onClose, onSaved }: { services: Service[]; staff: Staff[]; clients: ClientOption[]; vertical: VerticalConfig; onClose: () => void; onSaved: () => void }) {
   const [clientId, setClientId] = useState('')
   const [clientName, setClientName] = useState('')
   const [serviceId, setServiceId] = useState('')
@@ -970,7 +1015,7 @@ function WalkInForm({ services, staff, clients, onClose, onSaved }: { services: 
 
         {staff.length > 0 && (
           <div>
-            <label className="label">Barbero</label>
+            <label className="label">{vertical.staffSingular}</label>
             <select className="input" value={staffId} onChange={e => setStaffId(e.target.value)}>
               <option value="">— Sin asignar —</option>
               {staff.filter(s => s.active).map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
