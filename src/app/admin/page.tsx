@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Loader2, ShieldAlert, Search, Check } from 'lucide-react'
+import { Loader2, ShieldAlert, Search, Check, Trash2, AlertTriangle } from 'lucide-react'
 
 import Layout from '@/components/Layout'
 import { computeAccess, ymdInMonths, toYmd, ymdToIso, type AccessRow } from '@/lib/subscription'
@@ -277,6 +277,36 @@ function AdminUserEditor({ user, onSaved }: { user: AdminUser; onSaved: () => vo
   const [note, setNote] = useState<string>(user.admin_note ?? '')
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
+  const [showDelete, setShowDelete] = useState(false)
+  const [confirmText, setConfirmText] = useState('')
+  const [removing, setRemoving] = useState(false)
+  const [delError, setDelError] = useState<string | null>(null)
+
+  const emailLc = (user.email ?? '').trim().toLowerCase()
+  const nameLc = (user.name ?? '').trim().toLowerCase()
+  const typed = confirmText.trim().toLowerCase()
+  const canDelete = !!typed && (typed === emailLc || (!!nameLc && typed === nameLc))
+
+  const remove = async () => {
+    if (!canDelete || removing) return
+    setRemoving(true)
+    setDelError(null)
+    try {
+      const res = await fetch(`/api/admin/users/${user.id}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ confirm: confirmText.trim() }),
+      })
+      if (!res.ok) {
+        const b = await res.json().catch(() => null)
+        throw new Error(b?.error || 'No se pudo eliminar la cuenta')
+      }
+      onSaved()
+    } catch (e) {
+      setDelError(e instanceof Error ? e.message : 'Error al eliminar')
+      setRemoving(false)
+    }
+  }
 
   const save = async () => {
     setSaving(true)
@@ -409,6 +439,63 @@ function AdminUserEditor({ user, onSaved }: { user: AdminUser; onSaved: () => vo
           {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : saved ? <Check className="h-4 w-4" /> : null}
           {saved ? 'Guardado' : 'Guardar cambios'}
         </button>
+      </div>
+
+      {/* Zona de peligro: eliminar cuenta */}
+      <div className="mt-2 pt-4 border-t border-red-100">
+        {!showDelete ? (
+          <button
+            type="button"
+            onClick={() => { setShowDelete(true); setConfirmText(''); setDelError(null) }}
+            className="inline-flex items-center gap-2 text-sm font-medium text-red-600 hover:text-red-700"
+          >
+            <Trash2 className="h-4 w-4" /> Eliminar cuenta
+          </button>
+        ) : (
+          <div className="rounded-lg border border-red-200 bg-red-50 p-4 space-y-3">
+            <div className="flex items-start gap-2">
+              <AlertTriangle className="h-5 w-5 text-red-600 flex-shrink-0 mt-0.5" />
+              <div>
+                <p className="text-sm font-semibold text-red-800">Eliminar esta cuenta permanentemente</p>
+                <p className="text-xs text-red-700 mt-1">
+                  Se borrarán el usuario y <strong>todos sus datos</strong> (espacios, citas, clientes, cobros, etc.).
+                  Esta acción no se puede deshacer.
+                </p>
+              </div>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-red-800 mb-1">
+                Para confirmar, escribe el correo: <span className="font-mono">{user.email ?? user.name}</span>
+              </label>
+              <input
+                value={confirmText}
+                onChange={e => setConfirmText(e.target.value)}
+                placeholder={user.email ?? user.name ?? ''}
+                autoComplete="off"
+                className="input border-red-300 focus:border-red-500 focus:ring-red-500"
+              />
+            </div>
+            {delError && <p className="text-sm text-red-700">{delError}</p>}
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={remove}
+                disabled={!canDelete || removing}
+                className="btn bg-red-600 text-white hover:bg-red-700 flex items-center gap-2 disabled:opacity-50"
+              >
+                {removing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                Eliminar definitivamente
+              </button>
+              <button
+                type="button"
+                onClick={() => { setShowDelete(false); setConfirmText(''); setDelError(null) }}
+                className="btn btn-secondary"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )
