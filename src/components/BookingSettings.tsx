@@ -28,6 +28,8 @@ export default function BookingSettings() {
   const [slotMin, setSlotMin] = useState(30)
   const [deposit, setDeposit] = useState('')
   const [hours, setHours] = useState<BookingHours>({})
+  const [notifyPhone, setNotifyPhone] = useState('')
+  const [notifyUrl, setNotifyUrl] = useState('')
 
   useEffect(() => {
     fetch('/api/settings/booking', { credentials: 'include' })
@@ -39,6 +41,8 @@ export default function BookingSettings() {
         setSlotMin(d.slotMin ?? 30)
         setDeposit(d.deposit ? String(d.deposit) : '')
         setHours(d.hours && typeof d.hours === 'object' ? d.hours : {})
+        setNotifyPhone(d.notifyPhone ?? '')
+        setNotifyUrl(d.notifyUrl ?? '')
       })
       .catch(() => {})
       .finally(() => setLoading(false))
@@ -213,6 +217,33 @@ export default function BookingSettings() {
                   onBlur={() => save({ deposit: Number(deposit) || 0 })}
                 />
                 <p className="text-xs text-gray-500 mt-1">Si pones un monto, se le muestra al cliente que debe dejar una seña para confirmar.</p>
+              </div>
+
+              {/* Notificación por WhatsApp (vía webhook n8n) */}
+              <div className="pt-2 border-t border-gray-100">
+                <label className="label">Aviso por WhatsApp de nuevas reservas</label>
+                <p className="text-xs text-gray-500 mb-2">Cuando un cliente reserve, te avisamos por WhatsApp usando tu automatización (n8n).</p>
+                <div className="space-y-2 max-w-md">
+                  <input
+                    type="tel"
+                    className="input"
+                    placeholder="WhatsApp que recibe el aviso (ej. 809 123 4567)"
+                    value={notifyPhone}
+                    onChange={e => setNotifyPhone(e.target.value)}
+                    onBlur={() => save({ notifyPhone })}
+                  />
+                  <input
+                    type="url"
+                    className="input"
+                    placeholder="URL del webhook de n8n (https://…)"
+                    value={notifyUrl}
+                    onChange={e => setNotifyUrl(e.target.value)}
+                    onBlur={() => save({ notifyUrl })}
+                  />
+                </div>
+                <p className="text-xs text-gray-500 mt-1">
+                  Pega la URL del webhook de tu flujo de n8n. Al reservar, enviamos ahí los datos (cliente, servicio, fecha/hora, barbero) y tu n8n manda el WhatsApp.
+                </p>
               </div>
             </>
           )}

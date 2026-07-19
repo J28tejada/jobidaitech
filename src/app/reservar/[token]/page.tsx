@@ -157,14 +157,14 @@ export default function BookingPage({ params }: { params: { token: string } }) {
     setSubmitting(true)
     setError(null)
     try {
+      const when = new Date(slotIso).toLocaleString('es-ES', { weekday: 'long', day: 'numeric', month: 'long', hour: 'numeric', minute: '2-digit', hour12: true })
       const res = await fetch(`/api/public/booking/${params.token}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, phone, serviceId: serviceId || null, staffId: staffId || null, startsAt: slotIso }),
+        body: JSON.stringify({ name, phone, serviceId: serviceId || null, staffId: staffId || null, startsAt: slotIso, startsAtText: when }),
       })
       const b = await res.json().catch(() => null)
       if (!res.ok) throw new Error(b?.error || 'No se pudo reservar')
-      const when = new Date(slotIso).toLocaleString('es-ES', { weekday: 'long', day: 'numeric', month: 'long', hour: 'numeric', minute: '2-digit', hour12: true })
       setDone({ when, iso: slotIso, durationMin: durationFor, serviceName: service?.name || 'Cita' })
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Error al reservar')

@@ -3,12 +3,13 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseClient } from '@/lib/supabase'
 import { track } from '@/lib/analytics'
 import { effectiveHours } from '@/lib/booking'
+import { postWebhook } from '@/lib/notify'
 
 async function findWorkspace(token: string) {
   const supabase = getSupabaseClient()
   const { data } = await supabase
     .from('workspaces')
-    .select('id, name, currency, locale, booking_enabled, booking_open_time, booking_close_time, booking_slot_min, booking_days, booking_deposit, booking_hours')
+    .select('id, name, currency, locale, booking_enabled, booking_open_time, booking_close_time, booking_slot_min, booking_days, booking_deposit, booking_hours, booking_notify_url, booking_notify_phone')
     .eq('booking_token', token)
     .maybeSingle()
   return data
@@ -149,6 +150,27 @@ export async function POST(request: NextRequest, { params }: { params: { token: 
     if (error) throw error
 
     await track('booking_created', { workspaceId: ws.id })
+
+    // Aviso al negocio (webhook → n8n → WhatsApp). Fire-and-forget: no bloquea
+    // ni afecta la reserva si falla.
+    if (ws.booking_notify_url) {
+      const whenText = typeof body.startsAtText === 'string' ? body.startsAtText : ''
+      await postWebhook(ws.booking_notify_url as string, {
+        event: 'booking_created',
+        business: ws.name,
+        notifyPhone: ws.booking_notify_phone ?? null,
+        client: { name, phone },
+        service: title || null,
+        staff: staffName || null,
+        startsAt: starts.toISOString(),
+        whenText,
+        durationMin,
+        price,
+        deposit: Number(ws.booking_deposit ?? 0),
+        currency: ws.currency ?? 'DOP',
+      })
+    }
+
     return NextResponse.json({ ok: true })
   } catch (error) {
     console.error(`POST /api/public/booking/${params.token}`, error)
