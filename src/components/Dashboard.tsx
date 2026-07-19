@@ -13,6 +13,9 @@ import {
   Boxes,
   Target,
   CalendarClock,
+  CalendarCheck,
+  Contact,
+  FileText,
   Film,
   Plus
 } from 'lucide-react';
@@ -251,6 +254,27 @@ export default function Dashboard() {
   // que ese negocio no usa: inventario/embudo/videos en una barbería, etc.).
   const relevant = relevantHrefsForBusiness(businessType);
   const isRel = (href: string) => relevant.includes(href);
+
+  // Acciones rápidas secundarias por rubro. En negocios SIN proyectos, los
+  // botones "Registrar Ingreso/Gasto" (que exigen elegir un proyecto) no
+  // aplican; en su lugar mostramos accesos útiles a su flujo real.
+  const secondaryActions: { label: string; href: string; icon: typeof Contact }[] =
+    archetype === 'appointments'
+      ? [
+          { label: 'Clientes', href: '/clientes', icon: Contact },
+          { label: 'Reservas', href: '/reservas', icon: CalendarCheck },
+        ]
+      : archetype === 'retail' || archetype === 'food'
+      ? [
+          { label: 'Inventario', href: '/inventario', icon: Boxes },
+          { label: 'Cobros', href: '/cobros', icon: Coins },
+        ]
+      : archetype === 'creative'
+      ? [
+          { label: 'Clientes', href: '/clientes', icon: Contact },
+          { label: 'Cotizaciones', href: '/cotizaciones', icon: FileText },
+        ]
+      : [];
 
   return (
     <div className="space-y-6 w-full max-w-full overflow-x-hidden">
@@ -544,20 +568,35 @@ export default function Dashboard() {
                   {primary.label}
                 </button>
               )}
-              <button 
-                onClick={() => setShowIncomeForm(true)}
-                className="btn btn-success flex items-center justify-center"
-              >
-                <TrendingUp className="h-4 w-4 mr-1.5" />
-                Registrar Ingreso
-              </button>
-              <button 
-                onClick={() => setShowExpenseForm(true)}
-                className="btn btn-danger flex items-center justify-center"
-              >
-                <TrendingDown className="h-4 w-4 mr-1.5" />
-                Registrar Gasto
-              </button>
+              {showProjects ? (
+                <>
+                  <button
+                    onClick={() => setShowIncomeForm(true)}
+                    className="btn btn-success flex items-center justify-center"
+                  >
+                    <TrendingUp className="h-4 w-4 mr-1.5" />
+                    Registrar Ingreso
+                  </button>
+                  <button
+                    onClick={() => setShowExpenseForm(true)}
+                    className="btn btn-danger flex items-center justify-center"
+                  >
+                    <TrendingDown className="h-4 w-4 mr-1.5" />
+                    Registrar Gasto
+                  </button>
+                </>
+              ) : (
+                secondaryActions.map(a => (
+                  <button
+                    key={a.href}
+                    onClick={() => router.push(a.href)}
+                    className="btn btn-secondary flex items-center justify-center"
+                  >
+                    <a.icon className="h-4 w-4 mr-1.5" />
+                    {a.label}
+                  </button>
+                ))
+              )}
             </div>
           </div>
         </div>
