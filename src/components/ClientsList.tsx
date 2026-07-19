@@ -37,6 +37,7 @@ export default function ClientsList() {
   const [editing, setEditing] = useState<Client | null>(null)
   const [historyClient, setHistoryClient] = useState<Client | null>(null)
   const [showInactive, setShowInactive] = useState(false)
+  const [showImport, setShowImport] = useState(false)
 
   useEffect(() => {
     setMounted(true)
@@ -119,6 +120,9 @@ export default function ClientsList() {
         <div className="flex gap-2 w-full sm:w-auto">
           <button onClick={() => setShowInactive(true)} className="btn btn-secondary flex items-center justify-center" title="Reactivar clientes">
             <HeartHandshake className="h-4 w-4 sm:mr-1.5" /> <span className="hidden sm:inline">Reactivación</span>
+          </button>
+          <button onClick={() => setShowImport(true)} className="btn btn-secondary flex items-center justify-center" title="Importar contactos (pegar lista)">
+            <ClipboardList className="h-4 w-4 sm:mr-1.5" /> <span className="hidden sm:inline">Importar</span>
           </button>
           <button
             onClick={() => { setEditing(null); setShowForm(true) }}
@@ -241,7 +245,127 @@ export default function ClientsList() {
       )}
 
       {showInactive && <InactiveSheet onClose={() => setShowInactive(false)} />}
+
+      {showImport && (
+        <BulkImportSheet
+          onClose={() => setShowImport(false)}
+          onDone={async () => { setShowImport(false); await load() }}
+        />
+      )}
     </div>
+  )
+}
+
+// Parser de "pegar lista": una línea por contacto. Detecta el teléfono (7+
+// dígitos) y toma el resto como nombre. Acepta separadores (coma/;/tab) o texto
+// suelto ("Juan Pérez 809-555-1234").
+export function parseContacts(text: string): { name: string; phone: string }[] {
+  const digitCount = (s: string) => (s.match(/\d/g) || []).length
+  const out: { name: string; phone: string }[] = []
+  text.split(/\r?\n/).forEach(raw => {
+    const line = raw.trim()
+    if (!line) return
+    let name = ''
+    let phone = ''
+    if (/[,;\t]/.test(line)) {
+      const parts = line.split(/[,;\t]+/).map(p => p.trim()).filter(Boolean)
+      let phoneIdx = -1
+      let best = 6
+      parts.forEach((p, i) => { const d = digitCount(p); if (d >= 7 && d > best) { best = d; phoneIdx = i } })
+      if (phoneIdx >= 0) {
+        phone = parts[phoneIdx]
+        name = parts.filter((_, i) => i !== phoneIdx).join(' ').trim()
+      } else {
+        name = parts.join(' ').trim()
+      }
+    } else {
+      const m = line.match(/\+?[\d][\d\s().-]{5,}\d/)
+      if (m && digitCount(m[0]) >= 7) {
+        phone = m[0].trim()
+        name = line.replace(m[0], '').trim()
+      } else {
+        name = line
+      }
+    }
+    if (!name && phone) name = phone
+    if (name || phone) out.push({ name, phone })
+  })
+  return out
+}
+
+function BulkImportSheet({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
+  const toast = useToast()
+  const [text, setText] = useState('')
+  const [saving, setSaving] = useState(false)
+  const parsed = parseContacts(text)
+
+  const importAll = async () => {
+    if (parsed.length === 0 || saving) return
+    setSaving(true)
+    try {
+      const res = await fetch('/api/clients/bulk', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ contacts: parsed }),
+      })
+      const b = await res.json().catch(() => null)
+      if (!res.ok) throw new Error(b?.error || 'No se pudo importar')
+      const added = b?.added ?? 0
+      const skipped = b?.skipped ?? 0
+      toast.success(`${added} agregado(s)${skipped ? `, ${skipped} omitido(s)` : ''}`)
+      onDone()
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Error al importar')
+      setSaving(false)
+    }
+  }
+
+  return createPortal(
+    <div className="fixed inset-0 z-[90] flex items-end sm:items-center justify-center">
+      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
+      <div className="relative bg-white w-full sm:max-w-md rounded-t-2xl sm:rounded-2xl shadow-xl max-h-[92vh] overflow-y-auto">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 sticky top-0 bg-white z-10">
+          <h2 className="text-lg font-semibold text-gray-900">Importar contactos</h2>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 p-1"><X className="h-5 w-5" /></button>
+        </div>
+        <div className="p-5 space-y-3">
+          <p className="text-sm text-gray-600">
+            Pega tus contactos, <strong>uno por línea</strong>. Puede ser "Nombre, teléfono" o el nombre y el número juntos.
+            No se duplican los que ya tengan el mismo teléfono.
+          </p>
+          <textarea
+            value={text}
+            onChange={e => setText(e.target.value)}
+            rows={8}
+            className="input font-mono text-sm"
+            placeholder={'Juan Pérez, 809-555-1234\nMaría, 8291234567\nPedro 849 111 2222'}
+          />
+          {parsed.length > 0 && (
+            <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
+              <p className="text-xs text-gray-500 mb-1.5">Se detectaron {parsed.length} contacto(s):</p>
+              <div className="max-h-32 overflow-y-auto space-y-1">
+                {parsed.slice(0, 8).map((c, i) => (
+                  <p key={i} className="text-sm text-gray-700 truncate">
+                    {c.name}{c.phone ? <span className="text-gray-400"> · {c.phone}</span> : <span className="text-amber-600"> · sin teléfono</span>}
+                  </p>
+                ))}
+                {parsed.length > 8 && <p className="text-xs text-gray-400">…y {parsed.length - 8} más</p>}
+              </div>
+            </div>
+          )}
+          <button
+            onClick={importAll}
+            disabled={parsed.length === 0 || saving}
+            className="btn btn-primary w-full flex items-center justify-center gap-2 disabled:opacity-60"
+          >
+            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <ClipboardList className="h-4 w-4" />}
+            Importar {parsed.length > 0 ? `${parsed.length} contacto(s)` : ''}
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body
   )
 }
 
