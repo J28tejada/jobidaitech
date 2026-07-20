@@ -153,9 +153,13 @@ export async function POST(request: NextRequest, { params }: { params: { token: 
 
     // Aviso al negocio (webhook → n8n → WhatsApp). Fire-and-forget: no bloquea
     // ni afecta la reserva si falla.
-    if (ws.booking_notify_url) {
+    // El webhook es GLOBAL de la plataforma (env BOOKING_NOTIFY_WEBHOOK_URL):
+    // así el negocio solo pone su WhatsApp y la notificación ya funciona. Un
+    // negocio puede sobreescribirlo con su propio webhook (booking_notify_url).
+    const notifyUrl = (ws.booking_notify_url as string) || process.env.BOOKING_NOTIFY_WEBHOOK_URL || ''
+    if (notifyUrl && ws.booking_notify_phone) {
       const whenText = typeof body.startsAtText === 'string' ? body.startsAtText : ''
-      await postWebhook(ws.booking_notify_url as string, {
+      await postWebhook(notifyUrl, {
         event: 'booking_created',
         business: ws.name,
         notifyPhone: ws.booking_notify_phone ?? null,

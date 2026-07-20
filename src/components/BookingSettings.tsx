@@ -219,31 +219,38 @@ export default function BookingSettings() {
                 <p className="text-xs text-gray-500 mt-1">Si pones un monto, se le muestra al cliente que debe dejar una seña para confirmar.</p>
               </div>
 
-              {/* Notificación por WhatsApp (vía webhook n8n) */}
+              {/* Notificación por WhatsApp */}
               <div className="pt-2 border-t border-gray-100">
                 <label className="label">Aviso por WhatsApp de nuevas reservas</label>
-                <p className="text-xs text-gray-500 mb-2">Cuando un cliente reserve, te avisamos por WhatsApp usando tu automatización (n8n).</p>
-                <div className="space-y-2 max-w-md">
+                <p className="text-xs text-gray-500 mb-2">Cuando un cliente reserve, te llega un WhatsApp con los datos de la cita. Solo pon el número que debe recibir el aviso.</p>
+                <div className="max-w-md">
                   <input
                     type="tel"
                     className="input"
-                    placeholder="WhatsApp que recibe el aviso (ej. 809 123 4567)"
+                    placeholder="Tu WhatsApp (ej. 809 123 4567)"
                     value={notifyPhone}
                     onChange={e => setNotifyPhone(e.target.value)}
                     onBlur={() => save({ notifyPhone })}
                   />
-                  <input
-                    type="url"
-                    className="input"
-                    placeholder="URL del webhook de n8n (https://…)"
-                    value={notifyUrl}
-                    onChange={e => setNotifyUrl(e.target.value)}
-                    onBlur={() => save({ notifyUrl })}
-                  />
                 </div>
-                <p className="text-xs text-gray-500 mt-1">
-                  Pega la URL del webhook de tu flujo de n8n. Al reservar, enviamos ahí los datos (cliente, servicio, fecha/hora, barbero) y tu n8n manda el WhatsApp.
-                </p>
+
+                {/* Avanzado: webhook propio (opcional) */}
+                <details className="mt-2">
+                  <summary className="text-xs text-gray-400 cursor-pointer select-none">Avanzado (opcional)</summary>
+                  <div className="max-w-md mt-2">
+                    <input
+                      type="url"
+                      className="input"
+                      placeholder="URL de webhook propio (https://…)"
+                      value={notifyUrl}
+                      onChange={e => setNotifyUrl(e.target.value)}
+                      onBlur={() => save({ notifyUrl })}
+                    />
+                    <p className="text-[11px] text-gray-400 mt-1">
+                      Déjalo vacío para usar el envío estándar. Solo úsalo si quieres enviar el aviso a tu propia automatización.
+                    </p>
+                  </div>
+                </details>
               </div>
             </>
           )}
