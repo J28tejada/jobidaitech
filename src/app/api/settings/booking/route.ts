@@ -9,9 +9,13 @@ export async function GET() {
   if (!ctx) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
 
   const supabase = getSupabaseClient()
+  // select('*') a propósito: así, si una migración de columnas nuevas
+  // (booking_hours, booking_notify_*, booking_cover_url) aún no se corrió,
+  // la consulta NO falla — los campos faltantes quedan undefined y se usan
+  // sus valores por defecto. Evita que "se borre" toda la configuración.
   const { data, error } = await supabase
     .from('workspaces')
-    .select('booking_token, booking_enabled, booking_open_time, booking_close_time, booking_slot_min, booking_days, booking_deposit, booking_hours, booking_notify_url, booking_notify_phone, booking_cover_url')
+    .select('*')
     .eq('id', ctx.workspaceId)
     .maybeSingle()
   if (error) return NextResponse.json({ error: 'Error al obtener la configuración' }, { status: 500 })

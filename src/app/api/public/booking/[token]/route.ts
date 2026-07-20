@@ -9,9 +9,11 @@ import { sendPushToUser } from '@/lib/push'
 
 async function findWorkspace(token: string) {
   const supabase = getSupabaseClient()
+  // select('*') para tolerar columnas de migraciones aún no ejecutadas (los
+  // campos faltantes quedan undefined y caen a sus valores por defecto).
   const { data } = await supabase
     .from('workspaces')
-    .select('id, name, owner_id, currency, locale, booking_enabled, booking_open_time, booking_close_time, booking_slot_min, booking_days, booking_deposit, booking_hours, booking_notify_url, booking_notify_phone, booking_cover_url')
+    .select('*')
     .eq('booking_token', token)
     .maybeSingle()
   return data
