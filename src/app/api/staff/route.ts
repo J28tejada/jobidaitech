@@ -45,11 +45,13 @@ export async function POST(request: NextRequest) {
     let commissionPct = Number(body.commissionPct)
     if (!Number.isFinite(commissionPct) || commissionPct < 0) commissionPct = 0
     if (commissionPct > 100) commissionPct = 100
+    const phone = typeof body.phone === 'string' && body.phone.trim() ? body.phone.trim() : null
+    const email = typeof body.email === 'string' && body.email.trim() ? body.email.trim() : null
 
     const supabase = getSupabaseClient()
     const { data, error } = await supabase
       .from('staff')
-      .insert({ workspace_id: ctx.workspaceId, user_id: ctx.user.id, name, commission_pct: commissionPct })
+      .insert({ workspace_id: ctx.workspaceId, user_id: ctx.user.id, name, commission_pct: commissionPct, phone, email })
       .select()
       .single()
     if (error) throw error

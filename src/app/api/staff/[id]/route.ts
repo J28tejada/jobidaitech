@@ -31,6 +31,8 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
       patch.commission_pct = pct
     }
     if (typeof body.active === 'boolean') patch.active = body.active
+    if (body.phone !== undefined) patch.phone = typeof body.phone === 'string' && body.phone.trim() ? body.phone.trim() : null
+    if (body.email !== undefined) patch.email = typeof body.email === 'string' && body.email.trim() ? body.email.trim() : null
 
     const supabase = getSupabaseClient()
     const { data, error } = await supabase

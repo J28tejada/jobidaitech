@@ -88,9 +88,11 @@ export async function POST(request: NextRequest, { params }: { params: { token: 
     // Barbero
     let staffId: string | null = null
     let staffName = ''
+    let staffPhone: string | null = null
+    let staffEmail: string | null = null
     if (body.staffId) {
-      const { data: st } = await supabase.from('staff').select('id, name').eq('id', body.staffId).eq('workspace_id', ws.id).maybeSingle()
-      if (st) { staffId = st.id; staffName = st.name }
+      const { data: st } = await supabase.from('staff').select('id, name, phone, email').eq('id', body.staffId).eq('workspace_id', ws.id).maybeSingle()
+      if (st) { staffId = st.id; staffName = st.name; staffPhone = st.phone ?? null; staffEmail = st.email ?? null }
     }
 
     // Vincular/crear cliente por teléfono, para que la reserva alimente
@@ -175,6 +177,19 @@ export async function POST(request: NextRequest, { params }: { params: { token: 
       })
     }
 
+    // Aviso al BARBERO asignado (a su propio correo), si tiene contacto.
+    if (staffEmail) {
+      await notifyBookingReceived({
+        to: staffEmail,
+        business: ws.name,
+        clientName: name,
+        clientPhone: phone,
+        service: title || null,
+        staff: staffName || null,
+        whenText: whenTextGlobal,
+      })
+    }
+
     // Aviso al negocio (webhook → n8n → WhatsApp). Fire-and-forget: no bloquea
     // ni afecta la reserva si falla.
     // El webhook es GLOBAL de la plataforma (env BOOKING_NOTIFY_WEBHOOK_URL):
@@ -190,6 +205,7 @@ export async function POST(request: NextRequest, { params }: { params: { token: 
         client: { name, phone },
         service: title || null,
         staff: staffName || null,
+        staffPhone: staffPhone || null,
         startsAt: starts.toISOString(),
         whenText,
         durationMin,

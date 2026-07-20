@@ -51,6 +51,8 @@ interface Staff {
   id: string
   name: string
   commissionPct: number
+  phone: string | null
+  email: string | null
   active: boolean
 }
 interface Appointment {
@@ -869,9 +871,13 @@ function StaffManager({ staff, vertical, onClose, onChanged }: { staff: Staff[];
   const toast = useToast()
   const confirm = useConfirm()
   const [list, setList] = useState<Staff[]>(staff)
+  const [editingId, setEditingId] = useState<string | null>(null)
   const [name, setName] = useState('')
   const [pct, setPct] = useState('')
+  const [phone, setPhone] = useState('')
+  const [email, setEmail] = useState('')
   const [saving, setSaving] = useState(false)
+  const singular = vertical.staffSingular.toLowerCase()
 
   const reload = async () => {
     const s = await fetch('/api/staff', { credentials: 'include' }).then(r => (r.ok ? r.json() : []))
@@ -879,23 +885,31 @@ function StaffManager({ staff, vertical, onClose, onChanged }: { staff: Staff[];
     onChanged()
   }
 
-  const add = async (e: React.FormEvent) => {
+  const resetForm = () => { setEditingId(null); setName(''); setPct(''); setPhone(''); setEmail('') }
+
+  const startEdit = (s: Staff) => {
+    setEditingId(s.id)
+    setName(s.name)
+    setPct(s.commissionPct ? String(s.commissionPct) : '')
+    setPhone(s.phone ?? '')
+    setEmail(s.email ?? '')
+  }
+
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!name.trim() || saving) return
     setSaving(true)
     try {
-      const res = await fetch('/api/staff', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ name, commissionPct: Number(pct) || 0 }),
-      })
+      const payload = { name, commissionPct: Number(pct) || 0, phone, email }
+      const res = editingId
+        ? await fetch(`/api/staff/${editingId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify(payload) })
+        : await fetch('/api/staff', { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify(payload) })
       if (res.ok) {
-        setName(''); setPct('')
+        resetForm()
         await reload()
-        toast.success(`${vertical.staffSingular} agregado`)
+        toast.success(editingId ? `${vertical.staffSingular} actualizado` : `${vertical.staffSingular} agregado`)
       } else {
-        toast.error('No se pudo agregar')
+        toast.error('No se pudo guardar')
       }
     } finally {
       setSaving(false)
@@ -903,39 +917,48 @@ function StaffManager({ staff, vertical, onClose, onChanged }: { staff: Staff[];
   }
 
   const del = async (s: Staff) => {
-    const ok = await confirm({ title: `Eliminar ${vertical.staffSingular.toLowerCase()}`, message: `¿Eliminar "${s.name}"? Las citas ya registradas conservan su nombre.`, confirmText: 'Eliminar', danger: true })
+    const ok = await confirm({ title: `Eliminar ${singular}`, message: `¿Eliminar "${s.name}"? Las citas ya registradas conservan su nombre.`, confirmText: 'Eliminar', danger: true })
     if (!ok) return
     const res = await fetch(`/api/staff/${s.id}`, { method: 'DELETE', credentials: 'include' })
-    if (res.ok) { toast.success(`${vertical.staffSingular} eliminado`); await reload() }
+    if (res.ok) { toast.success(`${vertical.staffSingular} eliminado`); if (editingId === s.id) resetForm(); await reload() }
     else toast.error('No se pudo eliminar')
   }
 
   return (
     <Sheet title={vertical.staffPlural} onClose={onClose}>
-      <form onSubmit={add} className="space-y-3 mb-5">
-        <input value={name} onChange={e => setName(e.target.value)} className="input" placeholder={`Nombre del ${vertical.staffSingular.toLowerCase()}`} />
+      <form onSubmit={submit} className="space-y-3 mb-5">
+        <input value={name} onChange={e => setName(e.target.value)} className="input" placeholder={`Nombre del ${singular}`} />
         <input value={pct} onChange={e => setPct(e.target.value)} type="number" step="1" min="0" max="100" className="input" placeholder="Comisión % (ej. 40)" />
-        <button type="submit" disabled={saving || !name.trim()} className="btn btn-primary w-full flex items-center justify-center gap-2 disabled:opacity-60">
-          {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} Agregar {vertical.staffSingular.toLowerCase()}
-        </button>
+        <input value={phone} onChange={e => setPhone(e.target.value)} type="tel" inputMode="tel" className="input" placeholder="WhatsApp (para avisarle de sus citas)" />
+        <input value={email} onChange={e => setEmail(e.target.value)} type="email" className="input" placeholder="Correo (opcional)" />
+        <div className="flex gap-2">
+          <button type="submit" disabled={saving || !name.trim()} className="btn btn-primary flex-1 flex items-center justify-center gap-2 disabled:opacity-60">
+            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : editingId ? <Check className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
+            {editingId ? 'Guardar cambios' : `Agregar ${singular}`}
+          </button>
+          {editingId && <button type="button" onClick={resetForm} className="btn btn-secondary">Cancelar</button>}
+        </div>
       </form>
 
       {list.length === 0 ? (
         <p className="text-sm text-gray-500 text-center py-4 flex flex-col items-center gap-2">
           <Users className="h-6 w-6 text-gray-300" />
-          Agrega a tus {vertical.staffPlural.toLowerCase()} con su % de comisión. Al asignarlos a una cita calculamos su pago.
+          Agrega a tus {vertical.staffPlural.toLowerCase()} con su % de comisión y su WhatsApp. Al asignarlos a una cita calculamos su pago y les avisamos.
         </p>
       ) : (
         <div className="space-y-2">
           {list.map(s => (
-            <div key={s.id} className="flex items-center justify-between bg-gray-50 border border-gray-200 rounded-lg p-3">
+            <div key={s.id} className={`flex items-center justify-between bg-gray-50 border rounded-lg p-3 ${editingId === s.id ? 'border-primary-400' : 'border-gray-200'}`}>
               <div className="min-w-0">
                 <p className="text-sm font-medium text-gray-900 truncate">{s.name}</p>
-                <p className="text-xs text-gray-500">{s.commissionPct}% de comisión</p>
+                <p className="text-xs text-gray-500 truncate">
+                  {s.commissionPct}% de comisión{s.phone ? ` · ${s.phone}` : ''}
+                </p>
               </div>
-              <button onClick={() => del(s)} className="text-danger-500 hover:text-danger-700 p-1 flex-shrink-0" aria-label="Eliminar">
-                <Trash2 className="h-4 w-4" />
-              </button>
+              <div className="flex items-center gap-1 flex-shrink-0">
+                <button onClick={() => startEdit(s)} className="text-gray-400 hover:text-gray-600 p-1" aria-label="Editar"><Edit className="h-4 w-4" /></button>
+                <button onClick={() => del(s)} className="text-danger-500 hover:text-danger-700 p-1" aria-label="Eliminar"><Trash2 className="h-4 w-4" /></button>
+              </div>
             </div>
           ))}
         </div>
