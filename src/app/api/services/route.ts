@@ -54,6 +54,7 @@ export async function POST(request: NextRequest) {
         duration_min: Number.isFinite(Number(body.durationMin)) ? Math.max(1, Math.round(Number(body.durationMin))) : 30,
         price: Number.isFinite(Number(body.price)) ? Number(body.price) : 0,
         variants: normalizeVariants(body.variants),
+        image_url: typeof body.imageUrl === 'string' && body.imageUrl.trim() ? body.imageUrl.trim() : null,
         active: true,
       })
       .select()

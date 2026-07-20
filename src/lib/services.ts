@@ -26,6 +26,7 @@ export const mapServiceRow = (row: any) => ({
   durationMin: Number(row.duration_min ?? 30),
   price: Number(row.price ?? 0),
   variants: normalizeVariants(row.variants),
+  imageUrl: row.image_url ?? null,
   active: row.active !== false,
   createdAt: row.created_at ?? null,
   updatedAt: row.updated_at ?? null,

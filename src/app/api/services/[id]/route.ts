@@ -29,6 +29,7 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
     if (body.durationMin !== undefined) updates.duration_min = Math.max(1, Math.round(Number(body.durationMin) || 30))
     if (body.price !== undefined) updates.price = Number(body.price) || 0
     if (body.variants !== undefined) updates.variants = normalizeVariants(body.variants)
+    if (body.imageUrl !== undefined) updates.image_url = typeof body.imageUrl === 'string' && body.imageUrl.trim() ? body.imageUrl.trim() : null
     if (body.active !== undefined) updates.active = !!body.active
 
     if (Object.keys(updates).length === 0) {

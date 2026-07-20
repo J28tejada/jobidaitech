@@ -6,7 +6,7 @@ import { Loader2, Scissors, CalendarCheck, CheckCircle2, Clock, Check, CalendarP
 import { formatCurrency } from '@/lib/format'
 import type { BookingHours } from '@/lib/booking'
 
-interface Service { id: string; name: string; durationMin: number; price: number }
+interface Service { id: string; name: string; durationMin: number; price: number; imageUrl?: string | null }
 interface Staff { id: string; name: string }
 interface Config { slotMin: number; deposit: number; hours: BookingHours }
 interface BookingData {
@@ -299,11 +299,15 @@ export default function BookingPage({ params }: { params: { token: string } }) {
                     <button
                       key={s.id}
                       onClick={() => setServiceId(s.id)}
-                      className={`w-full flex items-center gap-3 p-4 rounded-2xl border text-left transition-all ${active ? 'border-emerald-500 bg-emerald-500/10' : 'border-neutral-800 bg-neutral-900 hover:border-neutral-700'}`}
+                      className={`w-full flex items-center gap-3 p-3 rounded-2xl border text-left transition-all ${active ? 'border-emerald-500 bg-emerald-500/10' : 'border-neutral-800 bg-neutral-900 hover:border-neutral-700'}`}
                     >
                       <div className={`h-5 w-5 rounded-full flex items-center justify-center flex-shrink-0 border ${active ? 'bg-emerald-500 border-emerald-500' : 'border-neutral-600'}`}>
                         {active && <Check className="h-3.5 w-3.5 text-white" />}
                       </div>
+                      {s.imageUrl && (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={s.imageUrl} alt={s.name} className="h-12 w-12 rounded-lg object-cover flex-shrink-0 border border-neutral-700" />
+                      )}
                       <div className="min-w-0 flex-1">
                         <p className="text-[15px] font-medium text-white truncate">{s.name}</p>
                         <p className="text-xs text-neutral-400 mt-0.5">{s.durationMin} min</p>

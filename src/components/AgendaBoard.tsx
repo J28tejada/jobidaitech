@@ -22,6 +22,7 @@ import {
   Trash2,
   Loader2,
   X,
+  Image as ImageIcon,
 } from 'lucide-react'
 
 import { useToast } from './Toaster'
@@ -45,6 +46,7 @@ interface Service {
   durationMin: number
   price: number
   variants: ServiceVariant[]
+  imageUrl: string | null
   active: boolean
 }
 interface Staff {
@@ -620,6 +622,10 @@ function AppointmentForm({ appointment, services, staff, clients, vertical, onCl
               <option value="">— Sin servicio —</option>
               {services.filter(s => s.active).map(s => <option key={s.id} value={s.id}>{s.name} ({s.durationMin} min)</option>)}
             </select>
+            {selService?.imageUrl && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={selService.imageUrl} alt={selService.name} className="mt-2 h-24 w-24 rounded-lg object-cover border border-gray-200" />
+            )}
             {selService && selService.variants.length > 0 && (
               <div className="flex flex-wrap gap-2 mt-2">
                 {selService.variants.map(v => (
@@ -705,6 +711,8 @@ function ServicesManager({ services, vertical, onClose, onChanged }: { services:
   const [duration, setDuration] = useState('30')
   const [price, setPrice] = useState('')
   const [variants, setVariants] = useState<{ label: string; price: string }[]>([])
+  const [imageUrl, setImageUrl] = useState('')
+  const [uploading, setUploading] = useState(false)
   const [saving, setSaving] = useState(false)
 
   const reload = async () => {
@@ -713,7 +721,7 @@ function ServicesManager({ services, vertical, onClose, onChanged }: { services:
     onChanged()
   }
 
-  const resetForm = () => { setEditingId(null); setName(''); setDuration('30'); setPrice(''); setVariants([]) }
+  const resetForm = () => { setEditingId(null); setName(''); setDuration('30'); setPrice(''); setVariants([]); setImageUrl('') }
 
   const startEdit = (s: Service) => {
     setEditingId(s.id)
@@ -721,6 +729,24 @@ function ServicesManager({ services, vertical, onClose, onChanged }: { services:
     setDuration(String(s.durationMin))
     setPrice(s.price ? String(s.price) : '')
     setVariants(s.variants.map(v => ({ label: v.label, price: String(v.price) })))
+    setImageUrl(s.imageUrl ?? '')
+  }
+
+  const uploadImage = async (file: File) => {
+    if (uploading) return
+    setUploading(true)
+    try {
+      const fd = new FormData()
+      fd.append('file', file)
+      const res = await fetch('/api/uploads/service-image', { method: 'POST', credentials: 'include', body: fd })
+      const b = await res.json().catch(() => null)
+      if (!res.ok || !b?.url) throw new Error(b?.error || 'No se pudo subir la imagen')
+      setImageUrl(b.url)
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Error al subir la imagen')
+    } finally {
+      setUploading(false)
+    }
   }
 
   // Sugerencias del rubro que aún no están en el catálogo (atajo para llenarlo).
@@ -755,7 +781,7 @@ function ServicesManager({ services, vertical, onClose, onChanged }: { services:
       const cleanVariants = variants
         .map(v => ({ label: v.label.trim(), price: Number(v.price) || 0 }))
         .filter(v => v.label)
-      const payload = { name, durationMin: Number(duration) || 30, price: Number(price) || 0, variants: cleanVariants }
+      const payload = { name, durationMin: Number(duration) || 30, price: Number(price) || 0, variants: cleanVariants, imageUrl: imageUrl || null }
       const res = editingId
         ? await fetch(`/api/services/${editingId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify(payload) })
         : await fetch('/api/services', { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify(payload) })
@@ -788,6 +814,28 @@ function ServicesManager({ services, vertical, onClose, onChanged }: { services:
         <div className="grid grid-cols-2 gap-2">
           <input value={duration} onChange={e => setDuration(e.target.value)} type="number" min="1" className="input" placeholder="Duración (min)" />
           <input value={price} onChange={e => setPrice(e.target.value)} type="number" step="0.01" min="0" className="input" placeholder="Precio base" />
+        </div>
+
+        {/* Imagen de referencia del corte */}
+        <div className="flex items-center gap-3">
+          {imageUrl ? (
+            <div className="relative">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={imageUrl} alt="Referencia" className="h-16 w-16 rounded-lg object-cover border border-gray-200" />
+              <button type="button" onClick={() => setImageUrl('')} className="absolute -top-1.5 -right-1.5 bg-white rounded-full border border-gray-200 p-0.5 text-gray-500 hover:text-red-600" aria-label="Quitar imagen">
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          ) : (
+            <div className="h-16 w-16 rounded-lg border border-dashed border-gray-300 flex items-center justify-center text-gray-300">
+              <ImageIcon className="h-6 w-6" />
+            </div>
+          )}
+          <label className="btn btn-secondary text-sm cursor-pointer flex items-center gap-1.5">
+            {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImageIcon className="h-4 w-4" />}
+            {imageUrl ? 'Cambiar foto' : 'Foto de referencia'}
+            <input type="file" accept="image/*" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) uploadImage(f); e.target.value = '' }} />
+          </label>
         </div>
 
         {/* Precios por tipo (ej. por edad) */}
@@ -848,8 +896,12 @@ function ServicesManager({ services, vertical, onClose, onChanged }: { services:
       ) : (
         <div className="space-y-2">
           {list.map(s => (
-            <div key={s.id} className={`flex items-center justify-between bg-gray-50 border rounded-lg p-3 ${editingId === s.id ? 'border-primary-400' : 'border-gray-200'}`}>
-              <div className="min-w-0">
+            <div key={s.id} className={`flex items-center gap-3 bg-gray-50 border rounded-lg p-3 ${editingId === s.id ? 'border-primary-400' : 'border-gray-200'}`}>
+              {s.imageUrl && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={s.imageUrl} alt={s.name} className="h-11 w-11 rounded-lg object-cover border border-gray-200 flex-shrink-0" />
+              )}
+              <div className="min-w-0 flex-1">
                 <p className="text-sm font-medium text-gray-900 truncate">{s.name}</p>
                 <p className="text-xs text-gray-500 truncate">
                   {s.durationMin} min · {s.variants.length > 0 ? s.variants.map(v => `${v.label} ${format(v.price)}`).join(' · ') : format(s.price)}

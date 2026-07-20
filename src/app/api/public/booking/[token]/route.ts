@@ -26,7 +26,7 @@ export async function GET(_request: NextRequest, { params }: { params: { token: 
 
     const supabase = getSupabaseClient()
     const [{ data: services }, { data: staff }] = await Promise.all([
-      supabase.from('services').select('id, name, duration_min, price, active').eq('workspace_id', ws.id).eq('active', true).order('created_at', { ascending: true }),
+      supabase.from('services').select('id, name, duration_min, price, variants, image_url, active').eq('workspace_id', ws.id).eq('active', true).order('created_at', { ascending: true }),
       supabase.from('staff').select('id, name, active').eq('workspace_id', ws.id).eq('active', true).order('created_at', { ascending: true }),
     ])
 
@@ -41,7 +41,7 @@ export async function GET(_request: NextRequest, { params }: { params: { token: 
         // Horario por día (efectivo): booking_hours o legado.
         hours: effectiveHours(ws),
       },
-      services: (services ?? []).map(s => ({ id: s.id, name: s.name, durationMin: Number(s.duration_min ?? 30), price: Number(s.price ?? 0) })),
+      services: (services ?? []).map(s => ({ id: s.id, name: s.name, durationMin: Number(s.duration_min ?? 30), price: Number(s.price ?? 0), imageUrl: (s as { image_url?: string | null }).image_url ?? null })),
       staff: (staff ?? []).map(s => ({ id: s.id, name: s.name })),
     })
   } catch (error) {
