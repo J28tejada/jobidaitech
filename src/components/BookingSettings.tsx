@@ -5,6 +5,7 @@ import { Loader2, Copy, Check, ExternalLink, CalendarCheck } from 'lucide-react'
 
 import { useToast } from './Toaster'
 import type { BookingHours } from '@/lib/booking'
+import PushToggle from './PushToggle'
 
 // Orden de presentación (Lun→Dom). La clave numérica sigue 0=Dom..6=Sáb.
 const DAYS = [
@@ -217,6 +218,13 @@ export default function BookingSettings() {
                   onBlur={() => save({ deposit: Number(deposit) || 0 })}
                 />
                 <p className="text-xs text-gray-500 mt-1">Si pones un monto, se le muestra al cliente que debe dejar una seña para confirmar.</p>
+              </div>
+
+              {/* Notificación en este dispositivo (push) */}
+              <div className="pt-2 border-t border-gray-100">
+                <label className="label">Notificaciones en este teléfono</label>
+                <p className="text-xs text-gray-500 mb-2">Recibe un aviso instantáneo en este dispositivo cuando entre una reserva. También te llega por correo.</p>
+                <PushToggle />
               </div>
 
               {/* Notificación por WhatsApp */}

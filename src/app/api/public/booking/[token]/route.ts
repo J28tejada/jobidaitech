@@ -4,12 +4,14 @@ import { getSupabaseClient } from '@/lib/supabase'
 import { track } from '@/lib/analytics'
 import { effectiveHours } from '@/lib/booking'
 import { postWebhook } from '@/lib/notify'
+import { notifyBookingReceived } from '@/lib/email'
+import { sendPushToUser } from '@/lib/push'
 
 async function findWorkspace(token: string) {
   const supabase = getSupabaseClient()
   const { data } = await supabase
     .from('workspaces')
-    .select('id, name, currency, locale, booking_enabled, booking_open_time, booking_close_time, booking_slot_min, booking_days, booking_deposit, booking_hours, booking_notify_url, booking_notify_phone')
+    .select('id, name, owner_id, currency, locale, booking_enabled, booking_open_time, booking_close_time, booking_slot_min, booking_days, booking_deposit, booking_hours, booking_notify_url, booking_notify_phone')
     .eq('booking_token', token)
     .maybeSingle()
   return data
@@ -150,6 +152,28 @@ export async function POST(request: NextRequest, { params }: { params: { token: 
     if (error) throw error
 
     await track('booking_created', { workspaceId: ws.id })
+
+    const whenTextGlobal = typeof body.startsAtText === 'string' ? body.startsAtText : ''
+
+    // Aviso al dueño por correo + push (ambos fire-and-forget; no afectan la
+    // reserva si fallan). El correo va a la cuenta del dueño del negocio.
+    if (ws.owner_id) {
+      const { data: owner } = await supabase.from('users').select('email').eq('id', ws.owner_id).maybeSingle()
+      await notifyBookingReceived({
+        to: owner?.email ?? null,
+        business: ws.name,
+        clientName: name,
+        clientPhone: phone,
+        service: title || null,
+        staff: staffName || null,
+        whenText: whenTextGlobal,
+      })
+      await sendPushToUser(ws.owner_id as string, {
+        title: `📅 Nueva reserva · ${ws.name}`,
+        body: `${name}${title ? ` · ${title}` : ''}${whenTextGlobal ? ` · ${whenTextGlobal}` : ''}`,
+        url: '/agenda',
+      })
+    }
 
     // Aviso al negocio (webhook → n8n → WhatsApp). Fire-and-forget: no bloquea
     // ni afecta la reserva si falla.

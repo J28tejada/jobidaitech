@@ -98,6 +98,51 @@ export async function notifyNewUserRegistered(user: { email?: string | null; nam
 }
 
 /**
+ * Notifica al negocio (dueño) que entró una reserva online. Usa Resend si está
+ * configurado (RESEND_API_KEY). Nunca lanza.
+ */
+export async function notifyBookingReceived(params: {
+  to: string | null
+  business: string
+  clientName: string
+  clientPhone?: string | null
+  service?: string | null
+  staff?: string | null
+  whenText?: string | null
+}): Promise<void> {
+  const apiKey = process.env.RESEND_API_KEY
+  if (!apiKey || !params.to) return
+  const from = process.env.RESEND_FROM || 'Jobidai <onboarding@resend.dev>'
+
+  const rows = [
+    ['Cliente', `${escapeHtml(params.clientName)}${params.clientPhone ? ` (${escapeHtml(params.clientPhone)})` : ''}`],
+    params.service ? ['Servicio', escapeHtml(params.service)] : null,
+    params.staff ? ['Atiende', escapeHtml(params.staff)] : null,
+    params.whenText ? ['Cuándo', escapeHtml(params.whenText)] : null,
+  ].filter(Boolean) as [string, string][]
+
+  const html = `
+    <div style="font-family: -apple-system, Segoe UI, Roboto, Arial, sans-serif; color:#1f2937; max-width:480px;">
+      <h2 style="color:#059669;">📅 Nueva reserva en ${escapeHtml(params.business)}</h2>
+      <table style="border-collapse:collapse; font-size:15px;">
+        ${rows.map(([k, v]) => `<tr><td style="padding:4px 12px 4px 0; color:#6b7280;">${k}</td><td style="padding:4px 0; font-weight:600;">${v}</td></tr>`).join('')}
+      </table>
+      <p style="color:#6b7280; font-size:13px; margin-top:16px;">La cita ya está en tu agenda de Jobidai.</p>
+    </div>
+  `
+
+  try {
+    await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ from, to: params.to, subject: `Nueva reserva: ${params.clientName}`, html }),
+    })
+  } catch (error) {
+    console.error('notifyBookingReceived', error)
+  }
+}
+
+/**
  * Notifica al administrador que alguien pidió el servicio de marketing.
  * Usa Resend si está configurado; nunca lanza.
  */
