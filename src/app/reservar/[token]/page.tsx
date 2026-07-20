@@ -11,7 +11,7 @@ interface Staff { id: string; name: string }
 interface Config { slotMin: number; deposit: number; hours: BookingHours }
 interface BookingData {
   enabled: boolean
-  business: { name: string }
+  business: { name: string; coverUrl?: string | null }
   currency?: string
   locale?: string
   config?: Config
@@ -267,9 +267,19 @@ export default function BookingPage({ params }: { params: { token: string } }) {
       <div className="max-w-md mx-auto">
         {/* Encabezado */}
         <div className="relative overflow-hidden">
-          <div className="absolute inset-0 bg-gradient-to-br from-emerald-600 to-emerald-800" />
-          <div className="absolute -right-8 -top-10 h-40 w-40 rounded-full bg-white/10 blur-2xl" />
-          <div className="relative px-6 pt-9 pb-8">
+          {data.business.coverUrl ? (
+            <>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={data.business.coverUrl} alt={data.business.name} className="absolute inset-0 h-full w-full object-cover" />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/45 to-black/25" />
+            </>
+          ) : (
+            <>
+              <div className="absolute inset-0 bg-gradient-to-br from-emerald-600 to-emerald-800" />
+              <div className="absolute -right-8 -top-10 h-40 w-40 rounded-full bg-white/10 blur-2xl" />
+            </>
+          )}
+          <div className={`relative px-6 pb-8 ${data.business.coverUrl ? 'pt-24' : 'pt-9'}`}>
             <div className="flex items-center gap-3">
               <div className="h-14 w-14 rounded-2xl bg-white/15 backdrop-blur border border-white/20 flex items-center justify-center text-white font-bold text-xl">
                 {initials(data.business.name)}

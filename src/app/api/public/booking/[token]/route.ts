@@ -11,7 +11,7 @@ async function findWorkspace(token: string) {
   const supabase = getSupabaseClient()
   const { data } = await supabase
     .from('workspaces')
-    .select('id, name, owner_id, currency, locale, booking_enabled, booking_open_time, booking_close_time, booking_slot_min, booking_days, booking_deposit, booking_hours, booking_notify_url, booking_notify_phone')
+    .select('id, name, owner_id, currency, locale, booking_enabled, booking_open_time, booking_close_time, booking_slot_min, booking_days, booking_deposit, booking_hours, booking_notify_url, booking_notify_phone, booking_cover_url')
     .eq('booking_token', token)
     .maybeSingle()
   return data
@@ -32,7 +32,7 @@ export async function GET(_request: NextRequest, { params }: { params: { token: 
 
     return NextResponse.json({
       enabled: true,
-      business: { name: ws.name },
+      business: { name: ws.name, coverUrl: ws.booking_cover_url ?? null },
       currency: ws.currency ?? 'DOP',
       locale: ws.locale ?? 'es-DO',
       config: {

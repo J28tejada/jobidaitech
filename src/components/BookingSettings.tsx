@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Loader2, Copy, Check, ExternalLink, CalendarCheck } from 'lucide-react'
+import { Loader2, Copy, Check, ExternalLink, CalendarCheck, X, Image as ImageIcon } from 'lucide-react'
 
 import { useToast } from './Toaster'
 import type { BookingHours } from '@/lib/booking'
@@ -31,6 +31,8 @@ export default function BookingSettings() {
   const [hours, setHours] = useState<BookingHours>({})
   const [notifyPhone, setNotifyPhone] = useState('')
   const [notifyUrl, setNotifyUrl] = useState('')
+  const [coverUrl, setCoverUrl] = useState('')
+  const [uploadingCover, setUploadingCover] = useState(false)
 
   useEffect(() => {
     fetch('/api/settings/booking', { credentials: 'include' })
@@ -44,6 +46,7 @@ export default function BookingSettings() {
         setHours(d.hours && typeof d.hours === 'object' ? d.hours : {})
         setNotifyPhone(d.notifyPhone ?? '')
         setNotifyUrl(d.notifyUrl ?? '')
+        setCoverUrl(d.coverUrl ?? '')
       })
       .catch(() => {})
       .finally(() => setLoading(false))
@@ -67,6 +70,26 @@ export default function BookingSettings() {
       setSaving(false)
     }
   }
+
+  const uploadCover = async (file: File) => {
+    if (uploadingCover) return
+    setUploadingCover(true)
+    try {
+      const fd = new FormData()
+      fd.append('file', file)
+      const res = await fetch('/api/uploads/service-image', { method: 'POST', credentials: 'include', body: fd })
+      const b = await res.json().catch(() => null)
+      if (!res.ok || !b?.url) throw new Error(b?.error || 'No se pudo subir la imagen')
+      setCoverUrl(b.url)
+      save({ coverUrl: b.url })
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Error al subir la imagen')
+    } finally {
+      setUploadingCover(false)
+    }
+  }
+
+  const removeCover = () => { setCoverUrl(''); save({ coverUrl: '' }) }
 
   // Activa/desactiva un día. Al activarlo, propone un horario inicial (que el
   // negocio ajusta); no hay días predefinidos: solo trabajan los que marque.
@@ -147,6 +170,30 @@ export default function BookingSettings() {
                     <ExternalLink className="h-4 w-4" /> Abrir
                   </a>
                 </div>
+              </div>
+
+              {/* Foto de portada */}
+              <div>
+                <label className="label">Foto de portada</label>
+                <p className="text-xs text-gray-500 mb-2">La imagen que ven tus clientes arriba en tu página de reservas (logo, flyer o un corte).</p>
+                {coverUrl ? (
+                  <div className="relative w-full max-w-sm">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={coverUrl} alt="Portada" className="w-full h-32 object-cover rounded-lg border border-gray-200" />
+                    <button type="button" onClick={removeCover} className="absolute top-2 right-2 bg-white/90 rounded-full border border-gray-200 p-1 text-gray-600 hover:text-red-600" aria-label="Quitar portada">
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+                ) : (
+                  <div className="w-full max-w-sm h-32 rounded-lg border border-dashed border-gray-300 flex items-center justify-center text-gray-400 text-sm">
+                    Sin portada (se muestra el degradado verde)
+                  </div>
+                )}
+                <label className="btn btn-secondary text-sm cursor-pointer inline-flex items-center gap-1.5 mt-2">
+                  {uploadingCover ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImageIcon className="h-4 w-4" />}
+                  {coverUrl ? 'Cambiar portada' : 'Subir portada'}
+                  <input type="file" accept="image/*" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) uploadCover(f); e.target.value = '' }} />
+                </label>
               </div>
 
               {/* Horario por día */}

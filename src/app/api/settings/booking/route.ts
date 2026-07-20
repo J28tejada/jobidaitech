@@ -11,7 +11,7 @@ export async function GET() {
   const supabase = getSupabaseClient()
   const { data, error } = await supabase
     .from('workspaces')
-    .select('booking_token, booking_enabled, booking_open_time, booking_close_time, booking_slot_min, booking_days, booking_deposit, booking_hours, booking_notify_url, booking_notify_phone')
+    .select('booking_token, booking_enabled, booking_open_time, booking_close_time, booking_slot_min, booking_days, booking_deposit, booking_hours, booking_notify_url, booking_notify_phone, booking_cover_url')
     .eq('id', ctx.workspaceId)
     .maybeSingle()
   if (error) return NextResponse.json({ error: 'Error al obtener la configuración' }, { status: 500 })
@@ -23,6 +23,7 @@ export async function GET() {
     deposit: Number(data?.booking_deposit ?? 0),
     notifyUrl: data?.booking_notify_url ?? '',
     notifyPhone: data?.booking_notify_phone ?? '',
+    coverUrl: data?.booking_cover_url ?? '',
     // Horario por día (efectivo): usa booking_hours o cae al legado.
     hours: effectiveHours(data ?? {}),
   })
@@ -55,6 +56,10 @@ export async function POST(request: Request) {
     if (body.notifyPhone !== undefined) {
       const p = typeof body.notifyPhone === 'string' ? body.notifyPhone.trim() : ''
       patch.booking_notify_phone = p || null
+    }
+    if (body.coverUrl !== undefined) {
+      const c = typeof body.coverUrl === 'string' ? body.coverUrl.trim() : ''
+      patch.booking_cover_url = c || null
     }
     // Horario por día: fuente de verdad. También sincronizamos los campos
     // legados (días + rango) para cualquier consumidor antiguo.
