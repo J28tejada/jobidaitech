@@ -171,11 +171,19 @@ export default function AgendaBoard() {
   useEffect(() => {
     setMounted(true)
     loadStatic()
-    // Botón "+" flotante: abrir el formulario de nueva cita.
-    if (typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('new') === 'true') {
-      setEditing(null)
-      setShowForm(true)
-      window.history.replaceState({}, '', window.location.pathname)
+    if (typeof window !== 'undefined') {
+      const q = new URLSearchParams(window.location.search)
+      // Botón "+" flotante: abrir el formulario de nueva cita.
+      if (q.get('new') === 'true') {
+        setEditing(null)
+        setShowForm(true)
+        window.history.replaceState({}, '', window.location.pathname)
+      }
+      // Desde "Reservas → Servicios y precios": abrir el catálogo de servicios.
+      if (q.get('services') === '1') {
+        setShowServices(true)
+        window.history.replaceState({}, '', window.location.pathname)
+      }
     }
   }, [])
 

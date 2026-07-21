@@ -11,7 +11,7 @@ interface Staff { id: string; name: string }
 interface Config { slotMin: number; deposit: number; hours: BookingHours }
 interface BookingData {
   enabled: boolean
-  business: { name: string; coverUrl?: string | null; intro?: string | null }
+  business: { name: string; coverUrl?: string | null; intro?: string | null; accent?: string | null }
   currency?: string
   locale?: string
   config?: Config
@@ -211,22 +211,22 @@ export default function BookingPage({ params }: { params: { token: string } }) {
     const fmtCal = (d: Date) => d.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '')
     const gcal = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(`${done.serviceName} · ${data.business.name}`)}&dates=${fmtCal(start)}/${fmtCal(end)}&details=${encodeURIComponent('Reserva hecha con Jobidai')}`
     return (
-      <div className="min-h-screen bg-neutral-950 flex items-center justify-center p-4">
+      <div className="min-h-screen bg-neutral-950 flex items-center justify-center p-4" style={{ ['--bk' as string]: data.business.accent || '#10b981' } as React.CSSProperties}>
         <div className="w-full max-w-md">
           <div className="bg-neutral-900 rounded-3xl border border-neutral-800 p-8 text-center shadow-2xl">
-            <div className="h-16 w-16 rounded-full bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center mx-auto mb-4">
-              <CheckCircle2 className="h-9 w-9 text-emerald-400" />
+            <div className="h-16 w-16 rounded-full bk-tint15 border bk-border30 flex items-center justify-center mx-auto mb-4">
+              <CheckCircle2 className="h-9 w-9 bk-text" />
             </div>
             <h1 className="text-2xl font-bold text-white">¡Reserva confirmada!</h1>
             <p className="text-neutral-400 text-sm mt-1">Te esperamos en {data.business.name}.</p>
 
             <div className="mt-6 rounded-2xl bg-neutral-950/60 border border-neutral-800 p-4 text-left space-y-3">
               <div className="flex items-center gap-3">
-                <Scissors className="h-4 w-4 text-emerald-400 flex-shrink-0" />
+                <Scissors className="h-4 w-4 bk-text flex-shrink-0" />
                 <span className="text-sm text-neutral-200">{done.serviceName}{selectedStaff ? ` · con ${selectedStaff.name}` : ''}</span>
               </div>
               <div className="flex items-center gap-3">
-                <CalendarCheck className="h-4 w-4 text-emerald-400 flex-shrink-0" />
+                <CalendarCheck className="h-4 w-4 bk-text flex-shrink-0" />
                 <span className="text-sm text-neutral-200 capitalize">{done.when}</span>
               </div>
             </div>
@@ -263,7 +263,7 @@ export default function BookingPage({ params }: { params: { token: string } }) {
     'w-full rounded-xl bg-neutral-800/70 border border-neutral-700 text-white placeholder-neutral-500 px-4 py-3 text-[15px] outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-colors'
 
   return (
-    <div className="min-h-screen bg-neutral-950 text-neutral-100 pb-28">
+    <div className="min-h-screen bg-neutral-950 text-neutral-100 pb-28" style={{ ['--bk' as string]: data.business.accent || '#10b981' } as React.CSSProperties}>
       <div className="max-w-md mx-auto">
         {/* Encabezado */}
         <div className="relative overflow-hidden">
@@ -275,7 +275,7 @@ export default function BookingPage({ params }: { params: { token: string } }) {
             </>
           ) : (
             <>
-              <div className="absolute inset-0 bg-gradient-to-br from-emerald-600 to-emerald-800" />
+              <div className="absolute inset-0 bk-grad" />
               <div className="absolute -right-8 -top-10 h-40 w-40 rounded-full bg-white/10 blur-2xl" />
             </>
           )}
@@ -313,9 +313,9 @@ export default function BookingPage({ params }: { params: { token: string } }) {
                     <button
                       key={s.id}
                       onClick={() => setServiceId(s.id)}
-                      className={`w-full flex items-center gap-3 p-3 rounded-2xl border text-left transition-all ${active ? 'border-emerald-500 bg-emerald-500/10' : 'border-neutral-800 bg-neutral-900 hover:border-neutral-700'}`}
+                      className={`w-full flex items-center gap-3 p-3 rounded-2xl border text-left transition-all ${active ? 'bk-border bk-tint' : 'border-neutral-800 bg-neutral-900 hover:border-neutral-700'}`}
                     >
-                      <div className={`h-5 w-5 rounded-full flex items-center justify-center flex-shrink-0 border ${active ? 'bg-emerald-500 border-emerald-500' : 'border-neutral-600'}`}>
+                      <div className={`h-5 w-5 rounded-full flex items-center justify-center flex-shrink-0 border ${active ? 'bk-bg bk-border' : 'border-neutral-600'}`}>
                         {active && <Check className="h-3.5 w-3.5 text-white" />}
                       </div>
                       {s.imageUrl && (
@@ -326,7 +326,7 @@ export default function BookingPage({ params }: { params: { token: string } }) {
                         <p className="text-[15px] font-medium text-white truncate">{s.name}</p>
                         <p className="text-xs text-neutral-400 mt-0.5">{s.durationMin} min</p>
                       </div>
-                      {s.price > 0 && <span className="text-[15px] font-semibold text-emerald-400 flex-shrink-0">{fmt(s.price)}</span>}
+                      {s.price > 0 && <span className="text-[15px] font-semibold bk-text flex-shrink-0">{fmt(s.price)}</span>}
                     </button>
                   )
                 })}
@@ -366,9 +366,9 @@ export default function BookingPage({ params }: { params: { token: string } }) {
                     <button
                       key={key}
                       onClick={() => setDate(key)}
-                      className={`flex-shrink-0 w-16 rounded-2xl border py-3 flex flex-col items-center gap-0.5 transition-all ${active ? 'border-emerald-500 bg-emerald-500/10' : 'border-neutral-800 bg-neutral-900 hover:border-neutral-700'}`}
+                      className={`flex-shrink-0 w-16 rounded-2xl border py-3 flex flex-col items-center gap-0.5 transition-all ${active ? 'bk-border bk-tint' : 'border-neutral-800 bg-neutral-900 hover:border-neutral-700'}`}
                     >
-                      <span className={`text-[11px] uppercase ${active ? 'text-emerald-400' : 'text-neutral-500'}`}>{isToday ? 'hoy' : WEEKDAYS[d.getDay()]}</span>
+                      <span className={`text-[11px] uppercase ${active ? 'bk-text' : 'text-neutral-500'}`}>{isToday ? 'hoy' : WEEKDAYS[d.getDay()]}</span>
                       <span className={`text-xl font-bold ${active ? 'text-white' : 'text-neutral-200'}`}>{d.getDate()}</span>
                       <span className="text-[11px] text-neutral-500">{MONTHS[d.getMonth()]}</span>
                     </button>
@@ -397,7 +397,7 @@ export default function BookingPage({ params }: { params: { token: string } }) {
                           <button
                             key={sl.iso}
                             onClick={() => setSlotIso(sl.iso)}
-                            className={`py-2.5 rounded-xl text-sm font-medium border transition-all ${active ? 'bg-emerald-500 text-white border-emerald-500' : 'bg-neutral-900 text-neutral-200 border-neutral-800 hover:border-emerald-500/60'}`}
+                            className={`py-2.5 rounded-xl text-sm font-medium border transition-all ${active ? 'bk-bg text-white bk-border' : 'bg-neutral-900 text-neutral-200 border-neutral-800 bk-border-hover'}`}
                           >
                             {sl.label}
                           </button>
@@ -440,13 +440,13 @@ export default function BookingPage({ params }: { params: { token: string } }) {
                 {service ? service.name : 'Cita'}
                 {slotIso && <span className="text-neutral-500"> · {new Date(slotIso).toLocaleString('es-ES', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit', hour12: true })}</span>}
               </span>
-              {service && service.price > 0 && <span className="font-semibold text-emerald-400 flex-shrink-0 ml-2">{fmt(service.price)}</span>}
+              {service && service.price > 0 && <span className="font-semibold bk-text flex-shrink-0 ml-2">{fmt(service.price)}</span>}
             </div>
           )}
           <button
             onClick={submit}
             disabled={!canSubmit || submitting}
-            className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-white font-semibold py-3.5 transition-colors disabled:bg-neutral-800 disabled:text-neutral-500"
+            className="w-full inline-flex items-center justify-center gap-2 rounded-xl bk-bg bk-bg-hover text-white font-semibold py-3.5 transition-colors disabled:bg-neutral-800 disabled:text-neutral-500"
           >
             {submitting ? <Loader2 className="h-5 w-5 animate-spin" /> : <><CalendarCheck className="h-5 w-5" /> Reservar cita <ChevronRight className="h-4 w-4 opacity-70" /></>}
           </button>
@@ -459,7 +459,7 @@ export default function BookingPage({ params }: { params: { token: string } }) {
 function StepHead({ n, title, icon }: { n: number; title: string; icon?: React.ReactNode }) {
   return (
     <div className="flex items-center gap-2.5 mb-3">
-      <span className="h-6 w-6 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-xs font-bold flex items-center justify-center flex-shrink-0">
+      <span className="h-6 w-6 rounded-full bk-tint15 border bk-border30 bk-text text-xs font-bold flex items-center justify-center flex-shrink-0">
         {n}
       </span>
       <h2 className="text-[15px] font-semibold text-white flex items-center gap-1.5">{icon}{title}</h2>
@@ -471,9 +471,9 @@ function StaffChip({ label, sub, active, onClick, avatar }: { label: string; sub
   return (
     <button
       onClick={onClick}
-      className={`flex-shrink-0 w-24 rounded-2xl border p-3 flex flex-col items-center gap-2 transition-all ${active ? 'border-emerald-500 bg-emerald-500/10' : 'border-neutral-800 bg-neutral-900 hover:border-neutral-700'}`}
+      className={`flex-shrink-0 w-24 rounded-2xl border p-3 flex flex-col items-center gap-2 transition-all ${active ? 'bk-border bk-tint' : 'border-neutral-800 bg-neutral-900 hover:border-neutral-700'}`}
     >
-      <div className={`h-12 w-12 rounded-full flex items-center justify-center text-sm font-bold ${active ? 'bg-emerald-500 text-white' : 'bg-neutral-800 text-neutral-300'}`}>
+      <div className={`h-12 w-12 rounded-full flex items-center justify-center text-sm font-bold ${active ? 'bk-bg text-white' : 'bg-neutral-800 text-neutral-300'}`}>
         {avatar ? sub : <Scissors className="h-5 w-5" />}
       </div>
       <span className={`text-[12px] text-center leading-tight truncate w-full ${active ? 'text-white' : 'text-neutral-300'}`}>{label}</span>

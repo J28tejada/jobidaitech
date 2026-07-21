@@ -34,6 +34,7 @@ export default function BookingSettings({ onSaved }: { onSaved?: () => void } = 
   const [coverUrl, setCoverUrl] = useState('')
   const [uploadingCover, setUploadingCover] = useState(false)
   const [intro, setIntro] = useState('')
+  const [accent, setAccent] = useState('')
 
   useEffect(() => {
     fetch('/api/settings/booking', { credentials: 'include' })
@@ -49,6 +50,7 @@ export default function BookingSettings({ onSaved }: { onSaved?: () => void } = 
         setNotifyUrl(d.notifyUrl ?? '')
         setCoverUrl(d.coverUrl ?? '')
         setIntro(d.intro ?? '')
+        setAccent(d.accent || '#10b981')
       })
       .catch(() => {})
       .finally(() => setLoading(false))
@@ -212,6 +214,24 @@ export default function BookingSettings({ onSaved }: { onSaved?: () => void } = 
                   onChange={e => setIntro(e.target.value)}
                   onBlur={() => save({ intro })}
                 />
+              </div>
+
+              {/* Color de acento */}
+              <div>
+                <label className="label">Color de tu página</label>
+                <p className="text-xs text-gray-500 mb-2">Se usa en el encabezado, botones y selección.</p>
+                <div className="flex flex-wrap gap-2">
+                  {['#10b981', '#0ea5e9', '#2563eb', '#7c3aed', '#db2777', '#e11d48', '#f59e0b', '#111827'].map(c => (
+                    <button
+                      key={c}
+                      type="button"
+                      onClick={() => { setAccent(c); save({ accent: c }) }}
+                      className={`h-9 w-9 rounded-full border-2 transition-transform ${accent.toLowerCase() === c ? 'border-gray-900 scale-110' : 'border-transparent'}`}
+                      style={{ backgroundColor: c }}
+                      aria-label={`Color ${c}`}
+                    />
+                  ))}
+                </div>
               </div>
 
               {/* Horario por día */}

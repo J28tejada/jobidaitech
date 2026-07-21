@@ -1,83 +1,97 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { RefreshCw, ExternalLink, Smartphone } from 'lucide-react'
+import Link from 'next/link'
+import { Copy, Check, ExternalLink, MessageCircle, Pencil, Scissors, CalendarCheck } from 'lucide-react'
 
 import Layout from '@/components/Layout'
-import BookingSettings from '@/components/BookingSettings'
+import { useToast } from '@/components/Toaster'
 
 export default function ReservasPage() {
+  const toast = useToast()
   const [token, setToken] = useState<string | null>(null)
   const [enabled, setEnabled] = useState(false)
-  const [previewKey, setPreviewKey] = useState(0)
+  const [loaded, setLoaded] = useState(false)
+  const [copied, setCopied] = useState(false)
 
-  const loadMeta = () => {
+  useEffect(() => {
     fetch('/api/settings/booking', { credentials: 'include' })
       .then(r => (r.ok ? r.json() : null))
       .then(d => { if (d) { setToken(d.token ?? null); setEnabled(!!d.enabled) } })
       .catch(() => {})
-  }
-
-  useEffect(() => { loadMeta() }, [])
+      .finally(() => setLoaded(true))
+  }, [])
 
   const link = token && typeof window !== 'undefined' ? `${window.location.origin}/reservar/${token}` : ''
+  const wa = link ? `https://wa.me/?text=${encodeURIComponent(`Reserva tu cita aquí: ${link}`)}` : ''
 
-  // Refresca la vista previa (y re-lee token/enabled) tras cada guardado.
-  const onSaved = () => { loadMeta(); setPreviewKey(k => k + 1) }
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(link)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1500)
+    } catch {
+      toast.error('No se pudo copiar')
+    }
+  }
 
   return (
     <Layout>
-      <div className="space-y-6">
+      <div className="space-y-6 max-w-2xl">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Reservas online</h1>
-          <p className="text-gray-600 mt-2">
-            Personaliza tu página de reservas y mira cómo la ven tus clientes en la vista previa.
-          </p>
+          <p className="text-gray-600 mt-2">Comparte tu enlace y personaliza tu página para que tus clientes reserven 24/7.</p>
         </div>
 
-        <div className="grid lg:grid-cols-2 gap-6 items-start">
-          {/* Editor */}
-          <BookingSettings onSaved={onSaved} />
-
-          {/* Vista previa */}
-          <div className="lg:sticky lg:top-4">
-            <div className="card">
-              <div className="flex items-center justify-between mb-3">
-                <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
-                  <Smartphone className="h-5 w-5 text-primary-600" /> Vista previa
-                </h2>
-                <div className="flex items-center gap-1">
-                  <button onClick={() => setPreviewKey(k => k + 1)} className="btn-icon bg-gray-100 text-gray-700 hover:bg-gray-200" title="Actualizar vista previa">
-                    <RefreshCw className="h-4 w-4" />
-                  </button>
-                  {link && (
-                    <a href={link} target="_blank" rel="noopener noreferrer" className="btn-icon bg-gray-100 text-gray-700 hover:bg-gray-200" title="Abrir en pestaña">
-                      <ExternalLink className="h-4 w-4" />
-                    </a>
-                  )}
-                </div>
-              </div>
-
-              {enabled && link ? (
-                <div className="mx-auto w-full max-w-[380px] rounded-[2rem] border-[6px] border-gray-800 overflow-hidden bg-black shadow-lg" style={{ height: 680 }}>
-                  <iframe
-                    key={previewKey}
-                    src={link}
-                    title="Vista previa de reservas"
-                    className="w-full h-full bg-black"
-                  />
-                </div>
-              ) : (
-                <p className="text-sm text-gray-500 py-8 text-center">
-                  Activa las reservas online para ver la vista previa de tu página.
-                </p>
-              )}
-              <p className="text-xs text-gray-400 mt-2 text-center">
-                Así la ven tus clientes. Los cambios aparecen al guardar (toca actualizar si no la ves).
-              </p>
+        {/* Enlace para compartir */}
+        {loaded && enabled && link ? (
+          <div className="card">
+            <p className="text-xs text-gray-500 mb-1.5">Tu enlace de reservas</p>
+            <p className="text-sm text-gray-900 break-all mb-3">{link}</p>
+            <div className="flex gap-2 flex-wrap">
+              <button onClick={copy} className="btn btn-secondary text-sm flex items-center gap-1.5">
+                {copied ? <Check className="h-4 w-4 text-success-600" /> : <Copy className="h-4 w-4" />} Copiar
+              </button>
+              <a href={wa} target="_blank" rel="noopener noreferrer" className="btn btn-secondary text-sm flex items-center gap-1.5">
+                <MessageCircle className="h-4 w-4 text-green-500" /> Compartir
+              </a>
+              <a href={link} target="_blank" rel="noopener noreferrer" className="btn btn-secondary text-sm flex items-center gap-1.5">
+                <ExternalLink className="h-4 w-4" /> Abrir
+              </a>
             </div>
           </div>
-        </div>
+        ) : loaded ? (
+          <div className="card flex items-start gap-3">
+            <div className="p-2 bg-primary-100 rounded-lg"><CalendarCheck className="h-5 w-5 text-primary-600" /></div>
+            <div>
+              <p className="text-sm font-semibold text-gray-900">Aún no has activado las reservas online</p>
+              <p className="text-sm text-gray-600 mt-1">Entra a “Editar página de citas” y actívalas para obtener tu enlace.</p>
+            </div>
+          </div>
+        ) : null}
+
+        {/* Accesos */}
+        <Link href="/reservas/editar" className="card flex items-center justify-between hover:border-primary-300 transition-colors">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-primary-100 rounded-lg"><Pencil className="h-5 w-5 text-primary-600" /></div>
+            <div>
+              <p className="text-sm font-semibold text-gray-900">Editar página de citas</p>
+              <p className="text-xs text-gray-500">Textos, colores, portada, horarios y vista previa.</p>
+            </div>
+          </div>
+          <span className="text-primary-600 text-sm font-medium">Editar →</span>
+        </Link>
+
+        <Link href="/agenda?services=1" className="card flex items-center justify-between hover:border-primary-300 transition-colors">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-primary-100 rounded-lg"><Scissors className="h-5 w-5 text-primary-600" /></div>
+            <div>
+              <p className="text-sm font-semibold text-gray-900">Servicios y precios (cortes)</p>
+              <p className="text-xs text-gray-500">Edita los cortes, precios por tipo e imágenes.</p>
+            </div>
+          </div>
+          <span className="text-primary-600 text-sm font-medium">Editar →</span>
+        </Link>
       </div>
     </Layout>
   )

@@ -29,6 +29,7 @@ export async function GET() {
     notifyPhone: data?.booking_notify_phone ?? '',
     coverUrl: data?.booking_cover_url ?? '',
     intro: data?.booking_intro ?? '',
+    accent: data?.booking_accent ?? '',
     // Horario por día (efectivo): usa booking_hours o cae al legado.
     hours: effectiveHours(data ?? {}),
   })
@@ -69,6 +70,10 @@ export async function POST(request: Request) {
     if (body.intro !== undefined) {
       const i = typeof body.intro === 'string' ? body.intro.trim().slice(0, 160) : ''
       patch.booking_intro = i || null
+    }
+    if (body.accent !== undefined) {
+      const a = typeof body.accent === 'string' ? body.accent.trim() : ''
+      patch.booking_accent = /^#[0-9a-fA-F]{6}$/.test(a) ? a : null
     }
     // Horario por día: fuente de verdad. También sincronizamos los campos
     // legados (días + rango) para cualquier consumidor antiguo.

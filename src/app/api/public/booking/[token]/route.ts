@@ -34,7 +34,7 @@ export async function GET(_request: NextRequest, { params }: { params: { token: 
 
     return NextResponse.json({
       enabled: true,
-      business: { name: ws.name, coverUrl: ws.booking_cover_url ?? null, intro: ws.booking_intro ?? null },
+      business: { name: ws.name, coverUrl: ws.booking_cover_url ?? null, intro: ws.booking_intro ?? null, accent: ws.booking_accent ?? null },
       currency: ws.currency ?? 'DOP',
       locale: ws.locale ?? 'es-DO',
       config: {

@@ -312,3 +312,15 @@
   from { opacity: 0; transform: translateY(6px); }
   to   { opacity: 1; transform: translateY(0); }
 }
+
+/* Acento configurable de la página pública de reservas (--bk).
+   Usa color-mix para tintes; se aplica poniendo --bk en el contenedor raíz. */
+.bk-grad      { background-image: linear-gradient(135deg, var(--bk, #10b981), color-mix(in srgb, var(--bk, #10b981) 55%, #000)); }
+.bk-bg        { background-color: var(--bk, #10b981); }
+.bk-bg-hover:hover { background-color: color-mix(in srgb, var(--bk, #10b981) 85%, #fff); }
+.bk-text      { color: var(--bk, #10b981); }
+.bk-border    { border-color: var(--bk, #10b981); }
+.bk-tint      { background-color: color-mix(in srgb, var(--bk, #10b981) 12%, transparent); }
+.bk-tint15    { background-color: color-mix(in srgb, var(--bk, #10b981) 15%, transparent); }
+.bk-border30  { border-color: color-mix(in srgb, var(--bk, #10b981) 30%, transparent); }
+.bk-border-hover:hover { border-color: color-mix(in srgb, var(--bk, #10b981) 60%, transparent); }
