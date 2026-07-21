@@ -520,7 +520,7 @@ function AppointmentDetail({
   // Cuando ya pasó la hora, en vez de "recordar" preguntamos si sigue en
   // camino o prefiere reagendar (más útil que un recordatorio tardío).
   const followUpHref = () => {
-    const msg = `Hola ${a.clientName}, tenías tu cita${a.title ? ` de ${a.title}` : ''} ${dateLabel.toLowerCase()} a las ${timeLabel(a.startsAt)}. ¿Sigues en camino o prefieres reagendar?`
+    const msg = `Saludos, ${a.clientName}. Tenía agendada su cita${a.title ? ` de ${a.title}` : ''} ${dateLabel.toLowerCase()} a las ${timeLabel(a.startsAt)}. ¿Sigue en camino o prefiere reprogramarla? Quedamos atentos.`
     return phoneDigits ? `https://wa.me/${phoneDigits}?text=${encodeURIComponent(msg)}` : `https://wa.me/?text=${encodeURIComponent(msg)}`
   }
 
