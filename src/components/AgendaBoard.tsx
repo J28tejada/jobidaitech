@@ -517,6 +517,13 @@ function AppointmentDetail({
   const fullDate = new Date(a.startsAt).toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' })
   const tone = timingTone(a.startsAt, a.status, Date.now())
 
+  // Cuando ya pasó la hora, en vez de "recordar" preguntamos si sigue en
+  // camino o prefiere reagendar (más útil que un recordatorio tardío).
+  const followUpHref = () => {
+    const msg = `Hola ${a.clientName}, tenías tu cita${a.title ? ` de ${a.title}` : ''} ${dateLabel.toLowerCase()} a las ${timeLabel(a.startsAt)}. ¿Sigues en camino o prefieres reagendar?`
+    return phoneDigits ? `https://wa.me/${phoneDigits}?text=${encodeURIComponent(msg)}` : `https://wa.me/?text=${encodeURIComponent(msg)}`
+  }
+
   return (
     <Sheet title="Detalle de la cita" onClose={onClose}>
       {/* Hora + estado */}
@@ -566,10 +573,16 @@ function AppointmentDetail({
         {a.notes && <InfoRow label="Notas" value={a.notes} />}
       </div>
 
-      {/* Recordatorio */}
-      <a href={reminderHref} target="_blank" rel="noopener noreferrer" className="btn btn-secondary w-full flex items-center justify-center gap-2 mb-3">
-        <MessageCircle className="h-4 w-4 text-green-500" /> Recordar por WhatsApp
-      </a>
+      {/* WhatsApp: recordar (antes) o preguntar si sigue en camino (ya pasó) */}
+      {tone === 'red' ? (
+        <a href={followUpHref()} target="_blank" rel="noopener noreferrer" className="btn btn-secondary w-full flex items-center justify-center gap-2 mb-3">
+          <MessageCircle className="h-4 w-4 text-green-500" /> Preguntar por WhatsApp
+        </a>
+      ) : (
+        <a href={reminderHref} target="_blank" rel="noopener noreferrer" className="btn btn-secondary w-full flex items-center justify-center gap-2 mb-3">
+          <MessageCircle className="h-4 w-4 text-green-500" /> Recordar por WhatsApp
+        </a>
+      )}
 
       {/* Acciones de estado */}
       <div className="rounded-xl border border-gray-100 overflow-hidden mb-3">
