@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { RefreshCw, ExternalLink, Smartphone, ArrowLeft, Scissors } from 'lucide-react'
+import { ArrowLeft, Scissors, ExternalLink, Eye, RefreshCw, X } from 'lucide-react'
 
 import Layout from '@/components/Layout'
 import BookingSettings from '@/components/BookingSettings'
@@ -11,6 +11,7 @@ export default function EditarReservasPage() {
   const [token, setToken] = useState<string | null>(null)
   const [enabled, setEnabled] = useState(false)
   const [previewKey, setPreviewKey] = useState(0)
+  const [showPreview, setShowPreview] = useState(false)
 
   const loadMeta = () => {
     fetch('/api/settings/booking', { credentials: 'include' })
@@ -26,16 +27,22 @@ export default function EditarReservasPage() {
 
   return (
     <Layout>
-      <div className="space-y-6">
+      <div className="space-y-6 max-w-2xl">
         <div>
           <Link href="/reservas" className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700 mb-2">
             <ArrowLeft className="h-4 w-4" /> Volver
           </Link>
           <h1 className="text-3xl font-bold text-gray-900">Editar página de citas</h1>
-          <p className="text-gray-600 mt-1">Personaliza textos, colores, portada y horarios. Míralo en la vista previa.</p>
+          <p className="text-gray-600 mt-1">Personaliza textos, colores, portada y horarios. Toca “Ver vista previa” para verla como tus clientes.</p>
         </div>
 
-        {/* Acceso a servicios/precios (se comparten con la agenda) */}
+        {enabled && link && (
+          <button onClick={() => { setPreviewKey(k => k + 1); setShowPreview(true) }} className="btn btn-primary w-full flex items-center justify-center gap-2">
+            <Eye className="h-4 w-4" /> Ver vista previa
+          </button>
+        )}
+
+        {/* Servicios/precios (se comparten con la agenda) */}
         <Link href="/agenda?services=1" className="card flex items-center justify-between hover:border-primary-300 transition-colors">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-primary-100 rounded-lg"><Scissors className="h-5 w-5 text-primary-600" /></div>
@@ -47,40 +54,23 @@ export default function EditarReservasPage() {
           <ExternalLink className="h-4 w-4 text-gray-400" />
         </Link>
 
-        <div className="grid lg:grid-cols-2 gap-6 items-start">
-          <BookingSettings onSaved={onSaved} />
+        <BookingSettings onSaved={onSaved} />
+      </div>
 
-          {/* Vista previa */}
-          <div className="lg:sticky lg:top-4">
-            <div className="card">
-              <div className="flex items-center justify-between mb-3">
-                <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
-                  <Smartphone className="h-5 w-5 text-primary-600" /> Vista previa
-                </h2>
-                <div className="flex items-center gap-1">
-                  <button onClick={() => setPreviewKey(k => k + 1)} className="btn-icon bg-gray-100 text-gray-700 hover:bg-gray-200" title="Actualizar vista previa">
-                    <RefreshCw className="h-4 w-4" />
-                  </button>
-                  {link && (
-                    <a href={link} target="_blank" rel="noopener noreferrer" className="btn-icon bg-gray-100 text-gray-700 hover:bg-gray-200" title="Abrir en pestaña">
-                      <ExternalLink className="h-4 w-4" />
-                    </a>
-                  )}
-                </div>
-              </div>
-
-              {enabled && link ? (
-                <div className="mx-auto w-full max-w-[380px] rounded-[2rem] border-[6px] border-gray-800 overflow-hidden bg-black shadow-lg" style={{ height: 680 }}>
-                  <iframe key={previewKey} src={link} title="Vista previa de reservas" className="w-full h-full bg-black" />
-                </div>
-              ) : (
-                <p className="text-sm text-gray-500 py-8 text-center">Activa las reservas online para ver la vista previa.</p>
-              )}
-              <p className="text-xs text-gray-400 mt-2 text-center">Así la ven tus clientes. Los cambios aparecen al guardar.</p>
+      {/* Vista previa a pantalla completa */}
+      {showPreview && enabled && link && (
+        <div className="fixed inset-0 z-[100] bg-neutral-950 flex flex-col">
+          <div className="flex items-center justify-between px-4 h-14 bg-neutral-900 border-b border-neutral-800 flex-shrink-0">
+            <span className="text-sm font-medium text-white">Vista previa</span>
+            <div className="flex items-center gap-1">
+              <button onClick={() => setPreviewKey(k => k + 1)} className="p-2 text-neutral-300 hover:text-white" aria-label="Actualizar"><RefreshCw className="h-5 w-5" /></button>
+              <a href={link} target="_blank" rel="noopener noreferrer" className="p-2 text-neutral-300 hover:text-white" aria-label="Abrir en pestaña"><ExternalLink className="h-5 w-5" /></a>
+              <button onClick={() => setShowPreview(false)} className="p-2 text-neutral-300 hover:text-white" aria-label="Cerrar"><X className="h-5 w-5" /></button>
             </div>
           </div>
+          <iframe key={previewKey} src={link} title="Vista previa de reservas" className="flex-1 w-full bg-neutral-950" />
         </div>
-      </div>
+      )}
     </Layout>
   )
 }
