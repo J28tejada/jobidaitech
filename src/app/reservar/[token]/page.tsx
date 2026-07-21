@@ -11,7 +11,7 @@ interface Staff { id: string; name: string }
 interface Config { slotMin: number; deposit: number; hours: BookingHours }
 interface BookingData {
   enabled: boolean
-  business: { name: string; coverUrl?: string | null }
+  business: { name: string; coverUrl?: string | null; intro?: string | null }
   currency?: string
   locale?: string
   config?: Config
@@ -289,11 +289,15 @@ export default function BookingPage({ params }: { params: { token: string } }) {
                 <h1 className="text-2xl font-bold text-white leading-tight truncate">{data.business.name}</h1>
               </div>
             </div>
-            <div className="mt-4 flex flex-wrap gap-2">
-              <span className="inline-flex items-center gap-1.5 text-[12px] text-white/90 bg-black/20 rounded-full px-3 py-1">
-                <MapPin className="h-3.5 w-3.5" /> Reserva en segundos
-              </span>
-            </div>
+            {data.business.intro ? (
+              <p className="mt-3 text-sm text-white/90 max-w-md">{data.business.intro}</p>
+            ) : (
+              <div className="mt-4 flex flex-wrap gap-2">
+                <span className="inline-flex items-center gap-1.5 text-[12px] text-white/90 bg-black/20 rounded-full px-3 py-1">
+                  <MapPin className="h-3.5 w-3.5" /> Reserva en segundos
+                </span>
+              </div>
+            )}
           </div>
         </div>
 

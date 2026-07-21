@@ -28,6 +28,7 @@ export async function GET() {
     notifyUrl: data?.booking_notify_url ?? '',
     notifyPhone: data?.booking_notify_phone ?? '',
     coverUrl: data?.booking_cover_url ?? '',
+    intro: data?.booking_intro ?? '',
     // Horario por día (efectivo): usa booking_hours o cae al legado.
     hours: effectiveHours(data ?? {}),
   })
@@ -64,6 +65,10 @@ export async function POST(request: Request) {
     if (body.coverUrl !== undefined) {
       const c = typeof body.coverUrl === 'string' ? body.coverUrl.trim() : ''
       patch.booking_cover_url = c || null
+    }
+    if (body.intro !== undefined) {
+      const i = typeof body.intro === 'string' ? body.intro.trim().slice(0, 160) : ''
+      patch.booking_intro = i || null
     }
     // Horario por día: fuente de verdad. También sincronizamos los campos
     // legados (días + rango) para cualquier consumidor antiguo.

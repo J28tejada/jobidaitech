@@ -18,7 +18,7 @@ const DAYS = [
   { n: 0, label: 'Domingo' },
 ]
 
-export default function BookingSettings() {
+export default function BookingSettings({ onSaved }: { onSaved?: () => void } = {}) {
   const toast = useToast()
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -33,6 +33,7 @@ export default function BookingSettings() {
   const [notifyUrl, setNotifyUrl] = useState('')
   const [coverUrl, setCoverUrl] = useState('')
   const [uploadingCover, setUploadingCover] = useState(false)
+  const [intro, setIntro] = useState('')
 
   useEffect(() => {
     fetch('/api/settings/booking', { credentials: 'include' })
@@ -47,6 +48,7 @@ export default function BookingSettings() {
         setNotifyPhone(d.notifyPhone ?? '')
         setNotifyUrl(d.notifyUrl ?? '')
         setCoverUrl(d.coverUrl ?? '')
+        setIntro(d.intro ?? '')
       })
       .catch(() => {})
       .finally(() => setLoading(false))
@@ -64,6 +66,7 @@ export default function BookingSettings() {
         body: JSON.stringify(patch),
       })
       if (!res.ok) throw new Error()
+      onSaved?.()
     } catch {
       toast.error('No se pudo guardar')
     } finally {
@@ -194,6 +197,21 @@ export default function BookingSettings() {
                   {coverUrl ? 'Cambiar portada' : 'Subir portada'}
                   <input type="file" accept="image/*" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) uploadCover(f); e.target.value = '' }} />
                 </label>
+              </div>
+
+              {/* Mensaje de bienvenida */}
+              <div>
+                <label className="label">Mensaje de bienvenida</label>
+                <p className="text-xs text-gray-500 mb-2">Aparece bajo el nombre en tu página de reservas.</p>
+                <input
+                  type="text"
+                  maxLength={160}
+                  className="input"
+                  placeholder="Ej. Reserva tu corte fácil y rápido"
+                  value={intro}
+                  onChange={e => setIntro(e.target.value)}
+                  onBlur={() => save({ intro })}
+                />
               </div>
 
               {/* Horario por día */}
