@@ -98,6 +98,32 @@ const dateKey = (iso: string) => {
   const d = new Date(iso)
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
 }
+// Semáforo de la hora: verde = a tiempo, amarillo = próxima (≤30 min), rojo =
+// ya pasó la hora. No aplica a citas cerradas (atendida/cancelada/no asistió).
+type Tone = 'green' | 'yellow' | 'red' | null
+function timingTone(startsAt: string, status: Status, now: number): Tone {
+  if (status === 'done' || status === 'cancelled' || status === 'no_show') return null
+  const diffMin = (new Date(startsAt).getTime() - now) / 60000
+  if (diffMin <= 0) return 'red'
+  if (diffMin <= 30) return 'yellow'
+  return 'green'
+}
+const TONE_DOT: Record<'green' | 'yellow' | 'red', string> = {
+  green: 'bg-green-500',
+  yellow: 'bg-amber-400',
+  red: 'bg-red-500',
+}
+const TONE_LABEL: Record<'green' | 'yellow' | 'red', string> = {
+  green: 'A tiempo',
+  yellow: 'Próxima',
+  red: 'Ya pasó',
+}
+const TONE_TEXT: Record<'green' | 'yellow' | 'red', string> = {
+  green: 'text-green-600',
+  yellow: 'text-amber-600',
+  red: 'text-red-600',
+}
+
 const dayHeading = (key: string) => {
   const [y, m, d] = key.split('-').map(Number)
   const date = new Date(y, m - 1, d)
@@ -123,6 +149,12 @@ export default function AgendaBoard() {
   const [dayFilter, setDayFilter] = useState('')
   const [businessType, setBusinessType] = useState<string | null>(null)
   const vertical = verticalFor(businessType)
+  // Reloj que tiquea cada minuto para actualizar el "semáforo" de las horas.
+  const [now, setNow] = useState<number>(() => Date.now())
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 60_000)
+    return () => clearInterval(id)
+  }, [])
 
   const [mounted, setMounted] = useState(false)
   const [detail, setDetail] = useState<Appointment | null>(null)
@@ -134,6 +166,7 @@ export default function AgendaBoard() {
   const [showCommissions, setShowCommissions] = useState(false)
   const [showWalkIn, setShowWalkIn] = useState(false)
   const [doneTarget, setDoneTarget] = useState<Appointment | null>(null)
+  const [postponeTarget, setPostponeTarget] = useState<Appointment | null>(null)
 
   useEffect(() => {
     setMounted(true)
@@ -322,13 +355,16 @@ export default function AgendaBoard() {
                 <span className="text-xs text-gray-400">({g.list.length})</span>
               </div>
               <div className="space-y-2">
-                {g.list.map(item => (
+                {g.list.map(item => {
+                  const tone = timingTone(item.startsAt, item.status, now)
+                  return (
                   <button
                     key={item.id}
                     onClick={() => setDetail(item)}
                     className={`card w-full flex items-center gap-3 text-left hover:border-primary-300 transition-colors ${item.status === 'cancelled' || item.status === 'no_show' ? 'opacity-60' : ''}`}
                   >
-                    <div className="flex flex-col items-center justify-center bg-primary-50 rounded-lg px-2.5 py-1.5 flex-shrink-0">
+                    <div className="relative flex flex-col items-center justify-center bg-primary-50 rounded-lg px-2.5 py-1.5 flex-shrink-0">
+                      {tone && <span className={`absolute top-1 right-1 h-2 w-2 rounded-full ${TONE_DOT[tone]} ${tone === 'yellow' ? 'animate-pulse' : ''}`} />}
                       <Clock className="h-3.5 w-3.5 text-primary-600" />
                       <span className="text-sm font-bold text-primary-700 mt-0.5">{timeLabel(item.startsAt)}</span>
                     </div>
@@ -345,7 +381,8 @@ export default function AgendaBoard() {
                     </div>
                     <ChevronRight className="h-5 w-5 text-gray-300 flex-shrink-0" />
                   </button>
-                ))}
+                  )
+                })}
               </div>
             </div>
           ))}
@@ -363,6 +400,7 @@ export default function AgendaBoard() {
           onDone={() => { const it = detail; setDetail(null); setDoneTarget(it) }}
           onCancel={() => { const it = detail; setDetail(null); setStatus(it, 'cancelled', 'Cita cancelada') }}
           onNoShow={() => { const it = detail; setDetail(null); setStatus(it, 'no_show', 'Marcada: no asistió') }}
+          onPostpone={() => { const it = detail; setDetail(null); setPostponeTarget(it) }}
           onEdit={() => { const it = detail; setDetail(null); setEditing(it); setShowForm(true) }}
           onDelete={() => { const it = detail; setDetail(null); remove(it) }}
         />
@@ -428,6 +466,14 @@ export default function AgendaBoard() {
           }}
         />
       )}
+
+      {postponeTarget && (
+        <PostponeDialog
+          appointment={postponeTarget}
+          onClose={() => setPostponeTarget(null)}
+          onSaved={async () => { setPostponeTarget(null); await refreshAll(); toast.success('Cita pospuesta') }}
+        />
+      )}
     </div>
   )
 }
@@ -450,7 +496,7 @@ function InfoRow({ label, value }: { label: string; value: string }) {
 }
 
 function AppointmentDetail({
-  appointment, vertical, reminderHref, onClose, onConfirm, onDone, onCancel, onNoShow, onEdit, onDelete,
+  appointment, vertical, reminderHref, onClose, onConfirm, onDone, onCancel, onNoShow, onPostpone, onEdit, onDelete,
 }: {
   appointment: Appointment
   vertical: VerticalConfig
@@ -460,6 +506,7 @@ function AppointmentDetail({
   onDone: () => void
   onCancel: () => void
   onNoShow: () => void
+  onPostpone: () => void
   onEdit: () => void
   onDelete: () => void
 }) {
@@ -468,17 +515,29 @@ function AppointmentDetail({
   const phoneDigits = (a.clientPhone || '').replace(/\D/g, '')
   const dateLabel = dayHeading(dateKey(a.startsAt))
   const fullDate = new Date(a.startsAt).toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' })
+  const tone = timingTone(a.startsAt, a.status, Date.now())
 
   return (
     <Sheet title="Detalle de la cita" onClose={onClose}>
       {/* Hora + estado */}
       <div className="flex items-start justify-between mb-4">
         <div>
-          <p className="text-2xl font-bold text-gray-900">{timeLabel(a.startsAt)}</p>
+          <div className="flex items-center gap-2">
+            {tone && <span className={`h-2.5 w-2.5 rounded-full ${TONE_DOT[tone]} ${tone === 'yellow' ? 'animate-pulse' : ''}`} />}
+            <p className="text-2xl font-bold text-gray-900">{timeLabel(a.startsAt)}</p>
+            {tone && <span className={`text-xs font-medium ${TONE_TEXT[tone]}`}>{TONE_LABEL[tone]}</span>}
+          </div>
           <p className="text-sm text-gray-500 capitalize">{dateLabel !== fullDate ? `${dateLabel} · ` : ''}{fullDate} · {a.durationMin} min</p>
         </div>
         <span className={`badge ${STATUS_META[a.status].badge}`}>{STATUS_META[a.status].label}</span>
       </div>
+
+      {/* Aviso cuando ya pasó la hora y sigue abierta */}
+      {tone === 'red' && (
+        <div className="rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-sm p-3 mb-4">
+          Ya pasó la hora de esta cita. ¿Fue atendida, no asistió o quieres posponerla?
+        </div>
+      )}
 
       {/* Cliente + contacto */}
       <div className="rounded-xl border border-gray-200 p-3 mb-4 flex items-center justify-between gap-3">
@@ -516,6 +575,7 @@ function AppointmentDetail({
       <div className="rounded-xl border border-gray-100 overflow-hidden mb-3">
         {a.status === 'scheduled' && <Btn icon={Check} color="text-primary-600" label="Confirmar" onClick={onConfirm} />}
         {a.status !== 'done' && <Btn icon={CheckCircle2} color="text-success-600" label="Marcar atendida" onClick={onDone} />}
+        <Btn icon={CalendarClock} color="text-blue-500" label="Posponer" onClick={onPostpone} />
         {a.status !== 'cancelled' && <Btn icon={XCircle} label="Cancelar" onClick={onCancel} />}
         {a.status !== 'no_show' && <Btn icon={Ban} label="No asistió" onClick={onNoShow} />}
       </div>
@@ -529,6 +589,51 @@ function AppointmentDetail({
           <Trash2 className="h-4 w-4" /> Eliminar
         </button>
       </div>
+    </Sheet>
+  )
+}
+
+function PostponeDialog({ appointment, onClose, onSaved }: { appointment: Appointment; onClose: () => void; onSaved: () => void }) {
+  const toast = useToast()
+  const [when, setWhen] = useState(toLocalInput(appointment.startsAt))
+  const [saving, setSaving] = useState(false)
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (saving || !when) return
+    setSaving(true)
+    try {
+      const res = await fetch(`/api/appointments/${appointment.id}`, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
+        body: JSON.stringify({ startsAt: new Date(when).toISOString() }),
+      })
+      if (!res.ok) throw new Error()
+      // Si la cita estaba cerrada, la reactivamos a "agendada".
+      if (appointment.status === 'cancelled' || appointment.status === 'no_show' || appointment.status === 'done') {
+        await fetch(`/api/appointments/${appointment.id}/status`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
+          body: JSON.stringify({ status: 'scheduled' }),
+        })
+      }
+      onSaved()
+    } catch {
+      toast.error('No se pudo posponer la cita')
+      setSaving(false)
+    }
+  }
+
+  return (
+    <Sheet title="Posponer cita" onClose={onClose}>
+      <form onSubmit={submit} className="space-y-4">
+        <p className="text-sm text-gray-600">{appointment.clientName}{appointment.title ? ` · ${appointment.title}` : ''}</p>
+        <div>
+          <label className="label">Nueva fecha y hora</label>
+          <input type="datetime-local" value={when} onChange={e => setWhen(e.target.value)} className="input" required />
+        </div>
+        <button type="submit" disabled={saving} className="btn btn-primary w-full flex items-center justify-center gap-2 disabled:opacity-60">
+          {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <CalendarClock className="h-4 w-4" />} Posponer cita
+        </button>
+      </form>
     </Sheet>
   )
 }
