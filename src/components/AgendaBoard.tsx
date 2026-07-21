@@ -1,10 +1,10 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import {
   Plus,
-  MoreVertical,
+  ChevronRight,
   CalendarClock,
   CalendarDays,
   Clock,
@@ -18,6 +18,7 @@ import {
   XCircle,
   Ban,
   MessageCircle,
+  Phone,
   Edit,
   Trash2,
   Loader2,
@@ -124,8 +125,7 @@ export default function AgendaBoard() {
   const vertical = verticalFor(businessType)
 
   const [mounted, setMounted] = useState(false)
-  const [menu, setMenu] = useState<{ item: Appointment; top?: number; bottom?: number; left: number } | null>(null)
-  const menuRef = useRef<HTMLDivElement>(null)
+  const [detail, setDetail] = useState<Appointment | null>(null)
 
   const [showForm, setShowForm] = useState(false)
   const [editing, setEditing] = useState<Appointment | null>(null)
@@ -149,22 +149,6 @@ export default function AgendaBoard() {
   useEffect(() => {
     loadAppointments()
   }, [dayFilter])
-
-  useEffect(() => {
-    if (!menu) return
-    const close = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenu(null)
-    }
-    const onScroll = () => setMenu(null)
-    document.addEventListener('mousedown', close)
-    window.addEventListener('scroll', onScroll, true)
-    window.addEventListener('resize', onScroll)
-    return () => {
-      document.removeEventListener('mousedown', close)
-      window.removeEventListener('scroll', onScroll, true)
-      window.removeEventListener('resize', onScroll)
-    }
-  }, [menu])
 
   const loadStatic = async () => {
     const [s, c, st] = await Promise.all([
@@ -217,19 +201,6 @@ export default function AgendaBoard() {
   const refreshAll = async () => {
     await loadAppointments()
     fetchSummary()
-  }
-
-  const openMenu = (e: React.MouseEvent, item: Appointment) => {
-    e.stopPropagation()
-    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
-    const left = Math.max(rect.right - 220, 8)
-    const menuH = 300 // estimado; si no cabe abajo, se abre hacia arriba
-    if (window.innerHeight - rect.bottom < menuH + 16) {
-      // Anclamos el borde inferior del menú justo encima del botón.
-      setMenu({ item, bottom: window.innerHeight - rect.top + 6, left })
-    } else {
-      setMenu({ item, top: rect.bottom + 6, left })
-    }
   }
 
   const setStatus = async (item: Appointment, status: Status, msg: string, tip?: number) => {
@@ -352,7 +323,11 @@ export default function AgendaBoard() {
               </div>
               <div className="space-y-2">
                 {g.list.map(item => (
-                  <div key={item.id} className={`card flex items-center gap-3 ${item.status === 'cancelled' || item.status === 'no_show' ? 'opacity-60' : ''}`}>
+                  <button
+                    key={item.id}
+                    onClick={() => setDetail(item)}
+                    className={`card w-full flex items-center gap-3 text-left hover:border-primary-300 transition-colors ${item.status === 'cancelled' || item.status === 'no_show' ? 'opacity-60' : ''}`}
+                  >
                     <div className="flex flex-col items-center justify-center bg-primary-50 rounded-lg px-2.5 py-1.5 flex-shrink-0">
                       <Clock className="h-3.5 w-3.5 text-primary-600" />
                       <span className="text-sm font-bold text-primary-700 mt-0.5">{timeLabel(item.startsAt)}</span>
@@ -368,10 +343,8 @@ export default function AgendaBoard() {
                         {item.tip > 0 ? ` · propina ${format(item.tip)}` : ''}
                       </p>
                     </div>
-                    <button onClick={e => openMenu(e, item)} className="text-gray-400 hover:text-gray-600 p-1 flex-shrink-0">
-                      <MoreVertical className="h-5 w-5" />
-                    </button>
-                  </div>
+                    <ChevronRight className="h-5 w-5 text-gray-300 flex-shrink-0" />
+                  </button>
                 ))}
               </div>
             </div>
@@ -379,21 +352,20 @@ export default function AgendaBoard() {
         </div>
       )}
 
-      {/* Menú */}
-      {mounted && menu && createPortal(
-        <div ref={menuRef} style={{ position: 'fixed', top: menu.top, bottom: menu.bottom, left: menu.left, width: 220 }} className="bg-white rounded-xl shadow-lg border border-gray-200 py-1.5 z-[80] max-h-[80vh] overflow-y-auto">
-          <a href={reminderLink(menu.item)} target="_blank" rel="noopener noreferrer" onClick={() => setMenu(null)} className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 text-left">
-            <MessageCircle className="h-4 w-4 text-green-500" /> Recordar por WhatsApp
-          </a>
-          {menu.item.status === 'scheduled' && <Btn icon={Check} color="text-primary-600" label="Confirmar" onClick={() => { const it = menu.item; setMenu(null); setStatus(it, 'confirmed', 'Cita confirmada') }} />}
-          {menu.item.status !== 'done' && <Btn icon={CheckCircle2} color="text-success-600" label="Marcar atendida" onClick={() => { const it = menu.item; setMenu(null); setDoneTarget(it) }} />}
-          {menu.item.status !== 'cancelled' && <Btn icon={XCircle} label="Cancelar" onClick={() => { const it = menu.item; setMenu(null); setStatus(it, 'cancelled', 'Cita cancelada') }} />}
-          {menu.item.status !== 'no_show' && <Btn icon={Ban} label="No asistió" onClick={() => { const it = menu.item; setMenu(null); setStatus(it, 'no_show', 'Marcada: no asistió') }} />}
-          <div className="border-t border-gray-100 my-1" />
-          <Btn icon={Edit} label="Editar" onClick={() => { const it = menu.item; setMenu(null); setEditing(it); setShowForm(true) }} />
-          <Btn icon={Trash2} color="text-red-600" danger label="Eliminar" onClick={() => { const it = menu.item; setMenu(null); remove(it) }} />
-        </div>,
-        document.body
+      {/* Detalle de la cita */}
+      {detail && (
+        <AppointmentDetail
+          appointment={detail}
+          vertical={vertical}
+          reminderHref={reminderLink(detail)}
+          onClose={() => setDetail(null)}
+          onConfirm={() => { const it = detail; setDetail(null); setStatus(it, 'confirmed', 'Cita confirmada') }}
+          onDone={() => { const it = detail; setDetail(null); setDoneTarget(it) }}
+          onCancel={() => { const it = detail; setDetail(null); setStatus(it, 'cancelled', 'Cita cancelada') }}
+          onNoShow={() => { const it = detail; setDetail(null); setStatus(it, 'no_show', 'Marcada: no asistió') }}
+          onEdit={() => { const it = detail; setDetail(null); setEditing(it); setShowForm(true) }}
+          onDelete={() => { const it = detail; setDetail(null); remove(it) }}
+        />
       )}
 
       {showForm && (
@@ -462,9 +434,102 @@ export default function AgendaBoard() {
 
 function Btn({ icon: Icon, label, onClick, color, danger }: { icon: any; label: string; onClick: () => void; color?: string; danger?: boolean }) {
   return (
-    <button onClick={onClick} className={`w-full flex items-center gap-2.5 px-3 py-2 text-sm text-left ${danger ? 'text-red-600 hover:bg-red-50' : 'text-gray-700 hover:bg-gray-50'}`}>
+    <button onClick={onClick} className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm text-left transition-colors ${danger ? 'text-red-600 hover:bg-red-50' : 'text-gray-700 hover:bg-gray-50'}`}>
       <Icon className={`h-4 w-4 ${color ?? 'text-gray-400'}`} /> {label}
     </button>
+  )
+}
+
+function InfoRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex justify-between gap-3 py-1.5">
+      <span className="text-sm text-gray-500 flex-shrink-0">{label}</span>
+      <span className="text-sm font-medium text-gray-900 text-right break-words">{value}</span>
+    </div>
+  )
+}
+
+function AppointmentDetail({
+  appointment, vertical, reminderHref, onClose, onConfirm, onDone, onCancel, onNoShow, onEdit, onDelete,
+}: {
+  appointment: Appointment
+  vertical: VerticalConfig
+  reminderHref: string
+  onClose: () => void
+  onConfirm: () => void
+  onDone: () => void
+  onCancel: () => void
+  onNoShow: () => void
+  onEdit: () => void
+  onDelete: () => void
+}) {
+  const { format } = useCurrency()
+  const a = appointment
+  const phoneDigits = (a.clientPhone || '').replace(/\D/g, '')
+  const dateLabel = dayHeading(dateKey(a.startsAt))
+  const fullDate = new Date(a.startsAt).toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' })
+
+  return (
+    <Sheet title="Detalle de la cita" onClose={onClose}>
+      {/* Hora + estado */}
+      <div className="flex items-start justify-between mb-4">
+        <div>
+          <p className="text-2xl font-bold text-gray-900">{timeLabel(a.startsAt)}</p>
+          <p className="text-sm text-gray-500 capitalize">{dateLabel !== fullDate ? `${dateLabel} · ` : ''}{fullDate} · {a.durationMin} min</p>
+        </div>
+        <span className={`badge ${STATUS_META[a.status].badge}`}>{STATUS_META[a.status].label}</span>
+      </div>
+
+      {/* Cliente + contacto */}
+      <div className="rounded-xl border border-gray-200 p-3 mb-4 flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-sm font-semibold text-gray-900 truncate">{a.clientName}</p>
+          {a.clientPhone && <p className="text-xs text-gray-500 truncate">{a.clientPhone}</p>}
+        </div>
+        {phoneDigits && (
+          <div className="flex gap-2 flex-shrink-0">
+            <a href={`tel:${phoneDigits}`} className="h-9 w-9 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center text-gray-700" aria-label="Llamar">
+              <Phone className="h-4 w-4" />
+            </a>
+            <a href={`https://wa.me/${phoneDigits}`} target="_blank" rel="noopener noreferrer" className="h-9 w-9 rounded-full bg-green-50 hover:bg-green-100 flex items-center justify-center text-green-600" aria-label="WhatsApp">
+              <MessageCircle className="h-4 w-4" />
+            </a>
+          </div>
+        )}
+      </div>
+
+      {/* Info principal */}
+      <div className="divide-y divide-gray-100 mb-4">
+        <InfoRow label="Servicio" value={a.title || 'Cita'} />
+        {a.staffName && <InfoRow label={vertical.staffSingular} value={a.staffName} />}
+        {a.price > 0 && <InfoRow label="Precio" value={format(a.price)} />}
+        {a.tip > 0 && <InfoRow label="Propina" value={format(a.tip)} />}
+        {a.notes && <InfoRow label="Notas" value={a.notes} />}
+      </div>
+
+      {/* Recordatorio */}
+      <a href={reminderHref} target="_blank" rel="noopener noreferrer" className="btn btn-secondary w-full flex items-center justify-center gap-2 mb-3">
+        <MessageCircle className="h-4 w-4 text-green-500" /> Recordar por WhatsApp
+      </a>
+
+      {/* Acciones de estado */}
+      <div className="rounded-xl border border-gray-100 overflow-hidden mb-3">
+        {a.status === 'scheduled' && <Btn icon={Check} color="text-primary-600" label="Confirmar" onClick={onConfirm} />}
+        {a.status !== 'done' && <Btn icon={CheckCircle2} color="text-success-600" label="Marcar atendida" onClick={onDone} />}
+        {a.status !== 'cancelled' && <Btn icon={XCircle} label="Cancelar" onClick={onCancel} />}
+        {a.status !== 'no_show' && <Btn icon={Ban} label="No asistió" onClick={onNoShow} />}
+      </div>
+
+      {/* Editar / Eliminar */}
+      <div className="flex gap-2">
+        <button onClick={onEdit} className="btn btn-secondary flex-1 flex items-center justify-center gap-1.5">
+          <Edit className="h-4 w-4" /> Editar
+        </button>
+        <button onClick={onDelete} className="btn flex-1 flex items-center justify-center gap-1.5 text-red-600 border border-red-200 hover:bg-red-50">
+          <Trash2 className="h-4 w-4" /> Eliminar
+        </button>
+      </div>
+    </Sheet>
   )
 }
 
