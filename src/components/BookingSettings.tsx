@@ -216,7 +216,7 @@ export default function BookingSettings({ onSaved }: { onSaved?: () => void } = 
               {/* Enlace personalizado (corto y con identidad) */}
               <div>
                 <label className="label">Personaliza tu enlace</label>
-                <p className="text-xs text-gray-500 mb-2">Elige un nombre corto para tu barbería. Tu enlace será más fácil de recordar y compartir.</p>
+                <p className="text-xs text-gray-500 mb-2">Se genera solo con el nombre de tu barbería. Puedes cambiarlo por el que prefieras (más fácil de recordar y compartir).</p>
                 <div className="flex items-center rounded-lg border border-gray-300 overflow-hidden max-w-md focus-within:border-primary-400">
                   <span className="px-3 py-2.5 text-sm text-gray-500 bg-gray-50 border-r border-gray-200 whitespace-nowrap">{origin.replace(/^https?:\/\//, '')}/r/</span>
                   <input
@@ -231,7 +231,7 @@ export default function BookingSettings({ onSaved }: { onSaved?: () => void } = 
                   />
                 </div>
                 <p className="text-[11px] text-gray-400 mt-1">
-                  De 3 a 30 letras o números. {savedSlug ? 'Si lo borras, se usa el enlace largo.' : 'Sin nombre, se comparte el enlace largo.'}
+                  De 3 a 30 letras o números. Si ya está en uso, prueba con otro. {savedSlug ? 'Si lo borras, se usa el enlace largo.' : ''}
                 </p>
               </div>
 

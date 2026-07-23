@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server'
 import { getSupabaseClient } from '@/lib/supabase'
 import { canManageWorkspace, getWorkspaceContext, READ_ONLY_ERROR } from '@/lib/workspaces'
 import { effectiveHours, normalizeHours, legacyFromHours } from '@/lib/booking'
+import { uniqueSlugFromName } from '@/lib/bookingSlug'
 
 export async function GET() {
   const ctx = await getWorkspaceContext()
@@ -20,9 +21,23 @@ export async function GET() {
     .maybeSingle()
   if (error) return NextResponse.json({ error: 'Error al obtener la configuración' }, { status: 500 })
 
+  // Si las reservas están activas pero aún no hay slug, generamos uno a partir
+  // del nombre del negocio (único). Así el enlace corto de marca aparece solo,
+  // sin que el barbero tenga que inventarlo. Sigue siendo editable.
+  let slug: string = data?.booking_slug ?? ''
+  if (!slug && data?.booking_enabled && 'booking_slug' in (data ?? {})) {
+    try {
+      const candidate = await uniqueSlugFromName(supabase, data?.name ?? '', ctx.workspaceId)
+      const { error: upErr } = await supabase.from('workspaces').update({ booking_slug: candidate }).eq('id', ctx.workspaceId)
+      if (!upErr) slug = candidate
+    } catch {
+      // Si la columna aún no existe (migración sin correr), se ignora.
+    }
+  }
+
   return NextResponse.json({
     token: data?.booking_token ?? null,
-    slug: data?.booking_slug ?? '',
+    slug,
     enabled: data?.booking_enabled ?? false,
     slotMin: data?.booking_slot_min ?? 30,
     deposit: Number(data?.booking_deposit ?? 0),
@@ -109,6 +124,20 @@ export async function POST(request: Request) {
       patch.booking_days = legacy.days.join(',')
       patch.booking_open_time = legacy.open
       patch.booking_close_time = legacy.close
+    }
+
+    // Al activar reservas, genera un slug de marca automáticamente (desde el
+    // nombre del negocio, único) si aún no hay y el cliente no envió uno.
+    if (patch.booking_enabled === true && body.slug === undefined) {
+      try {
+        const sb = getSupabaseClient()
+        const { data: cur } = await sb.from('workspaces').select('name, booking_slug').eq('id', ctx.workspaceId).maybeSingle()
+        if (cur && !cur.booking_slug) {
+          patch.booking_slug = await uniqueSlugFromName(sb, cur.name ?? '', ctx.workspaceId)
+        }
+      } catch {
+        // Si la columna aún no existe (migración sin correr), se ignora.
+      }
     }
 
     const supabase = getSupabaseClient()
