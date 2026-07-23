@@ -25,6 +25,8 @@ export default function BookingSettings({ onSaved }: { onSaved?: () => void } = 
   const [copied, setCopied] = useState(false)
 
   const [token, setToken] = useState<string | null>(null)
+  const [slug, setSlug] = useState('')
+  const [savedSlug, setSavedSlug] = useState('')
   const [enabled, setEnabled] = useState(false)
   const [slotMin, setSlotMin] = useState(30)
   const [deposit, setDeposit] = useState('')
@@ -42,6 +44,8 @@ export default function BookingSettings({ onSaved }: { onSaved?: () => void } = 
       .then(d => {
         if (!d) return
         setToken(d.token ?? null)
+        setSlug(d.slug ?? '')
+        setSavedSlug(d.slug ?? '')
         setEnabled(!!d.enabled)
         setSlotMin(d.slotMin ?? 30)
         setDeposit(d.deposit ? String(d.deposit) : '')
@@ -56,7 +60,39 @@ export default function BookingSettings({ onSaved }: { onSaved?: () => void } = 
       .finally(() => setLoading(false))
   }, [])
 
-  const link = token && typeof window !== 'undefined' ? `${window.location.origin}/reservar/${token}` : ''
+  const origin = typeof window !== 'undefined' ? window.location.origin : ''
+  // Enlace preferido: el corto de marca (/r/<slug>) si hay slug; si no, el token.
+  const link = savedSlug ? `${origin}/r/${savedSlug}` : token ? `${origin}/reservar/${token}` : ''
+
+  // Guarda el slug con manejo de su error específico (formato / en uso).
+  const saveSlug = async (value: string) => {
+    const clean = value.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
+    if (clean === savedSlug) { setSlug(clean); return }
+    setSaving(true)
+    try {
+      const res = await fetch('/api/settings/booking', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ slug: clean }),
+      })
+      const b = await res.json().catch(() => null)
+      if (!res.ok) {
+        toast.error(b?.error || 'No se pudo guardar el enlace')
+        setSlug(savedSlug) // revertir al último válido
+        return
+      }
+      setSlug(clean)
+      setSavedSlug(clean)
+      if (clean) toast.success('Enlace actualizado')
+      onSaved?.()
+    } catch {
+      toast.error('No se pudo guardar el enlace')
+      setSlug(savedSlug)
+    } finally {
+      setSaving(false)
+    }
+  }
 
   const save = async (patch: Record<string, unknown>) => {
     setSaving(true)
@@ -175,6 +211,28 @@ export default function BookingSettings({ onSaved }: { onSaved?: () => void } = 
                     <ExternalLink className="h-4 w-4" /> Abrir
                   </a>
                 </div>
+              </div>
+
+              {/* Enlace personalizado (corto y con identidad) */}
+              <div>
+                <label className="label">Personaliza tu enlace</label>
+                <p className="text-xs text-gray-500 mb-2">Elige un nombre corto para tu barbería. Tu enlace será más fácil de recordar y compartir.</p>
+                <div className="flex items-center rounded-lg border border-gray-300 overflow-hidden max-w-md focus-within:border-primary-400">
+                  <span className="px-3 py-2.5 text-sm text-gray-500 bg-gray-50 border-r border-gray-200 whitespace-nowrap">{origin.replace(/^https?:\/\//, '')}/r/</span>
+                  <input
+                    type="text"
+                    className="flex-1 px-3 py-2.5 text-sm outline-none min-w-0"
+                    placeholder="mibarberia"
+                    value={slug}
+                    maxLength={30}
+                    onChange={e => setSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))}
+                    onBlur={() => saveSlug(slug)}
+                    onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
+                  />
+                </div>
+                <p className="text-[11px] text-gray-400 mt-1">
+                  De 3 a 30 letras o números. {savedSlug ? 'Si lo borras, se usa el enlace largo.' : 'Sin nombre, se comparte el enlace largo.'}
+                </p>
               </div>
 
               {/* Foto de portada */}

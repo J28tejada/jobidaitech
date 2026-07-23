@@ -6,11 +6,20 @@ import { getSupabaseClient } from '@/lib/supabase'
 export async function GET(request: NextRequest, { params }: { params: { token: string } }) {
   try {
     const supabase = getSupabaseClient()
-    const { data: ws } = await supabase
+    // El identificador puede ser el token largo o el slug corto de la barbería.
+    let { data: ws } = await supabase
       .from('workspaces')
       .select('id, booking_enabled')
       .eq('booking_token', params.token)
       .maybeSingle()
+    if (!ws) {
+      const bySlug = await supabase
+        .from('workspaces')
+        .select('id, booking_enabled')
+        .ilike('booking_slug', params.token)
+        .maybeSingle()
+      ws = bySlug.data ?? null
+    }
     if (!ws || !ws.booking_enabled) return NextResponse.json({ taken: [] })
 
     const { searchParams } = new URL(request.url)

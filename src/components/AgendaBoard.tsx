@@ -56,6 +56,7 @@ interface Staff {
   commissionPct: number
   phone: string | null
   email: string | null
+  imageUrl: string | null
   active: boolean
 }
 interface Appointment {
@@ -1119,6 +1120,8 @@ function StaffManager({ staff, vertical, onClose, onChanged }: { staff: Staff[];
   const [pct, setPct] = useState('')
   const [phone, setPhone] = useState('')
   const [email, setEmail] = useState('')
+  const [imageUrl, setImageUrl] = useState('')
+  const [uploading, setUploading] = useState(false)
   const [saving, setSaving] = useState(false)
   const singular = vertical.staffSingular.toLowerCase()
 
@@ -1128,7 +1131,7 @@ function StaffManager({ staff, vertical, onClose, onChanged }: { staff: Staff[];
     onChanged()
   }
 
-  const resetForm = () => { setEditingId(null); setName(''); setPct(''); setPhone(''); setEmail('') }
+  const resetForm = () => { setEditingId(null); setName(''); setPct(''); setPhone(''); setEmail(''); setImageUrl('') }
 
   const startEdit = (s: Staff) => {
     setEditingId(s.id)
@@ -1136,6 +1139,24 @@ function StaffManager({ staff, vertical, onClose, onChanged }: { staff: Staff[];
     setPct(s.commissionPct ? String(s.commissionPct) : '')
     setPhone(s.phone ?? '')
     setEmail(s.email ?? '')
+    setImageUrl(s.imageUrl ?? '')
+  }
+
+  const uploadImage = async (file: File) => {
+    if (uploading) return
+    setUploading(true)
+    try {
+      const fd = new FormData()
+      fd.append('file', file)
+      const res = await fetch('/api/uploads/service-image', { method: 'POST', credentials: 'include', body: fd })
+      const b = await res.json().catch(() => null)
+      if (!res.ok || !b?.url) throw new Error(b?.error || 'No se pudo subir la foto')
+      setImageUrl(b.url)
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Error al subir la foto')
+    } finally {
+      setUploading(false)
+    }
   }
 
   const submit = async (e: React.FormEvent) => {
@@ -1143,7 +1164,7 @@ function StaffManager({ staff, vertical, onClose, onChanged }: { staff: Staff[];
     if (!name.trim() || saving) return
     setSaving(true)
     try {
-      const payload = { name, commissionPct: Number(pct) || 0, phone, email }
+      const payload = { name, commissionPct: Number(pct) || 0, phone, email, imageUrl: imageUrl || null }
       const res = editingId
         ? await fetch(`/api/staff/${editingId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify(payload) })
         : await fetch('/api/staff', { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify(payload) })
@@ -1170,6 +1191,27 @@ function StaffManager({ staff, vertical, onClose, onChanged }: { staff: Staff[];
   return (
     <Sheet title={vertical.staffPlural} onClose={onClose}>
       <form onSubmit={submit} className="space-y-3 mb-5">
+        {/* Foto del barbero (avatar en la página pública de reservas) */}
+        <div className="flex items-center gap-3">
+          {imageUrl ? (
+            <div className="relative">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={imageUrl} alt="Foto" className="h-16 w-16 rounded-full object-cover border border-gray-200" />
+              <button type="button" onClick={() => setImageUrl('')} className="absolute -top-1.5 -right-1.5 bg-white rounded-full border border-gray-200 p-0.5 text-gray-500 hover:text-red-600" aria-label="Quitar foto">
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          ) : (
+            <div className="h-16 w-16 rounded-full border border-dashed border-gray-300 flex items-center justify-center text-gray-300">
+              <ImageIcon className="h-6 w-6" />
+            </div>
+          )}
+          <label className="btn btn-secondary text-sm cursor-pointer flex items-center gap-1.5">
+            {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImageIcon className="h-4 w-4" />}
+            {imageUrl ? 'Cambiar foto' : `Foto del ${singular}`}
+            <input type="file" accept="image/*" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) uploadImage(f); e.target.value = '' }} />
+          </label>
+        </div>
         <input value={name} onChange={e => setName(e.target.value)} className="input" placeholder={`Nombre del ${singular}`} />
         <input value={pct} onChange={e => setPct(e.target.value)} type="number" step="1" min="0" max="100" className="input" placeholder="Comisión % (ej. 40)" />
         <input value={phone} onChange={e => setPhone(e.target.value)} type="tel" inputMode="tel" className="input" placeholder="WhatsApp (para avisarle de sus citas)" />
@@ -1192,11 +1234,21 @@ function StaffManager({ staff, vertical, onClose, onChanged }: { staff: Staff[];
         <div className="space-y-2">
           {list.map(s => (
             <div key={s.id} className={`flex items-center justify-between bg-gray-50 border rounded-lg p-3 ${editingId === s.id ? 'border-primary-400' : 'border-gray-200'}`}>
-              <div className="min-w-0">
-                <p className="text-sm font-medium text-gray-900 truncate">{s.name}</p>
-                <p className="text-xs text-gray-500 truncate">
-                  {s.commissionPct}% de comisión{s.phone ? ` · ${s.phone}` : ''}
-                </p>
+              <div className="flex items-center gap-3 min-w-0">
+                {s.imageUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={s.imageUrl} alt={s.name} className="h-10 w-10 rounded-full object-cover border border-gray-200 flex-shrink-0" />
+                ) : (
+                  <div className="h-10 w-10 rounded-full bg-primary-100 text-primary-700 flex items-center justify-center text-sm font-semibold flex-shrink-0">
+                    {s.name.trim().charAt(0).toUpperCase() || '?'}
+                  </div>
+                )}
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-gray-900 truncate">{s.name}</p>
+                  <p className="text-xs text-gray-500 truncate">
+                    {s.commissionPct}% de comisión{s.phone ? ` · ${s.phone}` : ''}
+                  </p>
+                </div>
               </div>
               <div className="flex items-center gap-1 flex-shrink-0">
                 <button onClick={() => startEdit(s)} className="text-gray-400 hover:text-gray-600 p-1" aria-label="Editar"><Edit className="h-4 w-4" /></button>

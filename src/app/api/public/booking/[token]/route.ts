@@ -7,16 +7,25 @@ import { postWebhook } from '@/lib/notify'
 import { notifyBookingReceived } from '@/lib/email'
 import { sendPushToUser } from '@/lib/push'
 
-async function findWorkspace(token: string) {
+async function findWorkspace(idOrSlug: string) {
   const supabase = getSupabaseClient()
   // select('*') para tolerar columnas de migraciones aún no ejecutadas (los
   // campos faltantes quedan undefined y caen a sus valores por defecto).
-  const { data } = await supabase
+  // El identificador puede ser el token largo o el slug corto de la barbería.
+  const byToken = await supabase
     .from('workspaces')
     .select('*')
-    .eq('booking_token', token)
+    .eq('booking_token', idOrSlug)
     .maybeSingle()
-  return data
+  if (byToken.data) return byToken.data
+  // Fallback por slug (case-insensitive). Si la columna aún no existe por una
+  // migración sin correr, la consulta falla en silencio y devolvemos null.
+  const bySlug = await supabase
+    .from('workspaces')
+    .select('*')
+    .ilike('booking_slug', idOrSlug)
+    .maybeSingle()
+  return bySlug.data ?? null
 }
 
 // Info pública para la página de reservas.
@@ -29,7 +38,7 @@ export async function GET(_request: NextRequest, { params }: { params: { token: 
     const supabase = getSupabaseClient()
     const [{ data: services }, { data: staff }] = await Promise.all([
       supabase.from('services').select('id, name, duration_min, price, variants, image_url, active').eq('workspace_id', ws.id).eq('active', true).order('created_at', { ascending: true }),
-      supabase.from('staff').select('id, name, active').eq('workspace_id', ws.id).eq('active', true).order('created_at', { ascending: true }),
+      supabase.from('staff').select('*').eq('workspace_id', ws.id).eq('active', true).order('created_at', { ascending: true }),
     ])
 
     return NextResponse.json({
@@ -44,7 +53,7 @@ export async function GET(_request: NextRequest, { params }: { params: { token: 
         hours: effectiveHours(ws),
       },
       services: (services ?? []).map(s => ({ id: s.id, name: s.name, durationMin: Number(s.duration_min ?? 30), price: Number(s.price ?? 0), imageUrl: (s as { image_url?: string | null }).image_url ?? null })),
-      staff: (staff ?? []).map(s => ({ id: s.id, name: s.name })),
+      staff: (staff ?? []).map(s => ({ id: s.id, name: s.name, imageUrl: (s as { image_url?: string | null }).image_url ?? null })),
     })
   } catch (error) {
     console.error(`GET /api/public/booking/${params.token}`, error)

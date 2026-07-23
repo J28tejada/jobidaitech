@@ -22,6 +22,7 @@ export async function GET() {
 
   return NextResponse.json({
     token: data?.booking_token ?? null,
+    slug: data?.booking_slug ?? '',
     enabled: data?.booking_enabled ?? false,
     slotMin: data?.booking_slot_min ?? 30,
     deposit: Number(data?.booking_deposit ?? 0),
@@ -74,6 +75,30 @@ export async function POST(request: Request) {
     if (body.accent !== undefined) {
       const a = typeof body.accent === 'string' ? body.accent.trim() : ''
       patch.booking_accent = /^#[0-9a-fA-F]{6}$/.test(a) ? a : null
+    }
+    // Slug corto para el enlace de marca (/r/<slug>). Normalizamos a
+    // minúsculas, guiones en vez de espacios, y validamos formato + unicidad.
+    if (body.slug !== undefined) {
+      const raw = typeof body.slug === 'string' ? body.slug.trim().toLowerCase() : ''
+      if (raw === '') {
+        patch.booking_slug = null
+      } else {
+        const slug = raw.replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
+        if (slug.length < 3 || slug.length > 30) {
+          return NextResponse.json({ error: 'El enlace debe tener entre 3 y 30 letras o números (sin espacios).' }, { status: 400 })
+        }
+        const supabase = getSupabaseClient()
+        const { data: taken } = await supabase
+          .from('workspaces')
+          .select('id')
+          .ilike('booking_slug', slug)
+          .neq('id', ctx.workspaceId)
+          .maybeSingle()
+        if (taken) {
+          return NextResponse.json({ error: 'Ese enlace ya está en uso. Prueba con otro.' }, { status: 409 })
+        }
+        patch.booking_slug = slug
+      }
     }
     // Horario por día: fuente de verdad. También sincronizamos los campos
     // legados (días + rango) para cualquier consumidor antiguo.

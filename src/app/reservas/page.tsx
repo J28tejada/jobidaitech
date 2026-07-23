@@ -10,6 +10,7 @@ import { useToast } from '@/components/Toaster'
 export default function ReservasPage() {
   const toast = useToast()
   const [token, setToken] = useState<string | null>(null)
+  const [slug, setSlug] = useState('')
   const [enabled, setEnabled] = useState(false)
   const [loaded, setLoaded] = useState(false)
   const [copied, setCopied] = useState(false)
@@ -17,12 +18,13 @@ export default function ReservasPage() {
   useEffect(() => {
     fetch('/api/settings/booking', { credentials: 'include' })
       .then(r => (r.ok ? r.json() : null))
-      .then(d => { if (d) { setToken(d.token ?? null); setEnabled(!!d.enabled) } })
+      .then(d => { if (d) { setToken(d.token ?? null); setSlug(d.slug ?? ''); setEnabled(!!d.enabled) } })
       .catch(() => {})
       .finally(() => setLoaded(true))
   }, [])
 
-  const link = token && typeof window !== 'undefined' ? `${window.location.origin}/reservar/${token}` : ''
+  const origin = typeof window !== 'undefined' ? window.location.origin : ''
+  const link = slug ? `${origin}/r/${slug}` : token ? `${origin}/reservar/${token}` : ''
   const wa = link ? `https://wa.me/?text=${encodeURIComponent(`Reserva tu cita aquí: ${link}`)}` : ''
 
   const copy = async () => {

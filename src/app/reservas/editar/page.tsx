@@ -9,6 +9,7 @@ import BookingSettings from '@/components/BookingSettings'
 
 export default function EditarReservasPage() {
   const [token, setToken] = useState<string | null>(null)
+  const [slug, setSlug] = useState('')
   const [enabled, setEnabled] = useState(false)
   const [previewKey, setPreviewKey] = useState(0)
   const [showPreview, setShowPreview] = useState(false)
@@ -16,13 +17,14 @@ export default function EditarReservasPage() {
   const loadMeta = () => {
     fetch('/api/settings/booking', { credentials: 'include' })
       .then(r => (r.ok ? r.json() : null))
-      .then(d => { if (d) { setToken(d.token ?? null); setEnabled(!!d.enabled) } })
+      .then(d => { if (d) { setToken(d.token ?? null); setSlug(d.slug ?? ''); setEnabled(!!d.enabled) } })
       .catch(() => {})
   }
 
   useEffect(() => { loadMeta() }, [])
 
-  const link = token && typeof window !== 'undefined' ? `${window.location.origin}/reservar/${token}` : ''
+  const origin = typeof window !== 'undefined' ? window.location.origin : ''
+  const link = slug ? `${origin}/r/${slug}` : token ? `${origin}/reservar/${token}` : ''
   const onSaved = () => { loadMeta(); setPreviewKey(k => k + 1) }
 
   return (

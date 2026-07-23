@@ -47,11 +47,12 @@ export async function POST(request: NextRequest) {
     if (commissionPct > 100) commissionPct = 100
     const phone = typeof body.phone === 'string' && body.phone.trim() ? body.phone.trim() : null
     const email = typeof body.email === 'string' && body.email.trim() ? body.email.trim() : null
+    const imageUrl = typeof body.imageUrl === 'string' && body.imageUrl.trim() ? body.imageUrl.trim() : null
 
     const supabase = getSupabaseClient()
     const { data, error } = await supabase
       .from('staff')
-      .insert({ workspace_id: ctx.workspaceId, user_id: ctx.user.id, name, commission_pct: commissionPct, phone, email })
+      .insert({ workspace_id: ctx.workspaceId, user_id: ctx.user.id, name, commission_pct: commissionPct, phone, email, image_url: imageUrl })
       .select()
       .single()
     if (error) throw error
