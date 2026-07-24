@@ -38,17 +38,34 @@ export function normalizePhone(input: string | null | undefined): string {
 }
 
 /**
- * Envía un texto por WhatsApp vía Evolution API. Devuelve true si la petición
- * salió con estado OK. Nunca lanza: un fallo de envío no debe romper el flujo.
+ * Interpreta un JID de WhatsApp y devuelve una clave estable de conversación.
+ * - Grupo (`<id>@g.us`): key = id del grupo (solo dígitos, sin normalización RD).
+ * - Directo (`<num>@s.whatsapp.net` o número suelto): key = teléfono normalizado.
+ */
+export function parseChatJid(jid: string | null | undefined): { key: string; isGroup: boolean } {
+  const raw = String(jid || '')
+  const local = raw.split('@')[0]
+  if (raw.indexOf('@g.us') !== -1) {
+    return { key: local.replace(/[^0-9]/g, ''), isGroup: true }
+  }
+  return { key: normalizePhone(local), isGroup: false }
+}
+
+/**
+ * Envía un texto por WhatsApp vía Evolution API. `destination` puede ser un
+ * teléfono (se normaliza) o un JID completo de grupo (`<id>@g.us`), que se pasa
+ * tal cual. Devuelve true si la petición salió con estado OK. Nunca lanza: un
+ * fallo de envío no debe romper el flujo.
  */
 export async function sendWhatsAppText(
-  phone: string,
+  destination: string,
   text: string
 ): Promise<boolean> {
   const base = process.env.EVOLUTION_API_URL
   const apiKey = process.env.EVOLUTION_API_KEY
   const instance = process.env.EVOLUTION_INSTANCE
-  const number = normalizePhone(phone)
+  // Un JID (contiene @) se envía tal cual (grupos); si no, es un teléfono.
+  const number = destination && destination.indexOf('@') !== -1 ? destination : normalizePhone(destination)
 
   if (!base || !apiKey || !instance || !number || !text) return false
 

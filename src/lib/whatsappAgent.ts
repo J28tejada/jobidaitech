@@ -1,9 +1,10 @@
 // Agente de captura por WhatsApp.
 //
-// Recibe un mensaje entrante (teléfono + texto), identifica el negocio dueño de
-// ese número, y usa Claude con herramientas (tool-use) para interpretar la nota
-// y registrarla en la app (ingreso/gasto, cita, cliente). Si algo no está claro
-// pregunta; si es una acción con monto o una cita, confirma antes de guardar.
+// Recibe un mensaje entrante (un "chat" directo o de grupo + texto), identifica
+// el negocio dueño de ese chat, y usa Claude con herramientas (tool-use) para
+// interpretar la nota y registrarla en la app (ingreso/gasto, cita, cliente). Si
+// algo no está claro pregunta; si es una acción con monto o una cita, confirma
+// antes de guardar. En grupos, ignora los mensajes que no le competen.
 //
 // Todo pasa por service_role (getSupabaseClient), igual que las demás rutas de
 // servidor. Env-gated: si no hay IA configurada, degrada con un mensaje claro.
@@ -19,9 +20,18 @@ import { DEFAULT_CURRENCY, DEFAULT_LOCALE } from './format'
 const TZ = process.env.WHATSAPP_TZ || 'America/Santo_Domingo'
 const MAX_TOOL_ITERATIONS = 4
 const HISTORY_LIMIT = 12
+const IGNORE_SENTINEL = '[IGNORAR]'
+
+// Un "chat" es de dónde viene el mensaje: un teléfono directo o un grupo.
+export interface WaChat {
+  jid: string // remoteJid completo (destino para responder)
+  key: string // clave de conversación: id de grupo o teléfono normalizado
+  isGroup: boolean
+  sender: string // teléfono de quien escribió (participant en grupos)
+}
 
 // ---------------------------------------------------------------------------
-// Contexto del negocio dueño de un número
+// Contexto del negocio dueño de un chat
 // ---------------------------------------------------------------------------
 
 export interface WaBusiness {
@@ -34,16 +44,15 @@ export interface WaBusiness {
   planTier: PlanTier
 }
 
-/** Resuelve el negocio vinculado a un teléfono (o null si no está vinculado). */
-export async function resolveBusinessForPhone(phone: string): Promise<WaBusiness | null> {
-  const number = normalizePhone(phone)
-  if (!number) return null
+/** Resuelve el negocio vinculado a un chat (o null si no está vinculado). */
+export async function resolveBusinessForChat(chatKey: string): Promise<WaBusiness | null> {
+  if (!chatKey) return null
   const supabase = getSupabaseClient()
 
   const { data: link } = await supabase
     .from('whatsapp_numbers')
     .select('workspace_id, user_id')
-    .eq('phone', number)
+    .eq('phone', chatKey)
     .eq('active', true)
     .maybeSingle()
   if (!link) return null
@@ -82,12 +91,11 @@ export async function resolveBusinessForPhone(phone: string): Promise<WaBusiness
 // ---------------------------------------------------------------------------
 
 /**
- * Si el texto contiene un código de vinculación válido, vincula el número al
- * negocio y devuelve el nombre del negocio. Si no, devuelve null.
+ * Si el texto contiene un código de vinculación válido, vincula el chat (número
+ * o grupo) al negocio y devuelve el nombre del negocio. Si no, devuelve null.
  */
-export async function tryLinkByCode(phone: string, text: string): Promise<string | null> {
-  const number = normalizePhone(phone)
-  if (!number || !text) return null
+export async function tryLinkByCode(chatKey: string, text: string, isGroup: boolean): Promise<string | null> {
+  if (!chatKey || !text) return null
   const upper = text.toUpperCase()
   const tokens: string[] = upper.match(/[A-Z0-9]{4,}/g) || []
   if (tokens.length === 0) return null
@@ -104,22 +112,22 @@ export async function tryLinkByCode(phone: string, text: string): Promise<string
   const valid = codes.find(c => !c.expires_at || new Date(c.expires_at).getTime() > now)
   if (!valid) return null
 
-  // Vincular (o re-vincular) el número a ese negocio.
+  // Vincular (o re-vincular) el chat a ese negocio.
   const { data: existing } = await supabase
     .from('whatsapp_numbers')
     .select('id')
-    .eq('phone', number)
+    .eq('phone', chatKey)
     .maybeSingle()
 
   if (existing) {
     await supabase
       .from('whatsapp_numbers')
-      .update({ workspace_id: valid.workspace_id, user_id: valid.user_id, active: true })
+      .update({ workspace_id: valid.workspace_id, user_id: valid.user_id, active: true, is_group: isGroup })
       .eq('id', existing.id)
   } else {
     await supabase
       .from('whatsapp_numbers')
-      .insert({ workspace_id: valid.workspace_id, user_id: valid.user_id, phone: number, active: true })
+      .insert({ workspace_id: valid.workspace_id, user_id: valid.user_id, phone: chatKey, active: true, is_group: isGroup })
   }
 
   await supabase
@@ -139,21 +147,22 @@ export async function tryLinkByCode(phone: string, text: string): Promise<string
 // Bitácora
 // ---------------------------------------------------------------------------
 
-export async function logMessage(params: {
+async function logMessage(params: {
   workspaceId: string | null
-  phone: string
+  chatKey: string
   direction: 'in' | 'out'
   body: string
-  meta?: Record<string, unknown>
+  sender?: string
 }): Promise<void> {
   try {
     const supabase = getSupabaseClient()
+    const meta = params.sender ? { sender: params.sender } : null
     await supabase.from('whatsapp_messages').insert({
       workspace_id: params.workspaceId,
-      phone: normalizePhone(params.phone),
+      phone: params.chatKey,
       direction: params.direction,
       body: params.body,
-      meta: params.meta ?? null,
+      meta,
     })
   } catch (error) {
     console.error('logMessage', error)
@@ -161,12 +170,12 @@ export async function logMessage(params: {
 }
 
 /** Últimos mensajes del chat (para dar contexto al modelo). */
-async function recentHistory(phone: string): Promise<Anthropic.MessageParam[]> {
+async function recentHistory(chatKey: string): Promise<Anthropic.MessageParam[]> {
   const supabase = getSupabaseClient()
   const { data } = await supabase
     .from('whatsapp_messages')
     .select('direction, body, created_at')
-    .eq('phone', normalizePhone(phone))
+    .eq('phone', chatKey)
     .order('created_at', { ascending: false })
     .limit(HISTORY_LIMIT)
   const rows = (data ?? []).slice().reverse()
@@ -431,8 +440,8 @@ function localNow(locale: string): string {
   }
 }
 
-function systemPrompt(biz: WaBusiness): string {
-  return [
+function systemPrompt(biz: WaBusiness, isGroup: boolean): string {
+  const lines = [
     `Eres el asistente de "${biz.name}", un negocio del rubro "${biz.businessType}". Ayudas al dueño a llevar sus cuentas por WhatsApp.`,
     `El dueño te escribe notas cortas en español (a veces con errores o de forma coloquial). Tu trabajo es entender qué quiere registrar y usar las herramientas para guardarlo en la app.`,
     `Moneda del negocio: ${biz.currency}. Zona horaria: ${TZ}. Fecha y hora actual: ${localNow(biz.locale)}.`,
@@ -445,7 +454,16 @@ function systemPrompt(biz: WaBusiness): string {
     `- Interpreta fechas y horas relativas ("mañana 3pm", "el viernes") usando la fecha actual y devuélvelas en ISO 8601 con la zona horaria del negocio.`,
     `- Responde siempre en español, cálido y muy breve (es WhatsApp). Usa como máximo 1-2 frases y algún emoji si encaja.`,
     `- No reveles detalles técnicos ni IDs internos.`,
-  ].join('\n')
+  ]
+  if (isGroup) {
+    lines.push(
+      ``,
+      `ESTÁS EN UN GRUPO con el dueño y su equipo. No todos los mensajes son para ti: pueden estar conversando entre ellos.`,
+      `- Si el mensaje NO es una anotación para registrar, ni una respuesta/confirmación a algo que preguntaste antes, responde EXACTAMENTE con "${IGNORE_SENTINEL}" (solo eso, sin nada más) para no interrumpir la conversación.`,
+      `- Cuando sí actúes, sé breve; el grupo ve tus mensajes.`
+    )
+  }
+  return lines.join('\n')
 }
 
 // ---------------------------------------------------------------------------
@@ -460,15 +478,16 @@ function textFromContent(content: Anthropic.ContentBlock[]): string {
   return parts.join('\n').trim()
 }
 
-async function runAgent(biz: WaBusiness, phone: string, userText: string): Promise<string> {
+/** Corre el agente. Devuelve el texto de respuesta, o null si hay que callar (grupos). */
+async function runAgent(biz: WaBusiness, chat: WaChat, userText: string): Promise<string | null> {
   const client = getAnthropic()
   const { tools, execs } = buildTools(biz)
 
-  const history = await recentHistory(phone)
+  const history = await recentHistory(chat.key)
   const messages: Anthropic.MessageParam[] = history.slice()
   messages.push({ role: 'user', content: userText })
 
-  const system = systemPrompt(biz)
+  const system = systemPrompt(biz, chat.isGroup)
   let reply = ''
 
   for (let i = 0; i < MAX_TOOL_ITERATIONS; i++) {
@@ -509,7 +528,12 @@ async function runAgent(biz: WaBusiness, phone: string, userText: string): Promi
     messages.push({ role: 'user', content: results })
   }
 
-  return reply || 'Anotado. ✅'
+  const trimmed = (reply || '').trim()
+  // En grupos, si el modelo decide no intervenir, callamos.
+  if (chat.isGroup && (trimmed === '' || trimmed.toUpperCase() === IGNORE_SENTINEL)) {
+    return null
+  }
+  return trimmed || 'Anotado. ✅'
 }
 
 // ---------------------------------------------------------------------------
@@ -523,52 +547,58 @@ export interface InboundResult {
 }
 
 /**
- * Procesa un mensaje entrante de WhatsApp: registra en bitácora, intenta vincular
- * por código, y si el número está vinculado corre el agente. Devuelve el texto de
- * respuesta a enviar (o null si no hay que responder).
+ * Procesa un mensaje entrante de WhatsApp (chat directo o de grupo): registra en
+ * bitácora, intenta vincular por código, y si el chat está vinculado corre el
+ * agente. Devuelve el texto de respuesta a enviar (o null si no hay que responder).
  */
-export async function handleInboundMessage(phone: string, text: string): Promise<InboundResult> {
-  const number = normalizePhone(phone)
+export async function handleInboundMessage(chat: WaChat, text: string): Promise<InboundResult> {
   const body = (text || '').trim()
-  if (!number || !body) return { reply: null, workspaceId: null, handled: false }
+  if (!chat.key || !body) return { reply: null, workspaceId: null, handled: false }
 
   // 1) ¿Es un código de vinculación?
-  const linked = await tryLinkByCode(number, body)
+  const linked = await tryLinkByCode(chat.key, body, chat.isGroup)
   if (linked) {
-    const reply = `¡Listo! Tu WhatsApp quedó conectado a "${linked}". 🎉\nEscríbeme tus ventas, gastos, clientes o citas y yo los anoto.`
-    await logMessage({ workspaceId: null, phone: number, direction: 'in', body })
-    const biz = await resolveBusinessForPhone(number)
-    await logMessage({ workspaceId: biz?.workspaceId ?? null, phone: number, direction: 'out', body: reply })
+    const reply = chat.isGroup
+      ? `¡Listo! Este grupo quedó conectado a "${linked}". 🎉\nEscriban aquí sus ventas, gastos, clientes o citas y yo los anoto.`
+      : `¡Listo! Tu WhatsApp quedó conectado a "${linked}". 🎉\nEscríbeme tus ventas, gastos, clientes o citas y yo los anoto.`
+    await logMessage({ workspaceId: null, chatKey: chat.key, direction: 'in', body, sender: chat.sender })
+    const biz = await resolveBusinessForChat(chat.key)
+    await logMessage({ workspaceId: biz?.workspaceId ?? null, chatKey: chat.key, direction: 'out', body: reply })
     return { reply, workspaceId: biz?.workspaceId ?? null, handled: true }
   }
 
   // 2) ¿Está vinculado a un negocio?
-  const biz = await resolveBusinessForPhone(number)
+  const biz = await resolveBusinessForChat(chat.key)
   if (!biz) {
-    await logMessage({ workspaceId: null, phone: number, direction: 'in', body })
+    await logMessage({ workspaceId: null, chatKey: chat.key, direction: 'in', body, sender: chat.sender })
+    // En un grupo no vinculado, callamos para no hacer ruido.
+    if (chat.isGroup) return { reply: null, workspaceId: null, handled: true }
     const reply =
       'Hola 👋 Este es el asistente de Jobidai. Para empezar a usar tu WhatsApp para anotar ventas y gastos, abre la app, ve a "Conectar WhatsApp" y envíame el código que te muestra.'
-    await logMessage({ workspaceId: null, phone: number, direction: 'out', body: reply })
+    await logMessage({ workspaceId: null, chatKey: chat.key, direction: 'out', body: reply })
     return { reply, workspaceId: null, handled: true }
   }
 
-  await logMessage({ workspaceId: biz.workspaceId, phone: number, direction: 'in', body })
+  await logMessage({ workspaceId: biz.workspaceId, chatKey: chat.key, direction: 'in', body, sender: chat.sender })
 
   // 3) ¿Está la IA configurada?
   if (!aiConfigured()) {
+    if (chat.isGroup) return { reply: null, workspaceId: biz.workspaceId, handled: true }
     const reply = 'Recibí tu mensaje, pero el asistente aún no está activo. Inténtalo más tarde.'
-    await logMessage({ workspaceId: biz.workspaceId, phone: number, direction: 'out', body: reply })
+    await logMessage({ workspaceId: biz.workspaceId, chatKey: chat.key, direction: 'out', body: reply })
     return { reply, workspaceId: biz.workspaceId, handled: true }
   }
 
   // 4) Correr el agente.
-  let reply: string
+  let reply: string | null
   try {
-    reply = await runAgent(biz, number, body)
+    reply = await runAgent(biz, chat, body)
   } catch (error) {
     console.error('runAgent', error)
-    reply = 'Uy, tuve un problema para procesar eso. ¿Puedes repetirlo?'
+    reply = chat.isGroup ? null : 'Uy, tuve un problema para procesar eso. ¿Puedes repetirlo?'
   }
-  await logMessage({ workspaceId: biz.workspaceId, phone: number, direction: 'out', body: reply })
+  if (reply) {
+    await logMessage({ workspaceId: biz.workspaceId, chatKey: chat.key, direction: 'out', body: reply })
+  }
   return { reply, workspaceId: biz.workspaceId, handled: true }
 }

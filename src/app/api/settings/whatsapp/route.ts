@@ -27,9 +27,10 @@ const platformNumber = () => process.env.NEXT_PUBLIC_WHATSAPP_NUMBER || ''
 
 async function loadState(workspaceId: string) {
   const supabase = getSupabaseClient()
+  // select('*') para tolerar la columna is_group si la migración 0036 aún no corrió.
   const { data: numbers } = await supabase
     .from('whatsapp_numbers')
-    .select('id, phone, label, active, created_at')
+    .select('*')
     .eq('workspace_id', workspaceId)
     .order('created_at', { ascending: true })
   return {
@@ -39,6 +40,7 @@ async function loadState(workspaceId: string) {
       phone: n.phone,
       label: n.label ?? null,
       active: n.active !== false,
+      isGroup: (n as { is_group?: boolean }).is_group === true,
       createdAt: n.created_at ?? null,
     })),
   }

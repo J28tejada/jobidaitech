@@ -1,13 +1,14 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Loader2, MessageCircle, Copy, Check, RefreshCw, Trash2 } from 'lucide-react';
+import { Loader2, MessageCircle, Copy, Check, RefreshCw, Trash2, Users } from 'lucide-react';
 
 interface WaNumber {
   id: string;
   phone: string;
   label: string | null;
   active: boolean;
+  isGroup?: boolean;
 }
 
 interface WaState {
@@ -166,6 +167,14 @@ export default function WhatsAppConnect() {
                 <RefreshCw className={`h-3.5 w-3.5 mr-1 ${busy ? 'animate-spin' : ''}`} />
                 Generar otro código
               </button>
+
+              <p className="text-xs text-gray-500 flex items-start gap-1.5 pt-1">
+                <Users className="h-3.5 w-3.5 mt-0.5 flex-shrink-0" />
+                <span>
+                  ¿Prefieres un grupo? Crea un grupo de WhatsApp, agrega el número del asistente
+                  ({formatPhone(state.platformNumber)}) y envía el código ahí. Todo el equipo podrá anotar.
+                </span>
+              </p>
             </div>
           ) : (
             <p className="text-sm text-gray-500">
@@ -182,7 +191,16 @@ export default function WhatsAppConnect() {
                     key={n.id}
                     className="flex items-center justify-between rounded-lg border border-gray-200 px-3 py-2"
                   >
-                    <span className="text-sm text-gray-900">{formatPhone(n.phone)}</span>
+                    <span className="text-sm text-gray-900 inline-flex items-center gap-1.5">
+                      {n.isGroup ? (
+                        <>
+                          <Users className="h-4 w-4 text-gray-400" />
+                          Grupo de WhatsApp
+                        </>
+                      ) : (
+                        formatPhone(n.phone)
+                      )}
+                    </span>
                     <button
                       onClick={() => unlink(n.id)}
                       disabled={busy}

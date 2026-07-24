@@ -94,8 +94,9 @@ Se disparan también dentro del `POST` de la reserva, en paralelo al webhook:
 - ❌ **Recordatorios automáticos programados (cron):** los recordatorios de cita
   siguen siendo manuales (clic en `wa.me`). No hay job que envíe recordatorios X
   horas antes. **(Siguiente candidato de trabajo.)**
-- ❌ **Grupos de WhatsApp:** el webhook ignora mensajes de grupo (`@g.us`) por
-  ahora; solo procesa chats directos con el número del asistente.
+- ✅ **Grupos de WhatsApp:** el negocio puede conectar un grupo (agregar el
+  número del asistente al grupo y enviar el código ahí). Cualquier miembro anota;
+  el agente ignora la conversación que no le compete. Ver §7.
 
 ---
 
@@ -151,8 +152,20 @@ El webhook también puede recibir un payload simplificado `{ phone, text }` si s
 prefiere pasar por n8n. Responde por Evolution si `EVOLUTION_*` está configurado,
 y además devuelve `{ reply }` en el JSON para que n8n lo envíe si así se decide.
 
-**Pendiente de correr por el dueño:** la migración `0035` en el SQL Editor de
-Supabase (el entorno dev no alcanza Supabase).
+**Grupos de WhatsApp:** además de un número directo, un negocio puede conectar
+un GRUPO. El dueño agrega el número del asistente al grupo y envía el código ahí;
+queda vinculado el grupo (identificado por su JID `...@g.us`) y cualquier miembro
+puede anotar. Para no ser ruidoso, en grupos el agente responde con `[IGNORAR]`
+(no se envía nada) cuando el mensaje no es una anotación ni una confirmación; un
+grupo no vinculado se ignora en silencio. Detalle técnico:
+- `parseChatJid` (en `whatsapp.ts`) distingue grupo vs directo y da una clave de
+  conversación estable. `sendWhatsAppText` acepta un JID de grupo o un teléfono.
+- `whatsapp_numbers.is_group` (migración `0036`) marca los chats de grupo. El
+  teléfono de quien escribe en el grupo se guarda en `whatsapp_messages.meta.sender`.
+- El webhook lee `key.participant` (el remitente real dentro del grupo).
+
+**Pendiente de correr por el dueño:** las migraciones `0035` y `0036` en el SQL
+Editor de Supabase (el entorno dev no alcanza Supabase).
 
 ---
 

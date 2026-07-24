@@ -1,14 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 
-import { handleInboundMessage } from '@/lib/whatsappAgent'
-import { sendWhatsAppText, whatsappConfigured } from '@/lib/whatsapp'
+import { handleInboundMessage, type WaChat } from '@/lib/whatsappAgent'
+import { sendWhatsAppText, whatsappConfigured, parseChatJid, normalizePhone } from '@/lib/whatsapp'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
 // Webhook entrante de WhatsApp. Recibe eventos de Evolution API (directo) o un
-// payload simplificado reenviado por n8n, extrae el mensaje del cliente, lo pasa
-// al agente y responde por el mismo chat.
+// payload simplificado reenviado por n8n, extrae el mensaje (de un chat directo
+// o de un grupo), lo pasa al agente y responde por el mismo chat.
 //
 // Seguridad: si EVOLUTION_WEBHOOK_TOKEN está configurado, se exige que coincida
 // (header x-webhook-token o query ?token=). Sin token configurado, procesa igual
@@ -17,21 +17,30 @@ export const dynamic = 'force-dynamic'
 // Variables: EVOLUTION_WEBHOOK_TOKEN (opcional, recomendado).
 
 interface Parsed {
-  phone: string
+  chat: WaChat
   text: string
   fromMe: boolean
-  isGroup: boolean
 }
 
-/** Extrae { phone, text } de los formatos conocidos. Devuelve null si no aplica. */
+/** Extrae el chat y el texto de los formatos conocidos. Devuelve null si no aplica. */
 function parseInbound(body: any): Parsed | null {
   if (!body || typeof body !== 'object') return null
 
-  // Formato simplificado (n8n u otros): { phone/from, text/message }
-  const simplePhone = body.phone ?? body.from ?? body.number
-  const simpleText = body.text ?? body.message ?? body.body
+  const simpleText: unknown = body.text ?? body.message ?? body.body
+
+  // Formato simplificado con JID explícito: { jid|remoteJid, text, participant? }
+  const explicitJid: unknown = body.jid ?? body.remoteJid
+  if (typeof explicitJid === 'string' && typeof simpleText === 'string' && simpleText) {
+    const { key, isGroup } = parseChatJid(explicitJid)
+    const sender = typeof body.participant === 'string' ? parseChatJid(body.participant).key : key
+    return { chat: { jid: explicitJid, key, isGroup, sender }, text: simpleText, fromMe: Boolean(body.fromMe) }
+  }
+
+  // Formato simplificado por teléfono: { phone|from|number, text }
+  const simplePhone: unknown = body.phone ?? body.from ?? body.number
   if (typeof simplePhone === 'string' && typeof simpleText === 'string' && simpleText) {
-    return { phone: simplePhone, text: simpleText, fromMe: Boolean(body.fromMe), isGroup: false }
+    const key = normalizePhone(simplePhone)
+    return { chat: { jid: simplePhone, key, isGroup: false, sender: key }, text: simpleText, fromMe: Boolean(body.fromMe) }
   }
 
   // Formato nativo Evolution API (messages.upsert). `data` puede ser objeto o arreglo.
@@ -39,11 +48,14 @@ function parseInbound(body: any): Parsed | null {
   const entry = Array.isArray(rawData) ? rawData[0] : rawData
   if (!entry || typeof entry !== 'object') return null
 
-  const key = entry.key ?? {}
-  const remoteJid: string = key.remoteJid ?? entry.remoteJid ?? ''
+  const key0 = entry.key ?? {}
+  const remoteJid: string = key0.remoteJid ?? entry.remoteJid ?? ''
   if (!remoteJid) return null
-  const isGroup = remoteJid.indexOf('@g.us') !== -1
-  const phone = remoteJid.split('@')[0]
+  const { key, isGroup } = parseChatJid(remoteJid)
+
+  // En grupos, quién escribió viene en key.participant.
+  const participant: string = key0.participant ?? entry.participant ?? ''
+  const sender = isGroup && participant ? parseChatJid(participant).key : key
 
   const message = entry.message ?? {}
   const text: string =
@@ -54,7 +66,7 @@ function parseInbound(body: any): Parsed | null {
     entry.text ??
     ''
 
-  return { phone, text, fromMe: Boolean(key.fromMe), isGroup }
+  return { chat: { jid: remoteJid, key, isGroup, sender }, text, fromMe: Boolean(key0.fromMe) }
 }
 
 function authorized(request: NextRequest): boolean {
@@ -78,18 +90,19 @@ export async function POST(request: NextRequest) {
   }
 
   const parsed = parseInbound(body)
-  // Ignorar: eventos que no son mensajes de texto entrantes, nuestros propios
-  // envíos, y (por ahora) mensajes de grupo.
-  if (!parsed || !parsed.text || parsed.fromMe || parsed.isGroup) {
+  // Ignorar: eventos que no son mensajes de texto entrantes y nuestros propios envíos.
+  if (!parsed || !parsed.text || parsed.fromMe) {
     return NextResponse.json({ ok: true, skipped: true })
   }
 
   try {
-    const result = await handleInboundMessage(parsed.phone, parsed.text)
-    // Enviar la respuesta por Evolution si está configurado. Además la devolvemos
-    // en el JSON para que n8n (u otro puente) pueda enviarla si así lo prefiere.
+    const result = await handleInboundMessage(parsed.chat, parsed.text)
+    // Responder por Evolution si está configurado. Para grupos, el destino es el
+    // JID del grupo; para directos, el teléfono. Además devolvemos la respuesta en
+    // el JSON para que n8n (u otro puente) pueda enviarla si así lo prefiere.
     if (result.reply && whatsappConfigured()) {
-      await sendWhatsAppText(parsed.phone, result.reply)
+      const destination = parsed.chat.isGroup ? parsed.chat.jid : parsed.chat.key
+      await sendWhatsAppText(destination, result.reply)
     }
     return NextResponse.json({ ok: true, reply: result.reply })
   } catch (error) {
