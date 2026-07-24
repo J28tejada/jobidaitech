@@ -1,0 +1,574 @@
+// Agente de captura por WhatsApp.
+//
+// Recibe un mensaje entrante (teléfono + texto), identifica el negocio dueño de
+// ese número, y usa Claude con herramientas (tool-use) para interpretar la nota
+// y registrarla en la app (ingreso/gasto, cita, cliente). Si algo no está claro
+// pregunta; si es una acción con monto o una cita, confirma antes de guardar.
+//
+// Todo pasa por service_role (getSupabaseClient), igual que las demás rutas de
+// servidor. Env-gated: si no hay IA configurada, degrada con un mensaje claro.
+
+import type Anthropic from '@anthropic-ai/sdk'
+
+import { getSupabaseClient } from './supabase'
+import { aiConfigured, aiModel, getAnthropic } from './ai'
+import { normalizePhone } from './whatsapp'
+import { hasModule, type PlanTier, type ModuleKey } from './modules'
+import { DEFAULT_CURRENCY, DEFAULT_LOCALE } from './format'
+
+const TZ = process.env.WHATSAPP_TZ || 'America/Santo_Domingo'
+const MAX_TOOL_ITERATIONS = 4
+const HISTORY_LIMIT = 12
+
+// ---------------------------------------------------------------------------
+// Contexto del negocio dueño de un número
+// ---------------------------------------------------------------------------
+
+export interface WaBusiness {
+  workspaceId: string
+  userId: string
+  name: string
+  businessType: string
+  currency: string
+  locale: string
+  planTier: PlanTier
+}
+
+/** Resuelve el negocio vinculado a un teléfono (o null si no está vinculado). */
+export async function resolveBusinessForPhone(phone: string): Promise<WaBusiness | null> {
+  const number = normalizePhone(phone)
+  if (!number) return null
+  const supabase = getSupabaseClient()
+
+  const { data: link } = await supabase
+    .from('whatsapp_numbers')
+    .select('workspace_id, user_id')
+    .eq('phone', number)
+    .eq('active', true)
+    .maybeSingle()
+  if (!link) return null
+
+  // select('*') para tolerar columnas de migraciones aún no corridas.
+  const { data: ws } = await supabase
+    .from('workspaces')
+    .select('*')
+    .eq('id', link.workspace_id)
+    .maybeSingle()
+  if (!ws) return null
+
+  let planTier: PlanTier = 'pro'
+  if (ws.owner_id) {
+    const { data: owner } = await supabase
+      .from('users')
+      .select('plan_tier')
+      .eq('id', ws.owner_id)
+      .maybeSingle()
+    planTier = (owner?.plan_tier as PlanTier) ?? 'pro'
+  }
+
+  return {
+    workspaceId: ws.id,
+    userId: (link.user_id as string) || (ws.owner_id as string),
+    name: ws.name ?? 'tu negocio',
+    businessType: (ws.business_type as string) || 'other',
+    currency: (ws.currency as string) || DEFAULT_CURRENCY,
+    locale: (ws.locale as string) || DEFAULT_LOCALE,
+    planTier,
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Vinculación por código
+// ---------------------------------------------------------------------------
+
+/**
+ * Si el texto contiene un código de vinculación válido, vincula el número al
+ * negocio y devuelve el nombre del negocio. Si no, devuelve null.
+ */
+export async function tryLinkByCode(phone: string, text: string): Promise<string | null> {
+  const number = normalizePhone(phone)
+  if (!number || !text) return null
+  const upper = text.toUpperCase()
+  const tokens: string[] = upper.match(/[A-Z0-9]{4,}/g) || []
+  if (tokens.length === 0) return null
+
+  const supabase = getSupabaseClient()
+  const { data: codes } = await supabase
+    .from('whatsapp_link_codes')
+    .select('id, code, workspace_id, user_id, expires_at, used_at')
+    .in('code', tokens)
+    .is('used_at', null)
+  if (!codes || codes.length === 0) return null
+
+  const now = Date.now()
+  const valid = codes.find(c => !c.expires_at || new Date(c.expires_at).getTime() > now)
+  if (!valid) return null
+
+  // Vincular (o re-vincular) el número a ese negocio.
+  const { data: existing } = await supabase
+    .from('whatsapp_numbers')
+    .select('id')
+    .eq('phone', number)
+    .maybeSingle()
+
+  if (existing) {
+    await supabase
+      .from('whatsapp_numbers')
+      .update({ workspace_id: valid.workspace_id, user_id: valid.user_id, active: true })
+      .eq('id', existing.id)
+  } else {
+    await supabase
+      .from('whatsapp_numbers')
+      .insert({ workspace_id: valid.workspace_id, user_id: valid.user_id, phone: number, active: true })
+  }
+
+  await supabase
+    .from('whatsapp_link_codes')
+    .update({ used_at: new Date().toISOString() })
+    .eq('id', valid.id)
+
+  const { data: ws } = await supabase
+    .from('workspaces')
+    .select('name')
+    .eq('id', valid.workspace_id)
+    .maybeSingle()
+  return ws?.name ?? 'tu negocio'
+}
+
+// ---------------------------------------------------------------------------
+// Bitácora
+// ---------------------------------------------------------------------------
+
+export async function logMessage(params: {
+  workspaceId: string | null
+  phone: string
+  direction: 'in' | 'out'
+  body: string
+  meta?: Record<string, unknown>
+}): Promise<void> {
+  try {
+    const supabase = getSupabaseClient()
+    await supabase.from('whatsapp_messages').insert({
+      workspace_id: params.workspaceId,
+      phone: normalizePhone(params.phone),
+      direction: params.direction,
+      body: params.body,
+      meta: params.meta ?? null,
+    })
+  } catch (error) {
+    console.error('logMessage', error)
+  }
+}
+
+/** Últimos mensajes del chat (para dar contexto al modelo). */
+async function recentHistory(phone: string): Promise<Anthropic.MessageParam[]> {
+  const supabase = getSupabaseClient()
+  const { data } = await supabase
+    .from('whatsapp_messages')
+    .select('direction, body, created_at')
+    .eq('phone', normalizePhone(phone))
+    .order('created_at', { ascending: false })
+    .limit(HISTORY_LIMIT)
+  const rows = (data ?? []).slice().reverse()
+  const msgs: Anthropic.MessageParam[] = []
+  rows.forEach(r => {
+    const body = (r.body as string) || ''
+    if (!body) return
+    msgs.push({ role: r.direction === 'in' ? 'user' : 'assistant', content: body })
+  })
+  return msgs
+}
+
+// ---------------------------------------------------------------------------
+// Ejecución de acciones
+// ---------------------------------------------------------------------------
+
+/** Proyecto "General" del negocio (se crea perezosamente) para movimientos sueltos. */
+async function ensureDefaultProject(biz: WaBusiness): Promise<string | null> {
+  const supabase = getSupabaseClient()
+  const { data: found } = await supabase
+    .from('projects')
+    .select('id')
+    .eq('workspace_id', biz.workspaceId)
+    .eq('name', 'General')
+    .limit(1)
+  if (found && found.length > 0) return found[0].id
+
+  const today = new Date().toISOString().slice(0, 10)
+  const { data: created, error } = await supabase
+    .from('projects')
+    .insert({
+      workspace_id: biz.workspaceId,
+      user_id: biz.userId,
+      name: 'General',
+      description: 'Movimientos registrados por WhatsApp',
+      client: 'General',
+      start_date: today,
+      status: 'active',
+      budget: 0,
+    })
+    .select('id')
+    .single()
+  if (error) {
+    console.error('ensureDefaultProject', error)
+    return null
+  }
+  return created?.id ?? null
+}
+
+function toDateOnly(value: unknown): string {
+  if (typeof value === 'string' && value.length >= 10) {
+    const d = new Date(value)
+    if (!Number.isNaN(d.getTime())) return d.toISOString().slice(0, 10)
+  }
+  return new Date().toISOString().slice(0, 10)
+}
+
+async function execRegistrarMovimiento(biz: WaBusiness, input: any): Promise<string> {
+  const tipo = input?.tipo === 'gasto' ? 'expense' : 'income'
+  const amount = Number(input?.monto)
+  if (!Number.isFinite(amount) || amount <= 0) return 'ERROR: monto inválido'
+  const description = typeof input?.descripcion === 'string' && input.descripcion.trim()
+    ? input.descripcion.trim()
+    : tipo === 'income' ? 'Ingreso' : 'Gasto'
+  const category = typeof input?.categoria === 'string' && input.categoria.trim()
+    ? input.categoria.trim()
+    : tipo === 'income' ? 'Ventas' : 'Gastos'
+
+  const projectId = await ensureDefaultProject(biz)
+  if (!projectId) return 'ERROR: no se pudo preparar el registro'
+
+  const supabase = getSupabaseClient()
+  const { data: cat } = await supabase
+    .from('categories')
+    .select('id')
+    .eq('workspace_id', biz.workspaceId)
+    .eq('name', category)
+    .eq('type', tipo)
+    .maybeSingle()
+
+  const { data, error } = await supabase
+    .from('transactions')
+    .insert({
+      workspace_id: biz.workspaceId,
+      user_id: biz.userId,
+      project_id: projectId,
+      type: tipo,
+      category_id: cat?.id ?? null,
+      category_name: category,
+      description,
+      amount,
+      date: toDateOnly(input?.fecha),
+      payment_method: typeof input?.metodo_pago === 'string' && input.metodo_pago.trim() ? input.metodo_pago.trim() : 'cash',
+      attachments: [],
+    })
+    .select('id')
+    .single()
+  if (error) {
+    console.error('execRegistrarMovimiento', error)
+    return 'ERROR: no se pudo guardar el movimiento'
+  }
+  return `OK: ${tipo === 'income' ? 'ingreso' : 'gasto'} de ${amount} registrado (id ${data?.id}).`
+}
+
+async function execRegistrarCliente(biz: WaBusiness, input: any): Promise<string> {
+  const name = typeof input?.nombre === 'string' ? input.nombre.trim() : ''
+  if (!name) return 'ERROR: falta el nombre del cliente'
+  const phone = typeof input?.telefono === 'string' ? normalizePhone(input.telefono) : ''
+  const supabase = getSupabaseClient()
+
+  // Evitar duplicados por teléfono.
+  if (phone) {
+    const { data: dup } = await supabase
+      .from('clients')
+      .select('id')
+      .eq('workspace_id', biz.workspaceId)
+      .eq('phone', phone)
+      .limit(1)
+    if (dup && dup.length > 0) return `OK: el cliente ya existía (id ${dup[0].id}).`
+  }
+
+  const { data, error } = await supabase
+    .from('clients')
+    .insert({
+      workspace_id: biz.workspaceId,
+      name,
+      phone: phone || null,
+      notes: typeof input?.notas === 'string' && input.notas.trim() ? input.notas.trim() : null,
+    })
+    .select('id')
+    .single()
+  if (error) {
+    console.error('execRegistrarCliente', error)
+    return 'ERROR: no se pudo guardar el cliente'
+  }
+  return `OK: cliente "${name}" registrado (id ${data?.id}).`
+}
+
+async function execAgendarCita(biz: WaBusiness, input: any): Promise<string> {
+  const clientName = typeof input?.cliente === 'string' ? input.cliente.trim() : ''
+  if (!clientName) return 'ERROR: falta el nombre del cliente'
+  const startsAtRaw = input?.inicio
+  const starts = startsAtRaw ? new Date(startsAtRaw) : null
+  if (!starts || Number.isNaN(starts.getTime())) return 'ERROR: fecha/hora inválida'
+
+  let durationMin = Number(input?.duracion_min)
+  if (!Number.isFinite(durationMin) || durationMin <= 0) durationMin = 30
+  let price = Number(input?.precio)
+  if (!Number.isFinite(price) || price < 0) price = 0
+
+  const supabase = getSupabaseClient()
+  const { data, error } = await supabase
+    .from('appointments')
+    .insert({
+      workspace_id: biz.workspaceId,
+      user_id: biz.userId,
+      client_name: clientName,
+      client_phone: typeof input?.telefono === 'string' ? normalizePhone(input.telefono) || null : null,
+      title: typeof input?.servicio === 'string' && input.servicio.trim() ? input.servicio.trim() : null,
+      starts_at: starts.toISOString(),
+      duration_min: Math.round(durationMin),
+      price,
+      status: 'scheduled',
+      notes: typeof input?.notas === 'string' && input.notas.trim() ? input.notas.trim() : 'Registrado por WhatsApp',
+    })
+    .select('id')
+    .single()
+  if (error) {
+    console.error('execAgendarCita', error)
+    return 'ERROR: no se pudo agendar la cita'
+  }
+  return `OK: cita de "${clientName}" agendada (id ${data?.id}).`
+}
+
+// ---------------------------------------------------------------------------
+// Herramientas expuestas al modelo (según los módulos del plan)
+// ---------------------------------------------------------------------------
+
+type ToolExec = (biz: WaBusiness, input: any) => Promise<string>
+
+function buildTools(biz: WaBusiness): { tools: Anthropic.Tool[]; execs: Record<string, ToolExec> } {
+  const tools: Anthropic.Tool[] = []
+  const execs: Record<string, ToolExec> = {}
+  const has = (m: ModuleKey) => hasModule(biz.planTier, m)
+
+  // Ingresos / gastos (módulo core: siempre disponible).
+  tools.push({
+    name: 'registrar_movimiento',
+    description:
+      'Registra un ingreso (venta, cobro) o un gasto (compra, pago) del negocio. Úsalo cuando el usuario reporte dinero que entró o salió.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        tipo: { type: 'string', enum: ['ingreso', 'gasto'], description: 'ingreso si entró dinero, gasto si salió' },
+        monto: { type: 'number', description: 'Monto en la moneda del negocio, solo el número' },
+        descripcion: { type: 'string', description: 'Qué fue (ej. "corte de pelo", "compra de gel")' },
+        categoria: { type: 'string', description: 'Categoría opcional (ej. Ventas, Servicios, Insumos)' },
+        metodo_pago: { type: 'string', description: 'Opcional: efectivo, transferencia, tarjeta' },
+        fecha: { type: 'string', description: 'Opcional: fecha ISO YYYY-MM-DD. Por defecto hoy.' },
+      },
+      required: ['tipo', 'monto'],
+    },
+  })
+  execs['registrar_movimiento'] = execRegistrarMovimiento
+
+  // Clientes (módulo sales).
+  if (has('sales')) {
+    tools.push({
+      name: 'registrar_cliente',
+      description: 'Guarda un cliente nuevo en la libreta del negocio. Úsalo cuando el usuario dé el nombre (y opcionalmente el teléfono) de un cliente.',
+      input_schema: {
+        type: 'object',
+        properties: {
+          nombre: { type: 'string', description: 'Nombre del cliente' },
+          telefono: { type: 'string', description: 'Opcional: teléfono/WhatsApp' },
+          notas: { type: 'string', description: 'Opcional: cualquier nota' },
+        },
+        required: ['nombre'],
+      },
+    })
+    execs['registrar_cliente'] = execRegistrarCliente
+  }
+
+  // Citas (módulo agenda).
+  if (has('agenda')) {
+    tools.push({
+      name: 'agendar_cita',
+      description: 'Agenda una cita/turno. Úsalo cuando el usuario quiera reservar un turno para un cliente en una fecha y hora.',
+      input_schema: {
+        type: 'object',
+        properties: {
+          cliente: { type: 'string', description: 'Nombre del cliente' },
+          telefono: { type: 'string', description: 'Opcional: teléfono del cliente' },
+          servicio: { type: 'string', description: 'Opcional: servicio (ej. corte, barba)' },
+          inicio: { type: 'string', description: 'Fecha y hora ISO 8601 con zona horaria (ej. 2026-07-25T15:00:00-04:00)' },
+          duracion_min: { type: 'number', description: 'Opcional: duración en minutos (por defecto 30)' },
+          precio: { type: 'number', description: 'Opcional: precio del servicio' },
+          notas: { type: 'string', description: 'Opcional' },
+        },
+        required: ['cliente', 'inicio'],
+      },
+    })
+    execs['agendar_cita'] = execAgendarCita
+  }
+
+  return { tools, execs }
+}
+
+// ---------------------------------------------------------------------------
+// Prompt del sistema
+// ---------------------------------------------------------------------------
+
+function localNow(locale: string): string {
+  try {
+    return new Intl.DateTimeFormat(locale || 'es-DO', {
+      dateStyle: 'full',
+      timeStyle: 'short',
+      timeZone: TZ,
+    }).format(new Date())
+  } catch {
+    return new Date().toISOString()
+  }
+}
+
+function systemPrompt(biz: WaBusiness): string {
+  return [
+    `Eres el asistente de "${biz.name}", un negocio del rubro "${biz.businessType}". Ayudas al dueño a llevar sus cuentas por WhatsApp.`,
+    `El dueño te escribe notas cortas en español (a veces con errores o de forma coloquial). Tu trabajo es entender qué quiere registrar y usar las herramientas para guardarlo en la app.`,
+    `Moneda del negocio: ${biz.currency}. Zona horaria: ${TZ}. Fecha y hora actual: ${localNow(biz.locale)}.`,
+    ``,
+    `REGLAS:`,
+    `- Si la nota reporta dinero que entró o salió, o una cita, PRIMERO responde con un resumen breve y pide confirmación ("¿Lo anoto? Responde SÍ"). Solo llama a la herramienta cuando el usuario confirme (sí, dale, ok, correcto...).`,
+    `- Para registrar un cliente sin monto ni cita, puedes hacerlo directamente y avisar.`,
+    `- Si un mensaje trae varias cosas, resúmelas todas y confirma en un solo mensaje.`,
+    `- Si algo no está claro (falta el monto, el cliente, la fecha...), pregunta de forma breve y concreta. No inventes datos.`,
+    `- Interpreta fechas y horas relativas ("mañana 3pm", "el viernes") usando la fecha actual y devuélvelas en ISO 8601 con la zona horaria del negocio.`,
+    `- Responde siempre en español, cálido y muy breve (es WhatsApp). Usa como máximo 1-2 frases y algún emoji si encaja.`,
+    `- No reveles detalles técnicos ni IDs internos.`,
+  ].join('\n')
+}
+
+// ---------------------------------------------------------------------------
+// Loop del agente
+// ---------------------------------------------------------------------------
+
+function textFromContent(content: Anthropic.ContentBlock[]): string {
+  const parts: string[] = []
+  content.forEach(block => {
+    if (block.type === 'text') parts.push(block.text)
+  })
+  return parts.join('\n').trim()
+}
+
+async function runAgent(biz: WaBusiness, phone: string, userText: string): Promise<string> {
+  const client = getAnthropic()
+  const { tools, execs } = buildTools(biz)
+
+  const history = await recentHistory(phone)
+  const messages: Anthropic.MessageParam[] = history.slice()
+  messages.push({ role: 'user', content: userText })
+
+  const system = systemPrompt(biz)
+  let reply = ''
+
+  for (let i = 0; i < MAX_TOOL_ITERATIONS; i++) {
+    const response = await client.messages.create({
+      model: aiModel(),
+      max_tokens: 1024,
+      system,
+      tools,
+      messages,
+    })
+
+    const toolUses = response.content.filter(
+      (b): b is Anthropic.ToolUseBlock => b.type === 'tool_use'
+    )
+
+    if (response.stop_reason !== 'tool_use' || toolUses.length === 0) {
+      reply = textFromContent(response.content)
+      break
+    }
+
+    // Ejecutar herramientas y devolver resultados.
+    messages.push({ role: 'assistant', content: response.content })
+    const results: Anthropic.ToolResultBlockParam[] = []
+    for (let j = 0; j < toolUses.length; j++) {
+      const tu = toolUses[j]
+      const exec = execs[tu.name]
+      let out = 'ERROR: herramienta desconocida'
+      if (exec) {
+        try {
+          out = await exec(biz, tu.input)
+        } catch (error) {
+          console.error('tool exec', tu.name, error)
+          out = 'ERROR: fallo al ejecutar'
+        }
+      }
+      results.push({ type: 'tool_result', tool_use_id: tu.id, content: out })
+    }
+    messages.push({ role: 'user', content: results })
+  }
+
+  return reply || 'Anotado. ✅'
+}
+
+// ---------------------------------------------------------------------------
+// Entrada principal
+// ---------------------------------------------------------------------------
+
+export interface InboundResult {
+  reply: string | null
+  workspaceId: string | null
+  handled: boolean
+}
+
+/**
+ * Procesa un mensaje entrante de WhatsApp: registra en bitácora, intenta vincular
+ * por código, y si el número está vinculado corre el agente. Devuelve el texto de
+ * respuesta a enviar (o null si no hay que responder).
+ */
+export async function handleInboundMessage(phone: string, text: string): Promise<InboundResult> {
+  const number = normalizePhone(phone)
+  const body = (text || '').trim()
+  if (!number || !body) return { reply: null, workspaceId: null, handled: false }
+
+  // 1) ¿Es un código de vinculación?
+  const linked = await tryLinkByCode(number, body)
+  if (linked) {
+    const reply = `¡Listo! Tu WhatsApp quedó conectado a "${linked}". 🎉\nEscríbeme tus ventas, gastos, clientes o citas y yo los anoto.`
+    await logMessage({ workspaceId: null, phone: number, direction: 'in', body })
+    const biz = await resolveBusinessForPhone(number)
+    await logMessage({ workspaceId: biz?.workspaceId ?? null, phone: number, direction: 'out', body: reply })
+    return { reply, workspaceId: biz?.workspaceId ?? null, handled: true }
+  }
+
+  // 2) ¿Está vinculado a un negocio?
+  const biz = await resolveBusinessForPhone(number)
+  if (!biz) {
+    await logMessage({ workspaceId: null, phone: number, direction: 'in', body })
+    const reply =
+      'Hola 👋 Este es el asistente de Jobidai. Para empezar a usar tu WhatsApp para anotar ventas y gastos, abre la app, ve a "Conectar WhatsApp" y envíame el código que te muestra.'
+    await logMessage({ workspaceId: null, phone: number, direction: 'out', body: reply })
+    return { reply, workspaceId: null, handled: true }
+  }
+
+  await logMessage({ workspaceId: biz.workspaceId, phone: number, direction: 'in', body })
+
+  // 3) ¿Está la IA configurada?
+  if (!aiConfigured()) {
+    const reply = 'Recibí tu mensaje, pero el asistente aún no está activo. Inténtalo más tarde.'
+    await logMessage({ workspaceId: biz.workspaceId, phone: number, direction: 'out', body: reply })
+    return { reply, workspaceId: biz.workspaceId, handled: true }
+  }
+
+  // 4) Correr el agente.
+  let reply: string
+  try {
+    reply = await runAgent(biz, number, body)
+  } catch (error) {
+    console.error('runAgent', error)
+    reply = 'Uy, tuve un problema para procesar eso. ¿Puedes repetirlo?'
+  }
+  await logMessage({ workspaceId: biz.workspaceId, phone: number, direction: 'out', body: reply })
+  return { reply, workspaceId: biz.workspaceId, handled: true }
+}

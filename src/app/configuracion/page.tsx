@@ -8,6 +8,7 @@ import CategoryManager from '@/components/CategoryManager';
 import BusinessTypePicker from '@/components/BusinessTypePicker';
 import AppearanceSettings from '@/components/AppearanceSettings';
 import LoyaltySettings from '@/components/LoyaltySettings';
+import WhatsAppConnect from '@/components/WhatsAppConnect';
 import { BusinessType } from '@/types';
 import { CURRENCIES } from '@/lib/format';
 import { useCurrency } from '@/components/CurrencyProvider';
@@ -156,6 +157,9 @@ export default function ConfigurationPage() {
         {/* Fidelidad (negocios con agenda). Las reservas online tienen su
             propia página en el menú (/reservas). */}
         {hasAgenda && <LoyaltySettings />}
+
+        {/* Conectar WhatsApp (asistente de captura por IA) */}
+        <WhatsAppConnect />
 
         {/* Apariencia */}
         <AppearanceSettings />
