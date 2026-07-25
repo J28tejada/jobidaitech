@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 
 import { getSupabaseClient } from '@/lib/supabase'
 import { aiConfigured, aiMissingKeyName, aiModel, aiProvider } from '@/lib/ai'
+import { aiPing } from '@/lib/aiAgent'
 import { getWorkspaceContext, getWriteAccess, READ_ONLY_ERROR } from '@/lib/workspaces'
 import { whatsappConfigured } from '@/lib/whatsapp'
 import { handleSimulatedMessage, resetSimulatedChat } from '@/lib/whatsappAgent'
@@ -12,10 +13,16 @@ export const dynamic = 'force-dynamic'
 // GET: diagnóstico. Dice qué está configurado y qué falta, sin exponer secretos.
 // Se puede abrir directo en el navegador para depurar un despliegue:
 //   https://<app>/api/settings/whatsapp/test
+//   https://<app>/api/settings/whatsapp/test?ping=1   ← llama de verdad al modelo
 // Un 404 aquí significa que el despliegue no tiene este código.
-export async function GET() {
+export async function GET(request: Request) {
   const ctx = await getWorkspaceContext()
   if (!ctx) return NextResponse.json({ error: 'No autorizado — inicia sesión primero' }, { status: 401 })
+
+  // ?ping=1: hace una llamada mínima real al proveedor y devuelve su error tal
+  // cual. Es lo que distingue un modelo inexistente de una llave inválida.
+  const ping = new URL(request.url).searchParams.get('ping')
+  const pruebaModelo = ping === '1' ? await aiPing() : undefined
 
   // ¿Corrieron las migraciones 0035/0036?
   let tablasListas = false
@@ -41,6 +48,7 @@ export async function GET() {
       modelo: aiModel(),
       llaveConfigurada: aiConfigured(),
       falta: aiConfigured() ? null : aiMissingKeyName(),
+      ...(pruebaModelo ? { pruebaModelo } : {}),
     },
     baseDeDatos: {
       migracion0035: tablasListas,

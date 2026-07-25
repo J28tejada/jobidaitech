@@ -12,7 +12,7 @@
 import { GoogleGenAI, ThinkingLevel, type Content, type Part } from '@google/genai'
 import type Anthropic from '@anthropic-ai/sdk'
 
-import { aiApiKey, aiModel, aiProvider, getAnthropic } from './ai'
+import { aiApiKey, aiModel, aiProvider, getAnthropic, type AiProviderName } from './ai'
 
 /** Una herramienta que el modelo puede invocar. `run` devuelve texto para el modelo. */
 export interface AgentTool {
@@ -59,6 +59,79 @@ async function execTool(tools: AgentTool[], name: string | undefined, input: unk
  */
 export async function runToolConversation(params: ToolConversationParams): Promise<string> {
   return aiProvider() === 'anthropic' ? runAnthropic(params) : runGoogle(params)
+}
+
+// ---------------------------------------------------------------------------
+// Ping de diagnóstico
+// ---------------------------------------------------------------------------
+
+export interface AiPingResult {
+  ok: boolean
+  proveedor: AiProviderName
+  modelo: string
+  respuesta?: string
+  error?: string
+  /** Solo al fallar con Google: modelos Flash que la llave sí puede usar. */
+  modelosFlashDisponibles?: string[]
+}
+
+/** Lista los modelos que la llave puede usar (REST, para no depender del Pager). */
+async function listGoogleFlashModels(): Promise<string[] | undefined> {
+  try {
+    const base = (process.env.GEMINI_BASE_URL || 'https://generativelanguage.googleapis.com').replace(/\/+$/, '')
+    const res = await fetch(`${base}/v1beta/models?key=${encodeURIComponent(aiApiKey())}&pageSize=200`)
+    if (!res.ok) return undefined
+    const body = (await res.json()) as { models?: Array<{ name?: string }> }
+    const names: string[] = []
+    ;(body.models ?? []).forEach(m => {
+      const name = (m.name || '').replace(/^models\//, '')
+      if (name && name.indexOf('flash') !== -1) names.push(name)
+    })
+    return names.length > 0 ? names : undefined
+  } catch {
+    return undefined
+  }
+}
+
+/**
+ * Hace una llamada mínima real al proveedor para comprobar llave + modelo.
+ * Devuelve el mensaje de error tal como lo da el proveedor (sin secretos), que es
+ * lo único que permite distinguir "modelo inexistente" de "llave inválida" o
+ * "cuota agotada".
+ */
+export async function aiPing(): Promise<AiPingResult> {
+  const proveedor = aiProvider()
+  const modelo = aiModel()
+  try {
+    if (proveedor === 'google') {
+      const baseUrl = process.env.GEMINI_BASE_URL
+      const ai = new GoogleGenAI({
+        apiKey: aiApiKey(),
+        ...(baseUrl ? { httpOptions: { baseUrl } } : {}),
+      })
+      const res = await ai.models.generateContent({
+        model: modelo,
+        contents: 'Responde solo con: ok',
+        config: { maxOutputTokens: 200 },
+      })
+      return { ok: true, proveedor, modelo, respuesta: (res.text ?? '').trim() }
+    }
+
+    const client = getAnthropic()
+    const res = await client.messages.create({
+      model: modelo,
+      max_tokens: 16,
+      messages: [{ role: 'user', content: 'Responde solo con: ok' }],
+    })
+    return { ok: true, proveedor, modelo, respuesta: textFromContent(res.content) }
+  } catch (error) {
+    const mensaje = error instanceof Error ? error.message : String(error)
+    const result: AiPingResult = { ok: false, proveedor, modelo, error: mensaje }
+    if (proveedor === 'google') {
+      result.modelosFlashDisponibles = await listGoogleFlashModels()
+    }
+    return result
+  }
 }
 
 // ---------------------------------------------------------------------------

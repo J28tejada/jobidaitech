@@ -616,7 +616,11 @@ export async function handleSimulatedMessage(params: {
     reply = await runAgent(biz, chat, body)
   } catch (error) {
     console.error('handleSimulatedMessage', error)
-    return { reply: null, error: 'El asistente falló. Revisa los logs del servidor.' }
+    // Mostramos el error tal como lo da el proveedor: es lo único que distingue
+    // "modelo inexistente" de "llave inválida" o "cuota agotada". Lo ve solo el
+    // dueño del espacio y no contiene secretos.
+    const detalle = error instanceof Error ? error.message : String(error)
+    return { reply: null, error: `Falló la llamada al modelo: ${detalle}` }
   }
 
   if (reply) {
