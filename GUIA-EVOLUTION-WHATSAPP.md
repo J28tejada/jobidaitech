@@ -10,7 +10,7 @@ registradas en la app.
 ```
 Dueño (WhatsApp)  →  Evolution API (VPS)  →  POST /api/whatsapp/webhook (Vercel)
                                                       ↓
-                                            Agente IA (Claude) + Supabase
+                                          Agente IA (Gemini) + Supabase
                                                       ↓
 Dueño (WhatsApp)  ←  Evolution API (VPS)  ←  sendWhatsAppText
 ```
@@ -27,7 +27,7 @@ Vercel, y Vercel debe alcanzar a Evolution. Eso condiciona el paso 2.
 | Número de WhatsApp | SIM prepago local (RD), en un teléfono dedicado que quede encendido. **No uses tu número personal** y evita números virtuales/VoIP (WhatsApp los banea). |
 | VPS con Evolution API | El Windows Server 2025 que ya tienes. |
 | Dominio | Un subdominio para Evolution, ej. `wa.tudominio.com`. Necesario para HTTPS (paso 2). |
-| Llave de Anthropic | `ANTHROPIC_API_KEY` desde console.anthropic.com. |
+| Llave de IA | `GEMINI_API_KEY` desde [aistudio.google.com/apikey](https://aistudio.google.com/apikey). (O `ANTHROPIC_API_KEY` si prefieres Claude.) |
 | Acceso a Vercel y Supabase | Para variables de entorno y migraciones. |
 
 > ⚠️ **Antes de invertir tiempo:** Evolution API es **no oficial** (usa WhatsApp
@@ -46,7 +46,7 @@ devuelve la respuesta en el propio JSON, así que puedes conversar con él desde
 terminal. Es el ciclo de prueba más rápido para afinar el prompt antes de montar
 la infraestructura.
 
-Solo necesitas: **Supabase** (migraciones del paso 6) + **`ANTHROPIC_API_KEY`**.
+Solo necesitas: **Supabase** (migraciones del paso 6) + **`GEMINI_API_KEY`**.
 
 1. Crea `.env.local` en la raíz del proyecto:
 
@@ -54,7 +54,7 @@ Solo necesitas: **Supabase** (migraciones del paso 6) + **`ANTHROPIC_API_KEY`**.
    NEXT_PUBLIC_SUPABASE_URL=https://xxxx.supabase.co
    NEXT_PUBLIC_SUPABASE_ANON_KEY=...
    SUPABASE_SERVICE_ROLE_KEY=...
-   ANTHROPIC_API_KEY=sk-ant-...
+   GEMINI_API_KEY=AIza...
    NEXT_PUBLIC_WHATSAPP_NUMBER=18090000000
    ```
 
@@ -245,8 +245,9 @@ En Vercel → tu proyecto → Settings → Environment Variables:
 
 | Variable | Valor | Obligatoria |
 |---|---|---|
-| `ANTHROPIC_API_KEY` | Tu llave de Anthropic | ✅ Sin ella el agente no razona |
-| `ANTHROPIC_MODEL` | `claude-haiku-4-5` | Opcional (es el default) |
+| `GEMINI_API_KEY` | Tu llave de Google AI Studio | ✅ Sin ella el agente no razona |
+| `GEMINI_MODEL` | `gemini-3.6-flash` | Opcional (es el default) |
+| `GEMINI_THINKING_LEVEL` | `LOW` | Opcional (es el default) |
 | `EVOLUTION_API_URL` | `https://wa.tudominio.com` | ✅ |
 | `EVOLUTION_API_KEY` | El `hash` del paso 3.1 (o la llave global) | ✅ |
 | `EVOLUTION_INSTANCE` | `jobidai` | ✅ |
@@ -315,7 +316,7 @@ y `whatsapp_pending_actions`.
 | El asistente nunca responde | El webhook no llega | `webhookByEvents` debe ser `false`. Revisa los logs de Vercel: si no hay peticiones a `/api/whatsapp/webhook`, el problema está en Evolution. |
 | Vercel recibe pero responde 401 | Token mal configurado | Que `EVOLUTION_WEBHOOK_TOKEN` sea idéntico al del paso 4. |
 | Responde en el chat pero no guarda nada | Migraciones sin correr | Paso 6. Mira los logs de Vercel buscando errores de Supabase. |
-| *"el asistente aún no está activo"* | Falta `ANTHROPIC_API_KEY` | Paso 5, y **redesplegar**. |
+| *"el asistente aún no está activo"* | Falta `GEMINI_API_KEY` | Paso 5, y **redesplegar**. |
 | Registra pero el dueño no lo ve | Número vinculado a otro espacio | Revisa `whatsapp_numbers.workspace_id`. |
 | Dejó de funcionar de repente | Sesión caída o número baneado | `GET /instance/connectionState/jobidai`. Si está `close`, re-escanea el QR. Si WhatsApp baneó el número, toca número nuevo. |
 | No responde en el grupo | Grupo no vinculado | Un grupo sin vincular se ignora en silencio (por diseño). Envía el código en el grupo. |

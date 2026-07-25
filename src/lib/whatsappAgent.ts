@@ -9,10 +9,9 @@
 // Todo pasa por service_role (getSupabaseClient), igual que las demás rutas de
 // servidor. Env-gated: si no hay IA configurada, degrada con un mensaje claro.
 
-import type Anthropic from '@anthropic-ai/sdk'
-
 import { getSupabaseClient } from './supabase'
-import { aiConfigured, aiModel, getAnthropic } from './ai'
+import { aiConfigured, aiMissingKeyName } from './ai'
+import { runToolConversation, type AgentMessage, type AgentTool } from './aiAgent'
 import { normalizePhone } from './whatsapp'
 import { hasModule, type PlanTier, type ModuleKey } from './modules'
 import { DEFAULT_CURRENCY, DEFAULT_LOCALE } from './format'
@@ -188,7 +187,7 @@ async function logMessage(params: {
 }
 
 /** Últimos mensajes del chat (para dar contexto al modelo). */
-async function recentHistory(chatKey: string): Promise<Anthropic.MessageParam[]> {
+async function recentHistory(chatKey: string): Promise<AgentMessage[]> {
   const supabase = getSupabaseClient()
   const { data } = await supabase
     .from('whatsapp_messages')
@@ -197,7 +196,7 @@ async function recentHistory(chatKey: string): Promise<Anthropic.MessageParam[]>
     .order('created_at', { ascending: false })
     .limit(HISTORY_LIMIT)
   const rows = (data ?? []).slice().reverse()
-  const msgs: Anthropic.MessageParam[] = []
+  const msgs: AgentMessage[] = []
   rows.forEach(r => {
     const body = (r.body as string) || ''
     if (!body) return
@@ -373,24 +372,19 @@ async function execAgendarCita(biz: WaBusiness, input: any): Promise<string> {
 // Herramientas expuestas al modelo (según los módulos del plan)
 // ---------------------------------------------------------------------------
 
-type ToolExec = (biz: WaBusiness, input: any) => Promise<string>
-
-function buildTools(biz: WaBusiness): { tools: Anthropic.Tool[]; execs: Record<string, ToolExec> } {
-  const tools: Anthropic.Tool[] = []
-  const execs: Record<string, ToolExec> = {}
+function buildTools(biz: WaBusiness): AgentTool[] {
+  const tools: AgentTool[] = []
   const has = (m: ModuleKey) => hasModule(biz.planTier, m)
 
-  // `strict: true` garantiza que los parámetros lleguen validados contra el
-  // esquema (requiere additionalProperties:false). Elimina toda una clase de
-  // errores: montos como texto, campos inventados, JSON mal formado. Los campos
-  // que NO están en `required` siguen siendo opcionales.
+  // Los esquemas llevan `additionalProperties: false`: con Claude habilita
+  // `strict` (la API valida los parámetros) y con Gemini se pasan tal cual vía
+  // parametersJsonSchema. Los campos fuera de `required` son opcionales.
 
   // Ingresos / gastos (módulo core: siempre disponible).
   tools.push({
     name: 'registrar_movimiento',
     description: 'Registra dinero que entró (ingreso) o salió (gasto) del negocio.',
-    strict: true,
-    input_schema: {
+    schema: {
       type: 'object',
       properties: {
         tipo: { type: 'string', enum: ['ingreso', 'gasto'] },
@@ -403,16 +397,15 @@ function buildTools(biz: WaBusiness): { tools: Anthropic.Tool[]; execs: Record<s
       required: ['tipo', 'monto'],
       additionalProperties: false,
     },
+    run: input => execRegistrarMovimiento(biz, input),
   })
-  execs['registrar_movimiento'] = execRegistrarMovimiento
 
   // Clientes (módulo sales).
   if (has('sales')) {
     tools.push({
       name: 'registrar_cliente',
       description: 'Guarda un cliente nuevo en la libreta del negocio.',
-      strict: true,
-      input_schema: {
+      schema: {
         type: 'object',
         properties: {
           nombre: { type: 'string' },
@@ -422,8 +415,8 @@ function buildTools(biz: WaBusiness): { tools: Anthropic.Tool[]; execs: Record<s
         required: ['nombre'],
         additionalProperties: false,
       },
+      run: input => execRegistrarCliente(biz, input),
     })
-    execs['registrar_cliente'] = execRegistrarCliente
   }
 
   // Citas (módulo agenda).
@@ -431,8 +424,7 @@ function buildTools(biz: WaBusiness): { tools: Anthropic.Tool[]; execs: Record<s
     tools.push({
       name: 'agendar_cita',
       description: 'Agenda una cita o turno para un cliente.',
-      strict: true,
-      input_schema: {
+      schema: {
         type: 'object',
         properties: {
           cliente: { type: 'string' },
@@ -446,11 +438,11 @@ function buildTools(biz: WaBusiness): { tools: Anthropic.Tool[]; execs: Record<s
         required: ['cliente', 'inicio'],
         additionalProperties: false,
       },
+      run: input => execAgendarCita(biz, input),
     })
-    execs['agendar_cita'] = execAgendarCita
   }
 
-  return { tools, execs }
+  return tools
 }
 
 // ---------------------------------------------------------------------------
@@ -496,63 +488,15 @@ function systemPrompt(biz: WaBusiness, isGroup: boolean): string {
 // Loop del agente
 // ---------------------------------------------------------------------------
 
-function textFromContent(content: Anthropic.ContentBlock[]): string {
-  const parts: string[] = []
-  content.forEach(block => {
-    if (block.type === 'text') parts.push(block.text)
-  })
-  return parts.join('\n').trim()
-}
-
 /** Corre el agente. Devuelve el texto de respuesta, o null si hay que callar (grupos). */
 async function runAgent(biz: WaBusiness, chat: WaChat, userText: string): Promise<string | null> {
-  const client = getAnthropic()
-  const { tools, execs } = buildTools(biz)
-
-  const history = await recentHistory(chat.key)
-  const messages: Anthropic.MessageParam[] = history.slice()
-  messages.push({ role: 'user', content: userText })
-
-  const system = systemPrompt(biz, chat.isGroup)
-  let reply = ''
-
-  for (let i = 0; i < MAX_TOOL_ITERATIONS; i++) {
-    const response = await client.messages.create({
-      model: aiModel(),
-      max_tokens: 1024,
-      system,
-      tools,
-      messages,
-    })
-
-    const toolUses = response.content.filter(
-      (b): b is Anthropic.ToolUseBlock => b.type === 'tool_use'
-    )
-
-    if (response.stop_reason !== 'tool_use' || toolUses.length === 0) {
-      reply = textFromContent(response.content)
-      break
-    }
-
-    // Ejecutar herramientas y devolver resultados.
-    messages.push({ role: 'assistant', content: response.content })
-    const results: Anthropic.ToolResultBlockParam[] = []
-    for (let j = 0; j < toolUses.length; j++) {
-      const tu = toolUses[j]
-      const exec = execs[tu.name]
-      let out = 'ERROR: herramienta desconocida'
-      if (exec) {
-        try {
-          out = await exec(biz, tu.input)
-        } catch (error) {
-          console.error('tool exec', tu.name, error)
-          out = 'ERROR: fallo al ejecutar'
-        }
-      }
-      results.push({ type: 'tool_result', tool_use_id: tu.id, content: out })
-    }
-    messages.push({ role: 'user', content: results })
-  }
+  const reply = await runToolConversation({
+    system: systemPrompt(biz, chat.isGroup),
+    history: await recentHistory(chat.key),
+    userText,
+    tools: buildTools(biz),
+    maxIterations: MAX_TOOL_ITERATIONS,
+  })
 
   const trimmed = (reply || '').trim()
   // En grupos, si el modelo decide no intervenir, callamos.
@@ -655,7 +599,7 @@ export async function handleSimulatedMessage(params: {
   if (!aiConfigured()) {
     return {
       reply: null,
-      error: 'Falta ANTHROPIC_API_KEY. Agrégala en las variables de entorno y vuelve a desplegar.',
+      error: `Falta ${aiMissingKeyName()}. Agrégala en las variables de entorno y vuelve a desplegar.`,
     }
   }
 

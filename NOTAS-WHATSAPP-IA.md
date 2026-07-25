@@ -114,7 +114,15 @@ falta algo, y registra en la app. Flujo:
   (teléfonos vinculados a un negocio), `whatsapp_link_codes` (handshake de
   vinculación), `whatsapp_messages` (bitácora/contexto),
   `whatsapp_pending_actions` (para confirmaciones; infra para uso futuro).
-- `src/lib/ai.ts` — cliente Claude (`getAnthropic`, `aiConfigured`, `aiModel`).
+- `src/lib/ai.ts` — configuración de IA: proveedor activo (`aiProvider`), modelo
+  (`aiModel`), llave (`aiApiKey`) y chequeos (`aiConfigured`, `aiMissingKeyName`).
+- `src/lib/aiAgent.ts` — **loop de herramientas independiente del proveedor**
+  (`runToolConversation`). Soporta **Gemini** (default, `gemini-3.6-flash`) y
+  **Claude** (`claude-haiku-4-5`); se cambia con `AI_PROVIDER` o simplemente con
+  cuál llave esté puesta. Cada proveedor tiene su propio loop en vez de una
+  abstracción común, porque el formato de resultados de herramienta difiere
+  bastante entre ambos. El JSON Schema de las herramientas se reusa tal cual:
+  Gemini vía `parametersJsonSchema`, Claude vía `input_schema` + `strict: true`.
 - `src/lib/whatsapp.ts` — `sendWhatsAppText` (Evolution) + `normalizePhone`.
 - `src/lib/whatsappAgent.ts` — orquestación: resuelve negocio por teléfono,
   vincula por código, define las herramientas (`registrar_movimiento`,
@@ -148,10 +156,15 @@ que el agente usa/crea perezosamente un proyecto "General" por negocio para los
 movimientos sueltos (el dueño no necesita crear proyectos).
 
 **Variables de entorno (nuevas):**
-- `ANTHROPIC_API_KEY` — activa la IA (sin ella, el webhook responde que el
-  asistente no está activo, sin romper).
-- `ANTHROPIC_MODEL` — opcional. Default `claude-haiku-4-5`. Subir a
-  `claude-sonnet-5` / `claude-opus-4-8` para más capacidad.
+- `GEMINI_API_KEY` — activa la IA con Gemini (proveedor por defecto). Sin llave de
+  ningún proveedor, el webhook responde que el asistente no está activo, sin romper.
+- `GEMINI_MODEL` — opcional. Default `gemini-3.6-flash`.
+- `GEMINI_THINKING_LEVEL` — opcional. `MINIMAL|LOW|MEDIUM|HIGH`, default `LOW`.
+- `ANTHROPIC_API_KEY` / `ANTHROPIC_MODEL` — alternativa (default
+  `claude-haiku-4-5`).
+- `AI_PROVIDER` — opcional, `google` | `anthropic`. Fuerza el proveedor; si no se
+  define se usa el que tenga llave (Google primero). Sirve para comparar ambos
+  con los mismos datos de `whatsapp_messages`.
 - `EVOLUTION_API_URL`, `EVOLUTION_API_KEY`, `EVOLUTION_INSTANCE` — para que el
   server responda directo por Evolution (`sendWhatsAppText`).
 - `EVOLUTION_WEBHOOK_TOKEN` — opcional pero recomendado. Si está, el webhook
