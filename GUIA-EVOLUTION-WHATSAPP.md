@@ -246,7 +246,7 @@ En Vercel → tu proyecto → Settings → Environment Variables:
 | Variable | Valor | Obligatoria |
 |---|---|---|
 | `GEMINI_API_KEY` | Tu llave de Google AI Studio | ✅ Sin ella el agente no razona |
-| `GEMINI_MODEL` | `gemini-3.6-flash` | Opcional (es el default) |
+| `GEMINI_MODEL` | `gemini-3.5-flash` | Opcional (es el default) |
 | `GEMINI_THINKING_LEVEL` | `LOW` | Opcional (es el default) |
 | `EVOLUTION_API_URL` | `https://wa.tudominio.com` | ✅ |
 | `EVOLUTION_API_KEY` | El `hash` del paso 3.1 (o la llave global) | ✅ |

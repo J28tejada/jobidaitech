@@ -5,7 +5,7 @@
 //
 // Variables de entorno:
 //   GEMINI_API_KEY          Llave de Google AI Studio (proveedor por defecto)
-//   GEMINI_MODEL            Default gemini-3.6-flash
+//   GEMINI_MODEL            Default gemini-3.5-flash
 //   GEMINI_THINKING_LEVEL   MINIMAL | LOW | MEDIUM | HIGH (default LOW)
 //   ANTHROPIC_API_KEY       Llave de Claude (alternativa)
 //   ANTHROPIC_MODEL         Default claude-haiku-4-5
@@ -16,7 +16,8 @@ import Anthropic from '@anthropic-ai/sdk'
 
 export type AiProviderName = 'google' | 'anthropic'
 
-export const DEFAULT_GOOGLE_MODEL = 'gemini-3.6-flash'
+// 3.5 en vez de 3.6: más estable/rodado. 3.6 es muy reciente.
+export const DEFAULT_GOOGLE_MODEL = 'gemini-3.5-flash'
 export const DEFAULT_ANTHROPIC_MODEL = 'claude-haiku-4-5'
 
 function googleKey(): string | undefined {

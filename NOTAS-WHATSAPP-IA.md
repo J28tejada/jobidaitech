@@ -89,8 +89,9 @@ Se disparan también dentro del `POST` de la reserva, en paralelo al webhook:
   (`sendWhatsAppText`). Coexiste con el camino `postWebhook → n8n`.
 - ✅ **Confirmación por respuesta del cliente:** el agente de IA (§7) confirma
   antes de guardar movimientos/citas usando el historial del chat.
-- ✅ **IA:** `src/lib/ai.ts` (cliente Claude, `@anthropic-ai/sdk`) + agente de
-  captura por WhatsApp (§7). Modelo configurable, default `claude-haiku-4-5`.
+- ✅ **IA:** `src/lib/ai.ts` + `src/lib/aiAgent.ts` (capa de proveedor) + agente de
+  captura por WhatsApp (§7). Default **Gemini** (`gemini-3.5-flash`); Claude
+  disponible cambiando una variable.
 - ❌ **Recordatorios automáticos programados (cron):** los recordatorios de cita
   siguen siendo manuales (clic en `wa.me`). No hay job que envíe recordatorios X
   horas antes. **(Siguiente candidato de trabajo.)**
@@ -104,10 +105,10 @@ Se disparan también dentro del `POST` de la reserva, en paralelo al webhook:
 
 El dueño le escribe sus anotaciones en lenguaje natural al WhatsApp de la
 plataforma ("vendí un corte 500", "gasté 300 en gel", "cítame a Juan mañana
-3pm"). Un agente de IA (Claude con tool-use) interpreta, confirma o pregunta si
-falta algo, y registra en la app. Flujo:
+3pm"). Un agente de IA (con tool-use) interpreta, confirma o pregunta si falta
+algo, y registra en la app. Flujo:
 
-`WhatsApp → Evolution (o n8n) → POST /api/whatsapp/webhook → handleInboundMessage → Claude (tools) → Supabase → responde por WhatsApp`
+`WhatsApp → Evolution (o n8n) → POST /api/whatsapp/webhook → handleInboundMessage → IA (tools) → Supabase → responde por WhatsApp`
 
 **Archivos:**
 - `supabase/migrations/0035_whatsapp_agent.sql` — tablas `whatsapp_numbers`
@@ -117,7 +118,7 @@ falta algo, y registra en la app. Flujo:
 - `src/lib/ai.ts` — configuración de IA: proveedor activo (`aiProvider`), modelo
   (`aiModel`), llave (`aiApiKey`) y chequeos (`aiConfigured`, `aiMissingKeyName`).
 - `src/lib/aiAgent.ts` — **loop de herramientas independiente del proveedor**
-  (`runToolConversation`). Soporta **Gemini** (default, `gemini-3.6-flash`) y
+  (`runToolConversation`). Soporta **Gemini** (default, `gemini-3.5-flash`) y
   **Claude** (`claude-haiku-4-5`); se cambia con `AI_PROVIDER` o simplemente con
   cuál llave esté puesta. Cada proveedor tiene su propio loop en vez de una
   abstracción común, porque el formato de resultados de herramienta difiere
@@ -128,14 +129,14 @@ falta algo, y registra en la app. Flujo:
   vincula por código, define las herramientas (`registrar_movimiento`,
   `registrar_cliente` [módulo sales], `agendar_cita` [módulo agenda]) y corre el
   loop de tool-use. Las herramientas se ofrecen según el plan del negocio.
-  - Las herramientas usan **`strict: true`** (+ `additionalProperties: false`):
-    la API valida los parámetros contra el esquema, así que no llegan montos como
-    texto, campos inventados ni JSON mal formado. No necesita beta header y
-    Haiku 4.5 lo soporta. Los campos fuera de `required` siguen siendo opcionales.
+  - Los esquemas llevan `additionalProperties: false`. Con Claude eso habilita
+    `strict: true` (la API valida los parámetros: no llegan montos como texto ni
+    campos inventados); con Gemini se pasan tal cual vía `parametersJsonSchema`.
+    Los campos fuera de `required` siguen siendo opcionales.
   - El prompt del sistema se mantiene deliberadamente **corto**: va en cada
-    llamada y, con Haiku, el prefijo (~700 tokens) no alcanza el mínimo cacheable
-    de 4096 tokens, así que no hay caché que lo amortigüe. Condensarlo es la
-    palanca de costo directa (la última pasada recortó ~36%).
+    llamada y el prefijo (~700 tokens) no alcanza el mínimo cacheable, así que no
+    hay caché que lo amortigüe. Condensarlo es la palanca de costo directa (la
+    última pasada recortó ~36%).
 - `src/app/api/whatsapp/webhook/route.ts` — recibe inbound (Evolution o n8n).
 - `src/app/api/settings/whatsapp/route.ts` — el dueño ve el número + código.
 - `src/components/WhatsAppConnect.tsx` — tarjeta "Conectar WhatsApp" en
@@ -158,7 +159,7 @@ movimientos sueltos (el dueño no necesita crear proyectos).
 **Variables de entorno (nuevas):**
 - `GEMINI_API_KEY` — activa la IA con Gemini (proveedor por defecto). Sin llave de
   ningún proveedor, el webhook responde que el asistente no está activo, sin romper.
-- `GEMINI_MODEL` — opcional. Default `gemini-3.6-flash`.
+- `GEMINI_MODEL` — opcional. Default `gemini-3.5-flash` (más rodado que 3.6).
 - `GEMINI_THINKING_LEVEL` — opcional. `MINIMAL|LOW|MEDIUM|HIGH`, default `LOW`.
 - `ANTHROPIC_API_KEY` / `ANTHROPIC_MODEL` — alternativa (default
   `claude-haiku-4-5`).
