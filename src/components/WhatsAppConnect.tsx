@@ -26,12 +26,61 @@ function formatPhone(digits: string): string {
   return d ? `+${d}` : '';
 }
 
+interface ChatLine {
+  role: 'user' | 'bot';
+  text: string;
+}
+
 export default function WhatsAppConnect() {
   const [state, setState] = useState<WaState | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Probador: conversa con el agente sin pasar por WhatsApp.
+  const [chat, setChat] = useState<ChatLine[]>([]);
+  const [draft, setDraft] = useState('');
+  const [sending, setSending] = useState(false);
+
+  const sendTest = async () => {
+    const text = draft.trim();
+    if (!text || sending) return;
+    setDraft('');
+    setChat(c => [...c, { role: 'user', text }]);
+    setSending(true);
+    try {
+      const res = await fetch('/api/settings/whatsapp/test', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ text }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setChat(c => [...c, { role: 'bot', text: `⚠️ ${data?.error || data?.message || 'Error al probar'}` }]);
+      } else {
+        setChat(c => [...c, { role: 'bot', text: data.reply || '(sin respuesta)' }]);
+      }
+    } catch {
+      setChat(c => [...c, { role: 'bot', text: '⚠️ No se pudo contactar el servidor.' }]);
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const resetTest = async () => {
+    setChat([]);
+    try {
+      await fetch('/api/settings/whatsapp/test', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ action: 'reset' }),
+      });
+    } catch {
+      /* noop */
+    }
+  };
 
   const load = async () => {
     try {
@@ -218,6 +267,54 @@ export default function WhatsAppConnect() {
       )}
 
       {error && <p className="text-sm text-red-600 mt-3">{error}</p>}
+
+      {/* Probador: verifica que la IA funcione sin depender de WhatsApp. */}
+      <div className="mt-6 pt-5 border-t border-gray-200">
+        <div className="flex items-center justify-between mb-2">
+          <h3 className="text-sm font-semibold text-gray-900">Probar el asistente</h3>
+          {chat.length > 0 && (
+            <button onClick={resetTest} className="text-xs text-gray-500 hover:text-gray-700">
+              Limpiar
+            </button>
+          )}
+        </div>
+        <p className="text-xs text-gray-500 mb-3">
+          Escríbele como si fuera WhatsApp (ej. <em>vendí un corte 500</em>). Registra de verdad en
+          este espacio, así compruebas que todo funciona antes de conectar el número.
+        </p>
+
+        {chat.length > 0 && (
+          <div className="mb-3 space-y-2 max-h-64 overflow-y-auto rounded-lg bg-gray-50 p-3">
+            {chat.map((line, i) => (
+              <div key={i} className={line.role === 'user' ? 'text-right' : 'text-left'}>
+                <span
+                  className={`inline-block rounded-lg px-3 py-1.5 text-sm max-w-[85%] whitespace-pre-wrap ${
+                    line.role === 'user' ? 'bg-primary-600 text-white' : 'bg-white border border-gray-200 text-gray-900'
+                  }`}
+                >
+                  {line.text}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div className="flex gap-2 max-w-md">
+          <input
+            className="input flex-1"
+            placeholder="vendí un corte 500"
+            value={draft}
+            onChange={e => setDraft(e.target.value)}
+            onKeyDown={e => {
+              if (e.key === 'Enter') sendTest();
+            }}
+            disabled={sending}
+          />
+          <button onClick={sendTest} disabled={sending || !draft.trim()} className="btn btn-primary">
+            {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Enviar'}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

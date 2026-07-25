@@ -47,24 +47,23 @@ export interface WaBusiness {
   planTier: PlanTier
 }
 
-/** Resuelve el negocio vinculado a un chat (o null si no está vinculado). */
-export async function resolveBusinessForChat(chatKey: string): Promise<WaBusiness | null> {
-  if (!chatKey) return null
+/**
+ * Carga el contexto de negocio de un espacio (nombre, rubro, moneda, plan).
+ * `preferredUserId` es a quién se le atribuyen los registros; si no viene, se usa
+ * el dueño del espacio.
+ */
+export async function loadBusiness(
+  workspaceId: string,
+  preferredUserId?: string | null
+): Promise<WaBusiness | null> {
+  if (!workspaceId) return null
   const supabase = getSupabaseClient()
-
-  const { data: link } = await supabase
-    .from('whatsapp_numbers')
-    .select('workspace_id, user_id')
-    .eq('phone', chatKey)
-    .eq('active', true)
-    .maybeSingle()
-  if (!link) return null
 
   // select('*') para tolerar columnas de migraciones aún no corridas.
   const { data: ws } = await supabase
     .from('workspaces')
     .select('*')
-    .eq('id', link.workspace_id)
+    .eq('id', workspaceId)
     .maybeSingle()
   if (!ws) return null
 
@@ -80,13 +79,29 @@ export async function resolveBusinessForChat(chatKey: string): Promise<WaBusines
 
   return {
     workspaceId: ws.id,
-    userId: (link.user_id as string) || (ws.owner_id as string),
+    userId: preferredUserId || (ws.owner_id as string),
     name: ws.name ?? 'tu negocio',
     businessType: (ws.business_type as string) || 'other',
     currency: (ws.currency as string) || DEFAULT_CURRENCY,
     locale: (ws.locale as string) || DEFAULT_LOCALE,
     planTier,
   }
+}
+
+/** Resuelve el negocio vinculado a un chat (o null si no está vinculado). */
+export async function resolveBusinessForChat(chatKey: string): Promise<WaBusiness | null> {
+  if (!chatKey) return null
+  const supabase = getSupabaseClient()
+
+  const { data: link } = await supabase
+    .from('whatsapp_numbers')
+    .select('workspace_id, user_id')
+    .eq('phone', chatKey)
+    .eq('active', true)
+    .maybeSingle()
+  if (!link) return null
+
+  return loadBusiness(link.workspace_id as string, link.user_id as string | null)
 }
 
 // ---------------------------------------------------------------------------
@@ -612,4 +627,66 @@ export async function handleInboundMessage(chat: WaChat, text: string): Promise<
     await logMessage({ workspaceId: biz.workspaceId, chatKey: chat.key, direction: 'out', body: reply })
   }
   return { reply, workspaceId: biz.workspaceId, handled: true }
+}
+
+// ---------------------------------------------------------------------------
+// Simulador (probar el agente desde la app, sin WhatsApp)
+// ---------------------------------------------------------------------------
+//
+// Corre el MISMO agente y escribe los MISMOS datos, pero el espacio se toma de la
+// sesión autenticada en vez de un número vinculado, y no se envía nada por
+// WhatsApp. Usa su propia clave de chat para no mezclar el historial de prueba
+// con el de una conversación real.
+
+function simChatKey(workspaceId: string, isGroup: boolean): string {
+  return `sim:${isGroup ? 'g' : 'd'}:${workspaceId}`
+}
+
+/** Procesa un mensaje de prueba contra el espacio indicado. */
+export async function handleSimulatedMessage(params: {
+  workspaceId: string
+  userId: string
+  text: string
+  isGroup: boolean
+}): Promise<{ reply: string | null; error?: string }> {
+  const body = (params.text || '').trim()
+  if (!body) return { reply: null, error: 'Escribe un mensaje.' }
+
+  if (!aiConfigured()) {
+    return {
+      reply: null,
+      error: 'Falta ANTHROPIC_API_KEY. Agrégala en las variables de entorno y vuelve a desplegar.',
+    }
+  }
+
+  const biz = await loadBusiness(params.workspaceId, params.userId)
+  if (!biz) return { reply: null, error: 'No se pudo cargar el negocio.' }
+
+  const key = simChatKey(params.workspaceId, params.isGroup)
+  const chat: WaChat = { jid: key, key, isGroup: params.isGroup, sender: key }
+
+  await logMessage({ workspaceId: biz.workspaceId, chatKey: key, direction: 'in', body })
+
+  let reply: string | null
+  try {
+    reply = await runAgent(biz, chat, body)
+  } catch (error) {
+    console.error('handleSimulatedMessage', error)
+    return { reply: null, error: 'El asistente falló. Revisa los logs del servidor.' }
+  }
+
+  if (reply) {
+    await logMessage({ workspaceId: biz.workspaceId, chatKey: key, direction: 'out', body: reply })
+  }
+  return { reply }
+}
+
+/** Borra el historial de la conversación de prueba (para empezar de cero). */
+export async function resetSimulatedChat(workspaceId: string): Promise<void> {
+  const supabase = getSupabaseClient()
+  await supabase
+    .from('whatsapp_messages')
+    .delete()
+    .eq('workspace_id', workspaceId)
+    .in('phone', [simChatKey(workspaceId, false), simChatKey(workspaceId, true)])
 }
