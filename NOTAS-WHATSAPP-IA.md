@@ -120,6 +120,14 @@ falta algo, y registra en la app. Flujo:
   vincula por código, define las herramientas (`registrar_movimiento`,
   `registrar_cliente` [módulo sales], `agendar_cita` [módulo agenda]) y corre el
   loop de tool-use. Las herramientas se ofrecen según el plan del negocio.
+  - Las herramientas usan **`strict: true`** (+ `additionalProperties: false`):
+    la API valida los parámetros contra el esquema, así que no llegan montos como
+    texto, campos inventados ni JSON mal formado. No necesita beta header y
+    Haiku 4.5 lo soporta. Los campos fuera de `required` siguen siendo opcionales.
+  - El prompt del sistema se mantiene deliberadamente **corto**: va en cada
+    llamada y, con Haiku, el prefijo (~700 tokens) no alcanza el mínimo cacheable
+    de 4096 tokens, así que no hay caché que lo amortigüe. Condensarlo es la
+    palanca de costo directa (la última pasada recortó ~36%).
 - `src/app/api/whatsapp/webhook/route.ts` — recibe inbound (Evolution o n8n).
 - `src/app/api/settings/whatsapp/route.ts` — el dueño ve el número + código.
 - `src/components/WhatsAppConnect.tsx` — tarjeta "Conectar WhatsApp" en

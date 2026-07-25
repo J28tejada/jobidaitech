@@ -20,6 +20,9 @@ import { DEFAULT_CURRENCY, DEFAULT_LOCALE } from './format'
 const TZ = process.env.WHATSAPP_TZ || 'America/Santo_Domingo'
 const MAX_TOOL_ITERATIONS = 4
 const HISTORY_LIMIT = 12
+// Tope por mensaje del historial: si alguien pega un texto larguísimo, no debe
+// encarecer todas las llamadas siguientes de ese chat.
+const HISTORY_BODY_MAX = 500
 const IGNORE_SENTINEL = '[IGNORAR]'
 
 // Un "chat" es de dónde viene el mensaje: un teléfono directo o un grupo.
@@ -183,7 +186,8 @@ async function recentHistory(chatKey: string): Promise<Anthropic.MessageParam[]>
   rows.forEach(r => {
     const body = (r.body as string) || ''
     if (!body) return
-    msgs.push({ role: r.direction === 'in' ? 'user' : 'assistant', content: body })
+    const trimmed = body.length > HISTORY_BODY_MAX ? body.slice(0, HISTORY_BODY_MAX) + '…' : body
+    msgs.push({ role: r.direction === 'in' ? 'user' : 'assistant', content: trimmed })
   })
   return msgs
 }
@@ -361,22 +365,28 @@ function buildTools(biz: WaBusiness): { tools: Anthropic.Tool[]; execs: Record<s
   const execs: Record<string, ToolExec> = {}
   const has = (m: ModuleKey) => hasModule(biz.planTier, m)
 
+  // `strict: true` garantiza que los parámetros lleguen validados contra el
+  // esquema (requiere additionalProperties:false). Elimina toda una clase de
+  // errores: montos como texto, campos inventados, JSON mal formado. Los campos
+  // que NO están en `required` siguen siendo opcionales.
+
   // Ingresos / gastos (módulo core: siempre disponible).
   tools.push({
     name: 'registrar_movimiento',
-    description:
-      'Registra un ingreso (venta, cobro) o un gasto (compra, pago) del negocio. Úsalo cuando el usuario reporte dinero que entró o salió.',
+    description: 'Registra dinero que entró (ingreso) o salió (gasto) del negocio.',
+    strict: true,
     input_schema: {
       type: 'object',
       properties: {
-        tipo: { type: 'string', enum: ['ingreso', 'gasto'], description: 'ingreso si entró dinero, gasto si salió' },
-        monto: { type: 'number', description: 'Monto en la moneda del negocio, solo el número' },
-        descripcion: { type: 'string', description: 'Qué fue (ej. "corte de pelo", "compra de gel")' },
-        categoria: { type: 'string', description: 'Categoría opcional (ej. Ventas, Servicios, Insumos)' },
-        metodo_pago: { type: 'string', description: 'Opcional: efectivo, transferencia, tarjeta' },
-        fecha: { type: 'string', description: 'Opcional: fecha ISO YYYY-MM-DD. Por defecto hoy.' },
+        tipo: { type: 'string', enum: ['ingreso', 'gasto'] },
+        monto: { type: 'number', description: 'Solo el número' },
+        descripcion: { type: 'string', description: 'Qué fue (ej. corte de pelo)' },
+        categoria: { type: 'string', description: 'Ej. Ventas, Insumos' },
+        metodo_pago: { type: 'string', description: 'efectivo, transferencia o tarjeta' },
+        fecha: { type: 'string', description: 'YYYY-MM-DD. Por defecto hoy.' },
       },
       required: ['tipo', 'monto'],
+      additionalProperties: false,
     },
   })
   execs['registrar_movimiento'] = execRegistrarMovimiento
@@ -385,15 +395,17 @@ function buildTools(biz: WaBusiness): { tools: Anthropic.Tool[]; execs: Record<s
   if (has('sales')) {
     tools.push({
       name: 'registrar_cliente',
-      description: 'Guarda un cliente nuevo en la libreta del negocio. Úsalo cuando el usuario dé el nombre (y opcionalmente el teléfono) de un cliente.',
+      description: 'Guarda un cliente nuevo en la libreta del negocio.',
+      strict: true,
       input_schema: {
         type: 'object',
         properties: {
-          nombre: { type: 'string', description: 'Nombre del cliente' },
-          telefono: { type: 'string', description: 'Opcional: teléfono/WhatsApp' },
-          notas: { type: 'string', description: 'Opcional: cualquier nota' },
+          nombre: { type: 'string' },
+          telefono: { type: 'string' },
+          notas: { type: 'string' },
         },
         required: ['nombre'],
+        additionalProperties: false,
       },
     })
     execs['registrar_cliente'] = execRegistrarCliente
@@ -403,19 +415,21 @@ function buildTools(biz: WaBusiness): { tools: Anthropic.Tool[]; execs: Record<s
   if (has('agenda')) {
     tools.push({
       name: 'agendar_cita',
-      description: 'Agenda una cita/turno. Úsalo cuando el usuario quiera reservar un turno para un cliente en una fecha y hora.',
+      description: 'Agenda una cita o turno para un cliente.',
+      strict: true,
       input_schema: {
         type: 'object',
         properties: {
-          cliente: { type: 'string', description: 'Nombre del cliente' },
-          telefono: { type: 'string', description: 'Opcional: teléfono del cliente' },
-          servicio: { type: 'string', description: 'Opcional: servicio (ej. corte, barba)' },
-          inicio: { type: 'string', description: 'Fecha y hora ISO 8601 con zona horaria (ej. 2026-07-25T15:00:00-04:00)' },
-          duracion_min: { type: 'number', description: 'Opcional: duración en minutos (por defecto 30)' },
-          precio: { type: 'number', description: 'Opcional: precio del servicio' },
-          notas: { type: 'string', description: 'Opcional' },
+          cliente: { type: 'string' },
+          telefono: { type: 'string' },
+          servicio: { type: 'string', description: 'Ej. corte, barba' },
+          inicio: { type: 'string', description: 'ISO 8601 con zona horaria, ej. 2026-07-25T15:00:00-04:00' },
+          duracion_min: { type: 'number', description: 'Por defecto 30' },
+          precio: { type: 'number' },
+          notas: { type: 'string' },
         },
         required: ['cliente', 'inicio'],
+        additionalProperties: false,
       },
     })
     execs['agendar_cita'] = execAgendarCita
@@ -440,27 +454,24 @@ function localNow(locale: string): string {
   }
 }
 
+// El prompt se mantiene corto a propósito: va en CADA llamada, y con el modelo
+// por defecto (Haiku) el prefijo no alcanza el mínimo cacheable, así que cada
+// token de más se paga siempre. Condensar aquí es la palanca de costo directa.
 function systemPrompt(biz: WaBusiness, isGroup: boolean): string {
   const lines = [
-    `Eres el asistente de "${biz.name}", un negocio del rubro "${biz.businessType}". Ayudas al dueño a llevar sus cuentas por WhatsApp.`,
-    `El dueño te escribe notas cortas en español (a veces con errores o de forma coloquial). Tu trabajo es entender qué quiere registrar y usar las herramientas para guardarlo en la app.`,
-    `Moneda del negocio: ${biz.currency}. Zona horaria: ${TZ}. Fecha y hora actual: ${localNow(biz.locale)}.`,
+    `Asistente de "${biz.name}" (${biz.businessType}). El dueño te manda notas cortas por WhatsApp, en español coloquial y con errores: entiéndelas y regístralas con tus herramientas.`,
+    `Moneda: ${biz.currency}. Ahora: ${localNow(biz.locale)} (${TZ}).`,
     ``,
-    `REGLAS:`,
-    `- Si la nota reporta dinero que entró o salió, o una cita, PRIMERO responde con un resumen breve y pide confirmación ("¿Lo anoto? Responde SÍ"). Solo llama a la herramienta cuando el usuario confirme (sí, dale, ok, correcto...).`,
-    `- Para registrar un cliente sin monto ni cita, puedes hacerlo directamente y avisar.`,
-    `- Si un mensaje trae varias cosas, resúmelas todas y confirma en un solo mensaje.`,
-    `- Si algo no está claro (falta el monto, el cliente, la fecha...), pregunta de forma breve y concreta. No inventes datos.`,
-    `- Interpreta fechas y horas relativas ("mañana 3pm", "el viernes") usando la fecha actual y devuélvelas en ISO 8601 con la zona horaria del negocio.`,
-    `- Responde siempre en español, cálido y muy breve (es WhatsApp). Usa como máximo 1-2 frases y algún emoji si encaja.`,
-    `- No reveles detalles técnicos ni IDs internos.`,
+    `REGLAS`,
+    `1. Dinero o cita: resume y pide confirmación ("¿Lo anoto?"). Registra solo cuando confirme (sí, dale, ok...). Un cliente sin monto ni cita regístralo directo.`,
+    `2. Varias cosas en un mensaje: resúmelas todas y confirma una sola vez.`,
+    `3. Falta un dato: pregúntalo, corto y concreto. Nunca inventes.`,
+    `4. Fechas relativas ("mañana 3pm", "el viernes"): resuélvelas con la fecha actual, en ISO 8601 con zona horaria.`,
+    `5. Responde en español, cálido, 1-2 frases máximo. Sin tecnicismos ni IDs.`,
   ]
   if (isGroup) {
     lines.push(
-      ``,
-      `ESTÁS EN UN GRUPO con el dueño y su equipo. No todos los mensajes son para ti: pueden estar conversando entre ellos.`,
-      `- Si el mensaje NO es una anotación para registrar, ni una respuesta/confirmación a algo que preguntaste antes, responde EXACTAMENTE con "${IGNORE_SENTINEL}" (solo eso, sin nada más) para no interrumpir la conversación.`,
-      `- Cuando sí actúes, sé breve; el grupo ve tus mensajes.`
+      `6. GRUPO: hay más gente conversando. Si el mensaje no es una anotación ni una confirmación de algo que preguntaste, responde solo "${IGNORE_SENTINEL}", nada más.`
     )
   }
   return lines.join('\n')
