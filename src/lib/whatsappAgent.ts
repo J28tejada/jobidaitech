@@ -336,6 +336,95 @@ async function execRegistrarCliente(biz: WaBusiness, input: any): Promise<string
   return `OK: cliente "${name}" registrado (id ${data?.id}).`
 }
 
+/** Anota que alguien quedó debiendo. Solo se llama al confirmar. */
+async function aplicarDeuda(biz: WaBusiness, input: any): Promise<string> {
+  const client = typeof input?.cliente === 'string' ? input.cliente.trim() : ''
+  if (!client) return 'ERROR: falta el cliente'
+  const amount = Number(input?.monto)
+  if (!Number.isFinite(amount) || amount <= 0) return 'ERROR: monto inválido'
+
+  const { data, error } = await getSupabaseClient()
+    .from('receivables')
+    .insert({
+      workspace_id: biz.workspaceId,
+      user_id: biz.userId,
+      client,
+      client_phone: typeof input?.telefono === 'string' ? normalizePhone(input.telefono) || null : null,
+      description: typeof input?.descripcion === 'string' && input.descripcion.trim() ? input.descripcion.trim() : null,
+      amount,
+      due_date: typeof input?.vence === 'string' && input.vence.length >= 10 ? toDateOnly(input.vence) : null,
+      status: 'open',
+    })
+    .select('id')
+    .single()
+  if (error) {
+    console.error('aplicarDeuda', error)
+    return 'ERROR: no se pudo anotar la deuda'
+  }
+  return `OK: deuda de ${client} por ${amount} anotada (id ${data?.id}).`
+}
+
+/**
+ * Registra un abono contra la deuda abierta más vieja del cliente y, si queda
+ * saldada, la cierra. Si el abono supera lo que debe esa cuenta, se aplica solo
+ * hasta cubrirla: no se reparte sobre otras deudas ni se guarda a favor, porque
+ * eso ya es criterio contable y debe decidirlo el dueño en la app.
+ */
+async function aplicarAbono(biz: WaBusiness, input: any): Promise<string> {
+  const cliente = typeof input?.cliente === 'string' ? input.cliente.trim() : ''
+  if (!cliente) return 'ERROR: falta el cliente'
+  const monto = Number(input?.monto)
+  if (!Number.isFinite(monto) || monto <= 0) return 'ERROR: monto inválido'
+
+  const supabase = getSupabaseClient()
+  const { data: deudas, error } = await supabase
+    .from('receivables')
+    .select('id,client,amount')
+    .eq('workspace_id', biz.workspaceId)
+    .eq('status', 'open')
+    .ilike('client', `%${cliente}%`)
+    .order('created_at', { ascending: true })
+  if (error) {
+    console.error('aplicarAbono', error)
+    return 'ERROR: no se pudo registrar el abono'
+  }
+  if (!deudas?.length) return `ERROR: no encontré una deuda abierta de "${cliente}"`
+
+  const { data: pagos } = await supabase
+    .from('receivable_payments')
+    .select('receivable_id,amount')
+    .eq('workspace_id', biz.workspaceId)
+  const abonado = new Map<string, number>()
+  for (const p of (pagos ?? []) as any[]) {
+    abonado.set(p.receivable_id, (abonado.get(p.receivable_id) ?? 0) + (Number(p.amount) || 0))
+  }
+  const objetivo = (deudas as any[]).find(d => (Number(d.amount) || 0) - (abonado.get(d.id) ?? 0) > 0)
+  if (!objetivo) return `ERROR: "${cliente}" no tiene saldo pendiente`
+
+  const saldo = (Number(objetivo.amount) || 0) - (abonado.get(objetivo.id) ?? 0)
+  const aplicar = Math.min(monto, saldo)
+
+  const { error: errPago } = await supabase.from('receivable_payments').insert({
+    receivable_id: objetivo.id,
+    workspace_id: biz.workspaceId,
+    user_id: biz.userId,
+    amount: aplicar,
+    date: toDateOnly(input?.fecha),
+    method: typeof input?.metodo === 'string' && input.metodo.trim() ? input.metodo.trim() : null,
+  })
+  if (errPago) {
+    console.error('aplicarAbono pago', errPago)
+    return 'ERROR: no se pudo registrar el abono'
+  }
+
+  const resta = saldo - aplicar
+  if (resta <= 0) {
+    await supabase.from('receivables').update({ status: 'paid' }).eq('id', objetivo.id)
+    return `OK: abono de ${aplicar} registrado. ${objetivo.client} quedó al día.`
+  }
+  return `OK: abono de ${aplicar} registrado. ${objetivo.client} debe ${resta}.`
+}
+
 /** Escribe la cita. Igual que el movimiento: solo se llama al confirmar. */
 async function aplicarCita(biz: WaBusiness, input: any): Promise<string> {
   const clientName = typeof input?.cliente === 'string' ? input.cliente.trim() : ''
@@ -389,7 +478,7 @@ async function aplicarCita(biz: WaBusiness, input: any): Promise<string> {
 // Efecto lateral bienvenido: un "sí" se resuelve sin llamar al modelo, así que
 // la confirmación —el mensaje más frecuente del flujo— pasa a costar cero.
 
-type TipoPendiente = 'movimiento' | 'cita'
+type TipoPendiente = 'movimiento' | 'cita' | 'deuda' | 'abono'
 
 const PENDIENTE_VIGENCIA_MIN = 30
 
@@ -466,11 +555,41 @@ async function cerrarPendiente(id: string, status: 'confirmed' | 'cancelled'): P
 
 /** Ejecuta el payload guardado tal cual: sin criterio del modelo de por medio. */
 async function aplicarPendiente(biz: WaBusiness, row: any): Promise<string> {
-  const res = row.kind === 'cita'
-    ? await aplicarCita(biz, row.payload)
-    : await aplicarMovimiento(biz, row.payload)
+  let res: string
+  switch (row.kind as TipoPendiente) {
+    case 'cita':
+      res = await aplicarCita(biz, row.payload)
+      break
+    case 'deuda':
+      res = await aplicarDeuda(biz, row.payload)
+      break
+    case 'abono':
+      res = await aplicarAbono(biz, row.payload)
+      break
+    default:
+      res = await aplicarMovimiento(biz, row.payload)
+  }
   await cerrarPendiente(row.id, 'confirmed')
   return res
+}
+
+/**
+ * Texto para el dueño después de confirmar.
+ *
+ * En abonos se prefiere el detalle que devuelve la escritura porque incluye el
+ * saldo que queda, que es justo lo que se quiere saber. En los demás alcanza el
+ * resumen: lo que devuelve la escritura trae el id y el prompt prohíbe mostrarlo.
+ * Los ERROR con motivo concreto ("no encontré una deuda abierta de Juan") se
+ * transmiten tal cual: son accionables, a diferencia de un fallo genérico.
+ */
+function textoConfirmacion(pendiente: any, res: string): string {
+  if (!res.startsWith('OK')) {
+    return res.startsWith('ERROR: ')
+      ? `Uy, ${res.slice(7)}.`
+      : 'Uy, no pude guardarlo. ¿Lo intentamos de nuevo?'
+  }
+  if (pendiente.kind === 'abono') return `${res.replace(/^OK:\s*/, '').trim()} ✅`
+  return `Listo, anoté ${pendiente.summary}. ✅`
 }
 
 /**
@@ -778,6 +897,41 @@ function buildTools(biz: WaBusiness, chatKey: string): AgentTool[] {
     })
   }
 
+  // Cobros (módulo receivables). Las dos acciones van en un solo esquema por lo
+  // mismo que `consultar`: dos herramientas sueltas pesarían el doble en cada
+  // request, se usen o no.
+  if (has('receivables')) {
+    tools.push({
+      name: 'cobro',
+      description: 'Anota que alguien quedó debiendo, o que abonó a lo que debía.',
+      schema: {
+        type: 'object',
+        properties: {
+          accion: { type: 'string', enum: ['deuda', 'abono'] },
+          cliente: { type: 'string' },
+          monto: { type: 'number', description: 'Solo el número' },
+          descripcion: { type: 'string', description: 'De qué es la deuda' },
+          vence: { type: 'string', description: 'YYYY-MM-DD, solo para deuda' },
+          metodo: { type: 'string', description: 'efectivo, transferencia... solo para abono' },
+          telefono: { type: 'string' },
+        },
+        required: ['accion', 'cliente', 'monto'],
+        additionalProperties: false,
+      },
+      run: input => {
+        const monto = Number(input?.monto)
+        if (!Number.isFinite(monto) || monto <= 0) return Promise.resolve('ERROR: monto inválido')
+        const cliente = typeof input?.cliente === 'string' ? input.cliente.trim() : ''
+        if (!cliente) return Promise.resolve('ERROR: falta el cliente')
+        const esAbono = input?.accion === 'abono'
+        const resumen = esAbono
+          ? `abono de ${monto} ${biz.currency} de ${cliente}`
+          : `deuda de ${cliente} por ${monto} ${biz.currency}`
+        return crearPendiente(biz, chatKey, esAbono ? 'abono' : 'deuda', input, resumen)
+      },
+    })
+  }
+
   // Consulta (solo lectura). UNA herramienta parametrizada en vez de una por
   // módulo: los esquemas viajan completos en CADA request, así que menos
   // superficie es directamente menos costo por mensaje. El enum se arma según
@@ -926,9 +1080,7 @@ export async function handleInboundMessage(chat: WaChat, text: string): Promise<
     const clase = claseRespuesta(body)
     if (clase === 'si') {
       const res = await aplicarPendiente(biz, pendiente)
-      const reply = res.startsWith('OK')
-        ? `Listo, anoté ${pendiente.summary}. ✅`
-        : 'Uy, no pude guardarlo. ¿Lo intentamos de nuevo?'
+      const reply = textoConfirmacion(pendiente, res)
       await logMessage({ workspaceId: biz.workspaceId, chatKey: chat.key, direction: 'out', body: reply })
       return { reply, workspaceId: biz.workspaceId, handled: true }
     }
@@ -1008,9 +1160,7 @@ export async function handleSimulatedMessage(params: {
     const clase = claseRespuesta(body)
     if (clase === 'si') {
       const res = await aplicarPendiente(biz, pendiente)
-      const reply = res.startsWith('OK')
-        ? `Listo, anoté ${pendiente.summary}. ✅`
-        : 'Uy, no pude guardarlo. ¿Lo intentamos de nuevo?'
+      const reply = textoConfirmacion(pendiente, res)
       await logMessage({ workspaceId: biz.workspaceId, chatKey: key, direction: 'out', body: reply })
       return { reply }
     }
