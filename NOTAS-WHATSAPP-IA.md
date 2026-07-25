@@ -132,6 +132,11 @@ falta algo, y registra en la app. Flujo:
 - `src/app/api/settings/whatsapp/route.ts` — el dueño ve el número + código.
 - `src/components/WhatsAppConnect.tsx` — tarjeta "Conectar WhatsApp" en
   `/configuracion`. Botón `wa.me` con el código prellenado (1 toque para vincular).
+- `scripts/wa-chat.mjs` — chat de prueba por terminal. Habla con el webhook en su
+  formato simplificado, así que permite probar el agente **sin Evolution, sin
+  teléfono y sin QR** (solo Supabase + `ANTHROPIC_API_KEY`). Soporta `--group`,
+  `--phone`, `--url`, `--token` y entrada por tubería. Ver el "Atajo" en
+  `GUIA-EVOLUTION-WHATSAPP.md`.
 
 **Vinculación (seguridad):** un número solo puede escribir a un negocio si está
 en `whatsapp_numbers`. El dueño genera un código en la app y lo envía por

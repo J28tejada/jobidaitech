@@ -38,6 +38,92 @@ Vercel, y Vercel debe alcanzar a Evolution. Eso condiciona el paso 2.
 
 ---
 
+## Atajo · Probar el agente SIN Evolution (empieza por aquí)
+
+**No necesitas el VPS, ni el teléfono, ni escanear un QR para probar el cerebro
+del agente.** El webhook acepta un formato simplificado (`{ phone, text }`) y
+devuelve la respuesta en el propio JSON, así que puedes conversar con él desde la
+terminal. Es el ciclo de prueba más rápido para afinar el prompt antes de montar
+la infraestructura.
+
+Solo necesitas: **Supabase** (migraciones del paso 6) + **`ANTHROPIC_API_KEY`**.
+
+1. Crea `.env.local` en la raíz del proyecto:
+
+   ```
+   NEXT_PUBLIC_SUPABASE_URL=https://xxxx.supabase.co
+   NEXT_PUBLIC_SUPABASE_ANON_KEY=...
+   SUPABASE_SERVICE_ROLE_KEY=...
+   ANTHROPIC_API_KEY=sk-ant-...
+   NEXT_PUBLIC_WHATSAPP_NUMBER=18090000000
+   ```
+
+   Fíjate que **no hace falta ninguna variable `EVOLUTION_*`**: sin ellas el
+   agente no intenta enviar por WhatsApp y solo devuelve la respuesta en el JSON,
+   que es justo lo que queremos para probar.
+
+2. Corre las migraciones `0035` y `0036` en Supabase (paso 6).
+
+3. Levanta la app:
+
+   ```bash
+   npm run dev
+   ```
+
+4. Entra a `http://localhost:3000/configuracion` → **Conectar WhatsApp** y copia
+   el **código** de 6 caracteres.
+
+5. Abre el chat de prueba:
+
+   ```bash
+   node scripts/wa-chat.mjs
+   ```
+
+6. Envía primero el código (para vincular el negocio) y luego conversa normal:
+
+   ```
+   tú  > K7M2QP
+   bot > ¡Listo! Tu WhatsApp quedó conectado a "Barbería X". 🎉
+
+   tú  > vendí un corte 500
+   bot > Corte de pelo, RD$500 de ingreso. ¿Lo anoto?
+
+   tú  > sí
+   bot > Anotado ✅
+   ```
+
+7. Verifica en la app que el movimiento aparezca en **Transacciones** (proyecto
+   "General") y las citas en **Agenda**.
+
+**Opciones del script:**
+
+| Flag | Para qué |
+|---|---|
+| `--group` | Simula un grupo (prueba que ignore lo que no le compete) |
+| `--phone 18095551234` | Simula otro número, para probar varios negocios |
+| `--url https://tu-app.vercel.app` | Probar contra producción en vez de local |
+| `--token XXX` | Si ya configuraste `EVOLUTION_WEBHOOK_TOKEN` |
+
+También acepta entrada por tubería, útil para repetir siempre la misma prueba:
+
+```bash
+printf 'K7M2QP\nvendí un corte 500\nsí\ngasté 300 en gel\nsí\n' | node scripts/wa-chat.mjs
+```
+
+**Qué vale la pena probar aquí** (antes de gastar tiempo en el VPS):
+
+- Que entienda español coloquial: `"vendi un corte 500"`, `"me dieron 1500 hoy"`
+- Que **pregunte** cuando falta un dato: escribe solo `"vendí"`
+- Que **no registre sin confirmar**: escribe una venta y responde `"no"`
+- Fechas relativas: `"cítame a Juan mañana 3pm"`, `"el viernes a las 10"`
+- Varias cosas juntas: `"vendí 2 cortes de 500 y gasté 200 en gel"`
+- En `--group`: que **calle** ante `"¿almorzamos?"` y sí actúe ante una anotación
+
+Cuando el agente se comporte como quieres, sigue con los pasos 1–4 para
+conectarlo a WhatsApp de verdad.
+
+---
+
 ## Paso 1 · Preparar el número
 
 1. Compra una SIM prepago (Claro / Altice) **a nombre de la empresa**.
