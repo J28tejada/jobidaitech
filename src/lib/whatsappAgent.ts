@@ -368,6 +368,174 @@ async function execAgendarCita(biz: WaBusiness, input: any): Promise<string> {
   return `OK: cita de "${clientName}" agendada (id ${data?.id}).`
 }
 
+/** Fecha YYYY-MM-DD desde un valor suelto, con respaldo si no es usable. */
+function fechaOpc(value: unknown, porDefecto: string): string {
+  if (typeof value === 'string' && value.length >= 10) {
+    const d = new Date(value)
+    if (!Number.isNaN(d.getTime())) return d.toISOString().slice(0, 10)
+  }
+  return porDefecto
+}
+
+// Consulta de solo lectura, siempre acotada al workspace del chat.
+//
+// El resultado se devuelve en texto compacto a propósito: vuelve al modelo como
+// salida de herramienta y se paga como contexto en esa llamada y en las
+// siguientes del historial. Se prioriza el dato sobre el formato: sin JSON, sin
+// etiquetas repetidas y sin IDs (que el prompt además prohíbe mostrar).
+async function execConsultar(biz: WaBusiness, input: any): Promise<string> {
+  const supabase = getSupabaseClient()
+  const limite = Math.min(Math.max(Math.round(Number(input?.limite)) || 5, 1), 20)
+  const buscar = typeof input?.buscar === 'string' ? input.buscar.trim() : ''
+  const hoy = new Date().toISOString().slice(0, 10)
+  const hace30 = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10)
+  const desde = fechaOpc(input?.desde, hace30)
+  const hasta = fechaOpc(input?.hasta, hoy)
+
+  switch (input?.recurso) {
+    case 'movimientos': {
+      // Se leen hasta 200 filas para que los totales cubran el período completo
+      // y no solo las que se alcanzan a listar.
+      const { data, error } = await supabase
+        .from('transactions')
+        .select('type,amount,description,category_name,date')
+        .eq('workspace_id', biz.workspaceId)
+        .gte('date', desde)
+        .lte('date', hasta)
+        .order('date', { ascending: false })
+        .limit(200)
+      if (error) {
+        console.error('execConsultar movimientos', error)
+        return 'ERROR: no se pudo consultar'
+      }
+      if (!data?.length) return `Sin movimientos entre ${desde} y ${hasta}.`
+      let ing = 0
+      let gas = 0
+      for (const t of data as any[]) {
+        if (t.type === 'income') ing += Number(t.amount) || 0
+        else gas += Number(t.amount) || 0
+      }
+      const filas = (data as any[])
+        .slice(0, limite)
+        .map(t => `${String(t.date).slice(5)} ${t.type === 'income' ? '+' : '-'}${t.amount} ${t.description || t.category_name || ''}`.trim())
+        .join('; ')
+      return `${desde}..${hasta}: ingresos ${ing}, gastos ${gas}, ganancia ${ing - gas}, ${data.length} movs. Últimos: ${filas}`
+    }
+
+    case 'citas': {
+      // Sin `desde` explícito se asume "de ahora en adelante": la pregunta
+      // habitual es por lo que viene, no por lo que ya pasó.
+      const desdeTs = input?.desde ? `${desde}T00:00:00` : new Date().toISOString()
+      let q = supabase
+        .from('appointments')
+        .select('client_name,title,starts_at,status')
+        .eq('workspace_id', biz.workspaceId)
+        .gte('starts_at', desdeTs)
+        .order('starts_at', { ascending: true })
+        .limit(limite)
+      if (input?.hasta) q = q.lte('starts_at', `${hasta}T23:59:59`)
+      const { data, error } = await q
+      if (error) {
+        console.error('execConsultar citas', error)
+        return 'ERROR: no se pudo consultar'
+      }
+      if (!data?.length) return 'Sin citas en ese rango.'
+      return (data as any[])
+        .map(c => {
+          const cuando = String(c.starts_at).slice(5, 16).replace('T', ' ')
+          const serv = c.title ? ` (${c.title})` : ''
+          const est = c.status && c.status !== 'scheduled' ? ` [${c.status}]` : ''
+          return `${cuando} ${c.client_name}${serv}${est}`
+        })
+        .join('; ')
+    }
+
+    case 'clientes': {
+      let q = supabase
+        .from('clients')
+        .select('name,phone')
+        .eq('workspace_id', biz.workspaceId)
+        .order('name', { ascending: true })
+        .limit(limite)
+      if (buscar) q = q.ilike('name', `%${buscar}%`)
+      const { data, error } = await q
+      if (error) {
+        console.error('execConsultar clientes', error)
+        return 'ERROR: no se pudo consultar'
+      }
+      if (!data?.length) return buscar ? `Sin clientes que coincidan con "${buscar}".` : 'Sin clientes registrados.'
+      return (data as any[]).map(c => `${c.name}${c.phone ? ` ${c.phone}` : ''}`).join('; ')
+    }
+
+    case 'cobros': {
+      // El saldo real es el monto menos los abonos: `receivables.amount` es el
+      // importe original, así que informarlo solo sería engañoso.
+      // `receivable_payments` lleva workspace_id denormalizado, con lo que basta
+      // una segunda consulta plana en vez de un join por fila.
+      const { data: deudas, error } = await supabase
+        .from('receivables')
+        .select('id,client,amount,due_date')
+        .eq('workspace_id', biz.workspaceId)
+        .eq('status', 'open')
+        .order('due_date', { ascending: true })
+      if (error) {
+        console.error('execConsultar cobros', error)
+        return 'ERROR: no se pudo consultar'
+      }
+      if (!deudas?.length) return 'Nadie debe nada.'
+      const { data: pagos } = await supabase
+        .from('receivable_payments')
+        .select('receivable_id,amount')
+        .eq('workspace_id', biz.workspaceId)
+      const abonado = new Map<string, number>()
+      for (const p of (pagos ?? []) as any[]) {
+        abonado.set(p.receivable_id, (abonado.get(p.receivable_id) ?? 0) + (Number(p.amount) || 0))
+      }
+      const saldos = (deudas as any[])
+        .map(d => ({
+          client: d.client as string,
+          due: d.due_date as string | null,
+          saldo: (Number(d.amount) || 0) - (abonado.get(d.id) ?? 0),
+        }))
+        .filter(d => d.saldo > 0)
+      if (!saldos.length) return 'Nadie debe nada.'
+      const total = saldos.reduce((s, d) => s + d.saldo, 0)
+      const lista = saldos
+        .filter(d => !buscar || d.client.toLowerCase().includes(buscar.toLowerCase()))
+        .slice(0, limite)
+        .map(d => `${d.client} ${d.saldo}${d.due ? ` vence ${String(d.due).slice(5)}` : ''}`)
+        .join('; ')
+      return `Deuda total ${total} en ${saldos.length} cuentas. ${lista}`
+    }
+
+    case 'inventario': {
+      let q = supabase
+        .from('products')
+        .select('name,stock,unit,low_stock_threshold')
+        .eq('workspace_id', biz.workspaceId)
+        .eq('active', true)
+        .order('name', { ascending: true })
+        .limit(limite)
+      if (buscar) q = q.ilike('name', `%${buscar}%`)
+      const { data, error } = await q
+      if (error) {
+        console.error('execConsultar inventario', error)
+        return 'ERROR: no se pudo consultar'
+      }
+      if (!data?.length) return buscar ? `Sin productos que coincidan con "${buscar}".` : 'Sin productos cargados.'
+      return (data as any[])
+        .map(p => {
+          const bajo = Number(p.stock) <= Number(p.low_stock_threshold) ? ' BAJO' : ''
+          return `${p.name} ${p.stock} ${p.unit || ''}${bajo}`.replace(/\s+/g, ' ').trim()
+        })
+        .join('; ')
+    }
+
+    default:
+      return 'ERROR: recurso no válido'
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Herramientas expuestas al modelo (según los módulos del plan)
 // ---------------------------------------------------------------------------
@@ -442,6 +610,33 @@ function buildTools(biz: WaBusiness): AgentTool[] {
     })
   }
 
+  // Consulta (solo lectura). UNA herramienta parametrizada en vez de una por
+  // módulo: los esquemas viajan completos en CADA request, así que menos
+  // superficie es directamente menos costo por mensaje. El enum se arma según
+  // el plan para no ofrecerle al modelo recursos que no puede leer.
+  const recursos = ['movimientos']
+  if (has('agenda')) recursos.push('citas')
+  if (has('sales')) recursos.push('clientes')
+  if (has('receivables')) recursos.push('cobros')
+  if (has('inventory')) recursos.push('inventario')
+  tools.push({
+    name: 'consultar',
+    description: 'Consulta lo ya registrado para responder preguntas del dueño.',
+    schema: {
+      type: 'object',
+      properties: {
+        recurso: { type: 'string', enum: recursos },
+        desde: { type: 'string', description: 'YYYY-MM-DD. Movimientos: por defecto 30 días atrás.' },
+        hasta: { type: 'string', description: 'YYYY-MM-DD. Por defecto hoy.' },
+        buscar: { type: 'string', description: 'Filtra por nombre (cliente, producto)' },
+        limite: { type: 'number', description: 'Máx. filas. Por defecto 5' },
+      },
+      required: ['recurso'],
+      additionalProperties: false,
+    },
+    run: input => execConsultar(biz, input),
+  })
+
   return tools
 }
 
@@ -466,7 +661,7 @@ function localNow(locale: string): string {
 // token de más se paga siempre. Condensar aquí es la palanca de costo directa.
 function systemPrompt(biz: WaBusiness, isGroup: boolean): string {
   const lines = [
-    `Asistente de "${biz.name}" (${biz.businessType}). El dueño te manda notas cortas por WhatsApp, en español coloquial y con errores: entiéndelas y regístralas con tus herramientas.`,
+    `Asistente de "${biz.name}" (${biz.businessType}). El dueño te manda notas cortas por WhatsApp, en español coloquial y con errores: entiéndelas y regístralas con tus herramientas. Si pregunta por datos ya registrados, búscalos con "consultar".`,
     `Moneda: ${biz.currency}. Ahora: ${localNow(biz.locale)} (${TZ}).`,
     ``,
     `REGLAS`,
