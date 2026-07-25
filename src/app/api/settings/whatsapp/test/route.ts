@@ -1,10 +1,62 @@
 import { NextResponse } from 'next/server'
 
+import { getSupabaseClient } from '@/lib/supabase'
+import { aiConfigured, aiMissingKeyName, aiModel, aiProvider } from '@/lib/ai'
 import { getWorkspaceContext, getWriteAccess, READ_ONLY_ERROR } from '@/lib/workspaces'
+import { whatsappConfigured } from '@/lib/whatsapp'
 import { handleSimulatedMessage, resetSimulatedChat } from '@/lib/whatsappAgent'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
+
+// GET: diagnóstico. Dice qué está configurado y qué falta, sin exponer secretos.
+// Se puede abrir directo en el navegador para depurar un despliegue:
+//   https://<app>/api/settings/whatsapp/test
+// Un 404 aquí significa que el despliegue no tiene este código.
+export async function GET() {
+  const ctx = await getWorkspaceContext()
+  if (!ctx) return NextResponse.json({ error: 'No autorizado — inicia sesión primero' }, { status: 401 })
+
+  // ¿Corrieron las migraciones 0035/0036?
+  let tablasListas = false
+  let errorTablas: string | null = null
+  let columnaGrupos = false
+  try {
+    const supabase = getSupabaseClient()
+    const { error } = await supabase.from('whatsapp_numbers').select('id').limit(1)
+    tablasListas = !error
+    if (error) errorTablas = error.message
+    const { error: gErr } = await supabase.from('whatsapp_numbers').select('is_group').limit(1)
+    columnaGrupos = !gErr
+  } catch (error) {
+    errorTablas = error instanceof Error ? error.message : String(error)
+  }
+
+  const listo = aiConfigured() && tablasListas && ctx.canWrite && getWriteAccess(ctx.role).allowed
+
+  return NextResponse.json({
+    listoParaProbar: listo,
+    ia: {
+      proveedor: aiProvider(),
+      modelo: aiModel(),
+      llaveConfigurada: aiConfigured(),
+      falta: aiConfigured() ? null : aiMissingKeyName(),
+    },
+    baseDeDatos: {
+      migracion0035: tablasListas,
+      migracion0036: columnaGrupos,
+      error: errorTablas,
+    },
+    espacio: {
+      nombre: ctx.workspaceId,
+      rol: ctx.role,
+      puedeEscribir: ctx.canWrite,
+      permisoDeEscritura: getWriteAccess(ctx.role).allowed,
+    },
+    numeroVisibleConfigurado: Boolean(process.env.NEXT_PUBLIC_WHATSAPP_NUMBER),
+    evolutionConfigurado: whatsappConfigured(),
+  })
+}
 
 // Probador del agente de WhatsApp desde la app (sin WhatsApp, sin Evolution).
 //
