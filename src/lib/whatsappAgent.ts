@@ -251,7 +251,11 @@ function toDateOnly(value: unknown): string {
   return new Date().toISOString().slice(0, 10)
 }
 
-async function execRegistrarMovimiento(biz: WaBusiness, input: any): Promise<string> {
+/**
+ * Escribe el movimiento. No se llama desde la herramienta: se llama al confirmar
+ * la acción pendiente (ver `aplicarPendiente`).
+ */
+async function aplicarMovimiento(biz: WaBusiness, input: any): Promise<string> {
   const tipo = input?.tipo === 'gasto' ? 'expense' : 'income'
   const amount = Number(input?.monto)
   if (!Number.isFinite(amount) || amount <= 0) return 'ERROR: monto inválido'
@@ -292,7 +296,7 @@ async function execRegistrarMovimiento(biz: WaBusiness, input: any): Promise<str
     .select('id')
     .single()
   if (error) {
-    console.error('execRegistrarMovimiento', error)
+    console.error('aplicarMovimiento', error)
     return 'ERROR: no se pudo guardar el movimiento'
   }
   return `OK: ${tipo === 'income' ? 'ingreso' : 'gasto'} de ${amount} registrado (id ${data?.id}).`
@@ -332,7 +336,8 @@ async function execRegistrarCliente(biz: WaBusiness, input: any): Promise<string
   return `OK: cliente "${name}" registrado (id ${data?.id}).`
 }
 
-async function execAgendarCita(biz: WaBusiness, input: any): Promise<string> {
+/** Escribe la cita. Igual que el movimiento: solo se llama al confirmar. */
+async function aplicarCita(biz: WaBusiness, input: any): Promise<string> {
   const clientName = typeof input?.cliente === 'string' ? input.cliente.trim() : ''
   if (!clientName) return 'ERROR: falta el nombre del cliente'
   const startsAtRaw = input?.inicio
@@ -362,10 +367,147 @@ async function execAgendarCita(biz: WaBusiness, input: any): Promise<string> {
     .select('id')
     .single()
   if (error) {
-    console.error('execAgendarCita', error)
+    console.error('aplicarCita', error)
     return 'ERROR: no se pudo agendar la cita'
   }
   return `OK: cita de "${clientName}" agendada (id ${data?.id}).`
+}
+
+// ---------------------------------------------------------------------------
+// Acciones pendientes de confirmación
+// ---------------------------------------------------------------------------
+//
+// Las acciones con plata o con cita NO se escriben cuando el modelo llama a la
+// herramienta: se guardan en `whatsapp_pending_actions` con su payload exacto y
+// se ejecutan recién cuando el dueño confirma.
+//
+// El motivo es que la confirmación conversacional es frágil: dependía de que el
+// modelo recordara en el historial qué había propuesto y de que interpretara el
+// "dale". Si el historial se corta o llegan dos notas seguidas, podía registrar
+// lo que no era, o perder una confirmación válida.
+//
+// Efecto lateral bienvenido: un "sí" se resuelve sin llamar al modelo, así que
+// la confirmación —el mensaje más frecuente del flujo— pasa a costar cero.
+
+type TipoPendiente = 'movimiento' | 'cita'
+
+const PENDIENTE_VIGENCIA_MIN = 30
+
+/** Deja la acción en espera y devuelve al modelo el texto a transmitir. */
+async function crearPendiente(
+  biz: WaBusiness,
+  chatKey: string,
+  kind: TipoPendiente,
+  payload: any,
+  resumen: string
+): Promise<string> {
+  const supabase = getSupabaseClient()
+  try {
+    // Una sola pendiente viva por chat: si hay otra, queda sin efecto. Con dos
+    // abiertas, un "sí" sería ambiguo.
+    await supabase
+      .from('whatsapp_pending_actions')
+      .update({ status: 'expired' })
+      .eq('workspace_id', biz.workspaceId)
+      .eq('phone', chatKey)
+      .eq('status', 'pending')
+
+    const { error } = await supabase.from('whatsapp_pending_actions').insert({
+      workspace_id: biz.workspaceId,
+      phone: chatKey,
+      kind,
+      payload,
+      summary: resumen,
+      status: 'pending',
+      expires_at: new Date(Date.now() + PENDIENTE_VIGENCIA_MIN * 60000).toISOString(),
+    })
+    if (error) {
+      console.error('crearPendiente', error)
+      return 'ERROR: no se pudo preparar la confirmación'
+    }
+  } catch (error) {
+    console.error('crearPendiente', error)
+    return 'ERROR: no se pudo preparar la confirmación'
+  }
+  return `PENDIENTE: ${resumen}. Pídele confirmación al dueño; no lo des por hecho.`
+}
+
+/** Pendiente viva del chat, o null. */
+async function pendienteVigente(chatKey: string): Promise<any | null> {
+  try {
+    const supabase = getSupabaseClient()
+    const { data } = await supabase
+      .from('whatsapp_pending_actions')
+      .select('id,kind,payload,summary,expires_at')
+      .eq('phone', chatKey)
+      .eq('status', 'pending')
+      .order('created_at', { ascending: false })
+      .limit(1)
+    const row = data?.[0]
+    if (!row) return null
+    if (row.expires_at && new Date(row.expires_at).getTime() < Date.now()) {
+      await supabase.from('whatsapp_pending_actions').update({ status: 'expired' }).eq('id', row.id)
+      return null
+    }
+    return row
+  } catch (error) {
+    console.error('pendienteVigente', error)
+    return null
+  }
+}
+
+async function cerrarPendiente(id: string, status: 'confirmed' | 'cancelled'): Promise<void> {
+  try {
+    await getSupabaseClient().from('whatsapp_pending_actions').update({ status }).eq('id', id)
+  } catch (error) {
+    console.error('cerrarPendiente', error)
+  }
+}
+
+/** Ejecuta el payload guardado tal cual: sin criterio del modelo de por medio. */
+async function aplicarPendiente(biz: WaBusiness, row: any): Promise<string> {
+  const res = row.kind === 'cita'
+    ? await aplicarCita(biz, row.payload)
+    : await aplicarMovimiento(biz, row.payload)
+  await cerrarPendiente(row.id, 'confirmed')
+  return res
+}
+
+/**
+ * Normaliza para comparar: minúsculas, sin tildes ni signos.
+ * NFD separa la tilde en un carácter aparte y el segundo `replace` borra ese
+ * bloque combinante (U+0300–U+036F). Va como rango literal y no como
+ * `\p{Diacritic}` porque el target es ES5 y las property escapes piden ES2018.
+ */
+function normalizar(texto: string): string {
+  return texto
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-z0-9\s]/g, '')
+    .trim()
+}
+
+const AFIRMACIONES = new Set([
+  'si', 'sii', 'siii', 'sip', 'dale', 'ok', 'oka', 'okey', 'okay', 'claro', 'correcto',
+  'confirmo', 'confirmado', 'exacto', 'perfecto', 'va', 'vale', 'listo', 'adelante',
+  'anotalo', 'guardalo', 'hazlo', 'yes', 'y', 'sisi', 'asi es', 'esta bien', 'si dale',
+  'si porfavor', 'si por favor', 'de una', 'obvio',
+])
+
+const NEGACIONES = new Set([
+  'no', 'nop', 'nel', 'cancela', 'cancelar', 'cancelalo', 'olvidalo', 'olvidalo ya',
+  'mejor no', 'no gracias', 'negativo', 'nada', 'no aun', 'todavia no', 'espera',
+])
+
+// Solo se consideran mensajes cortos: "sí pero cambiá el monto a 300" no es una
+// confirmación, es una corrección, y tiene que llegarle al modelo.
+function claseRespuesta(texto: string): 'si' | 'no' | null {
+  const t = normalizar(texto)
+  if (!t || t.split(/\s+/).length > 3) return null
+  if (AFIRMACIONES.has(t)) return 'si'
+  if (NEGACIONES.has(t)) return 'no'
+  return null
 }
 
 /** Fecha YYYY-MM-DD desde un valor suelto, con respaldo si no es usable. */
@@ -540,7 +682,7 @@ async function execConsultar(biz: WaBusiness, input: any): Promise<string> {
 // Herramientas expuestas al modelo (según los módulos del plan)
 // ---------------------------------------------------------------------------
 
-function buildTools(biz: WaBusiness): AgentTool[] {
+function buildTools(biz: WaBusiness, chatKey: string): AgentTool[] {
   const tools: AgentTool[] = []
   const has = (m: ModuleKey) => hasModule(biz.planTier, m)
 
@@ -565,7 +707,21 @@ function buildTools(biz: WaBusiness): AgentTool[] {
       required: ['tipo', 'monto'],
       additionalProperties: false,
     },
-    run: input => execRegistrarMovimiento(biz, input),
+    run: input => {
+      const monto = Number(input?.monto)
+      if (!Number.isFinite(monto) || monto <= 0) return Promise.resolve('ERROR: monto inválido')
+      const esGasto = input?.tipo === 'gasto'
+      const desc = typeof input?.descripcion === 'string' && input.descripcion.trim() ? ` por ${input.descripcion.trim()}` : ''
+      const fecha = toDateOnly(input?.fecha)
+      const cuando = fecha === new Date().toISOString().slice(0, 10) ? '' : ` del ${fecha}`
+      return crearPendiente(
+        biz,
+        chatKey,
+        'movimiento',
+        input,
+        `${esGasto ? 'gasto' : 'ingreso'} de ${monto} ${biz.currency}${desc}${cuando}`
+      )
+    },
   })
 
   // Clientes (módulo sales).
@@ -606,7 +762,19 @@ function buildTools(biz: WaBusiness): AgentTool[] {
         required: ['cliente', 'inicio'],
         additionalProperties: false,
       },
-      run: input => execAgendarCita(biz, input),
+      run: input => {
+        const cliente = typeof input?.cliente === 'string' ? input.cliente.trim() : ''
+        if (!cliente) return Promise.resolve('ERROR: falta el nombre del cliente')
+        const inicio = input?.inicio ? new Date(input.inicio) : null
+        if (!inicio || Number.isNaN(inicio.getTime())) return Promise.resolve('ERROR: fecha/hora inválida')
+        const cuando = new Intl.DateTimeFormat(biz.locale || DEFAULT_LOCALE, {
+          dateStyle: 'short',
+          timeStyle: 'short',
+          timeZone: TZ,
+        }).format(inicio)
+        const serv = typeof input?.servicio === 'string' && input.servicio.trim() ? ` (${input.servicio.trim()})` : ''
+        return crearPendiente(biz, chatKey, 'cita', input, `cita de ${cliente}${serv} el ${cuando}`)
+      },
     })
   }
 
@@ -665,7 +833,7 @@ function systemPrompt(biz: WaBusiness, isGroup: boolean): string {
     `Moneda: ${biz.currency}. Ahora: ${localNow(biz.locale)} (${TZ}).`,
     ``,
     `REGLAS`,
-    `1. Dinero o cita: resume y pide confirmación ("¿Lo anoto?"). Registra solo cuando confirme (sí, dale, ok...). Un cliente sin monto ni cita regístralo directo.`,
+    `1. Dinero o cita: llama la herramienta y transmite el resumen que devuelva preguntando "¿Lo anoto?". NO digas que quedó guardado: la confirmación la maneja el sistema. Un cliente sin monto ni cita regístralo directo.`,
     `2. Varias cosas en un mensaje: resúmelas todas y confirma una sola vez.`,
     `3. Falta un dato: pregúntalo, corto y concreto. Nunca inventes.`,
     `4. Fechas relativas ("mañana 3pm", "el viernes"): resuélvelas con la fecha actual, en ISO 8601 con zona horaria.`,
@@ -689,7 +857,7 @@ async function runAgent(biz: WaBusiness, chat: WaChat, userText: string): Promis
     system: systemPrompt(biz, chat.isGroup),
     history: await recentHistory(chat.key),
     userText,
-    tools: buildTools(biz),
+    tools: buildTools(biz, chat.key),
     maxIterations: MAX_TOOL_ITERATIONS,
   })
 
@@ -746,7 +914,33 @@ export async function handleInboundMessage(chat: WaChat, text: string): Promise<
 
   await logMessage({ workspaceId: biz.workspaceId, chatKey: chat.key, direction: 'in', body, sender: chat.sender })
 
-  // 3) ¿Está la IA configurada?
+  // 3) ¿Responde a algo que quedó pendiente de confirmar?
+  //
+  // Va ANTES del agente y a propósito: un "sí" ejecuta el payload guardado tal
+  // cual, sin que el modelo tenga que reconstruir de qué se hablaba. Además no
+  // gasta una llamada al modelo, y la confirmación es el mensaje más repetido
+  // del flujo. Si no es un sí/no claro, la pendiente sigue viva y el mensaje
+  // sigue su curso normal (puede ser una corrección: "sí pero eran 300").
+  const pendiente = await pendienteVigente(chat.key)
+  if (pendiente) {
+    const clase = claseRespuesta(body)
+    if (clase === 'si') {
+      const res = await aplicarPendiente(biz, pendiente)
+      const reply = res.startsWith('OK')
+        ? `Listo, anoté ${pendiente.summary}. ✅`
+        : 'Uy, no pude guardarlo. ¿Lo intentamos de nuevo?'
+      await logMessage({ workspaceId: biz.workspaceId, chatKey: chat.key, direction: 'out', body: reply })
+      return { reply, workspaceId: biz.workspaceId, handled: true }
+    }
+    if (clase === 'no') {
+      await cerrarPendiente(pendiente.id, 'cancelled')
+      const reply = 'Listo, no lo anoto.'
+      await logMessage({ workspaceId: biz.workspaceId, chatKey: chat.key, direction: 'out', body: reply })
+      return { reply, workspaceId: biz.workspaceId, handled: true }
+    }
+  }
+
+  // 4) ¿Está la IA configurada?
   if (!aiConfigured()) {
     if (chat.isGroup) return { reply: null, workspaceId: biz.workspaceId, handled: true }
     const reply = 'Recibí tu mensaje, pero el asistente aún no está activo. Inténtalo más tarde.'
@@ -754,7 +948,7 @@ export async function handleInboundMessage(chat: WaChat, text: string): Promise<
     return { reply, workspaceId: biz.workspaceId, handled: true }
   }
 
-  // 4) Correr el agente.
+  // 5) Correr el agente.
   let reply: string | null
   try {
     reply = await runAgent(biz, chat, body)
@@ -805,6 +999,28 @@ export async function handleSimulatedMessage(params: {
   const chat: WaChat = { jid: key, key, isGroup: params.isGroup, sender: key }
 
   await logMessage({ workspaceId: biz.workspaceId, chatKey: key, direction: 'in', body })
+
+  // Misma intercepción que en WhatsApp: el simulador corre el MISMO agente, así
+  // que sin esto un "sí" volvería al modelo y solo crearía otra pendiente, sin
+  // llegar a escribir nunca.
+  const pendiente = await pendienteVigente(key)
+  if (pendiente) {
+    const clase = claseRespuesta(body)
+    if (clase === 'si') {
+      const res = await aplicarPendiente(biz, pendiente)
+      const reply = res.startsWith('OK')
+        ? `Listo, anoté ${pendiente.summary}. ✅`
+        : 'Uy, no pude guardarlo. ¿Lo intentamos de nuevo?'
+      await logMessage({ workspaceId: biz.workspaceId, chatKey: key, direction: 'out', body: reply })
+      return { reply }
+    }
+    if (clase === 'no') {
+      await cerrarPendiente(pendiente.id, 'cancelled')
+      const reply = 'Listo, no lo anoto.'
+      await logMessage({ workspaceId: biz.workspaceId, chatKey: key, direction: 'out', body: reply })
+      return { reply }
+    }
+  }
 
   let reply: string | null
   try {
