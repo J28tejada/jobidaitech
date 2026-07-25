@@ -146,8 +146,11 @@ movimientos sueltos (el dueño no necesita crear proyectos).
 - `NEXT_PUBLIC_WHATSAPP_NUMBER` — número visible del asistente (para la UI).
 - `WHATSAPP_TZ` — opcional. Default `America/Santo_Domingo`.
 
-**Cómo cablear Evolution:** apuntar el webhook de la instancia (evento
-`messages.upsert`) a `https://<app>/api/whatsapp/webhook?token=<EVOLUTION_WEBHOOK_TOKEN>`.
+**Cómo cablear Evolution:** ver la guía paso a paso en
+**`GUIA-EVOLUTION-WHATSAPP.md`** (número, HTTPS, instancia, webhook, variables,
+migraciones y pruebas). En resumen: apuntar el webhook de la instancia (evento
+`MESSAGES_UPSERT`, con `webhookByEvents: false`) a
+`https://<app>/api/whatsapp/webhook?token=<EVOLUTION_WEBHOOK_TOKEN>`.
 El webhook también puede recibir un payload simplificado `{ phone, text }` si se
 prefiere pasar por n8n. Responde por Evolution si `EVOLUTION_*` está configurado,
 y además devuelve `{ reply }` en el JSON para que n8n lo envíe si así se decide.
