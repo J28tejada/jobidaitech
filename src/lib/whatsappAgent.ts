@@ -108,11 +108,26 @@ export async function resolveBusinessForChat(chatKey: string): Promise<WaBusines
 // Vinculación por código
 // ---------------------------------------------------------------------------
 
+export type ResultadoVinculo =
+  | { estado: 'vinculado'; negocio: string }
+  | { estado: 'cambiado'; negocio: string }
+  | { estado: 'ajeno' }
+
 /**
- * Si el texto contiene un código de vinculación válido, vincula el chat (número
- * o grupo) al negocio y devuelve el nombre del negocio. Si no, devuelve null.
+ * Si el texto trae un código válido, vincula el chat y devuelve qué pasó.
+ * Devuelve null si no había código (el mensaje sigue su curso normal).
+ *
+ * El teléfono identifica a una PERSONA: `user_id` se fija en el primer vínculo y
+ * no se reasigna. Antes, cualquier código válido reescribía el vínculo, así que
+ * un dueño que reenviara un código sin pensar veía sus ventas caer en otro
+ * negocio, sin ningún aviso. Un código de otra cuenta ahora se rechaza; uno de
+ * la misma cuenta solo conmuta el negocio activo.
  */
-export async function tryLinkByCode(chatKey: string, text: string, isGroup: boolean): Promise<string | null> {
+export async function tryLinkByCode(
+  chatKey: string,
+  text: string,
+  isGroup: boolean
+): Promise<ResultadoVinculo | null> {
   if (!chatKey || !text) return null
   const upper = text.toUpperCase()
   const tokens: string[] = upper.match(/[A-Z0-9]{4,}/g) || []
@@ -130,17 +145,29 @@ export async function tryLinkByCode(chatKey: string, text: string, isGroup: bool
   const valid = codes.find(c => !c.expires_at || new Date(c.expires_at).getTime() > now)
   if (!valid) return null
 
-  // Vincular (o re-vincular) el chat a ese negocio.
   const { data: existing } = await supabase
     .from('whatsapp_numbers')
-    .select('id')
+    .select('id, user_id, workspace_id')
     .eq('phone', chatKey)
     .maybeSingle()
 
+  // Un grupo no es una persona, así que ahí no aplica la identidad: se vincula
+  // al negocio y punto.
+  if (existing && !isGroup && existing.user_id && existing.user_id !== valid.user_id) {
+    return { estado: 'ajeno' }
+  }
+
+  const yaEstaba = existing?.workspace_id === valid.workspace_id
   if (existing) {
     await supabase
       .from('whatsapp_numbers')
-      .update({ workspace_id: valid.workspace_id, user_id: valid.user_id, active: true, is_group: isGroup })
+      .update({
+        workspace_id: valid.workspace_id,
+        // La identidad solo se escribe si faltaba (vínculos viejos o grupos).
+        user_id: existing.user_id ?? valid.user_id,
+        active: true,
+        is_group: isGroup,
+      })
       .eq('id', existing.id)
   } else {
     await supabase
@@ -158,7 +185,33 @@ export async function tryLinkByCode(chatKey: string, text: string, isGroup: bool
     .select('name')
     .eq('id', valid.workspace_id)
     .maybeSingle()
-  return ws?.name ?? 'tu negocio'
+  const negocio = ws?.name ?? 'tu negocio'
+  return { estado: existing && !yaEstaba ? 'cambiado' : 'vinculado', negocio }
+}
+
+/**
+ * Negocios entre los que este teléfono puede conmutar: aquellos donde su dueño
+ * es miembro. Se valida contra workspace_members igual que la web, para que un
+ * puntero viejo no dé acceso a un espacio del que ya lo sacaron.
+ */
+async function negociosDelTelefono(chatKey: string): Promise<{ id: string; name: string }[]> {
+  const supabase = getSupabaseClient()
+  const { data: num } = await supabase
+    .from('whatsapp_numbers')
+    .select('user_id')
+    .eq('phone', chatKey)
+    .maybeSingle()
+  if (!num?.user_id) return []
+
+  const { data: miembros } = await supabase
+    .from('workspace_members')
+    .select('workspace_id')
+    .eq('user_id', num.user_id)
+  const ids = (miembros ?? []).map((m: any) => m.workspace_id)
+  if (!ids.length) return []
+
+  const { data: ws } = await supabase.from('workspaces').select('id,name').in('id', ids)
+  return ((ws ?? []) as any[]).map(w => ({ id: w.id, name: w.name }))
 }
 
 // ---------------------------------------------------------------------------
@@ -801,6 +854,19 @@ function normalizar(texto: string): string {
     .trim()
 }
 
+/**
+ * Detecta un pedido de cambio de negocio.
+ * Devuelve el destino, `''` si pidió ver la lista, o null si no es un pedido.
+ * Solo frases cortas: "cambiar a X" dentro de una nota larga es texto, no orden.
+ */
+function pedidoDeCambio(texto: string): string | null {
+  const t = normalizar(texto)
+  if (!t || t.split(/\s+/).length > 6) return null
+  if (/^(cambiar de negocio|cambiar negocio|que negocios tengo|mis negocios|listar negocios)$/.test(t)) return ''
+  const m = t.match(/^(?:cambia|cambiar|cambiame|pasa|pasar|pasame|ir|irme)\s+(?:a|al)\s+(?:negocio\s+)?(.+)$/)
+  return m ? m[1].trim() : null
+}
+
 const AFIRMACIONES = new Set([
   'si', 'sii', 'siii', 'sip', 'dale', 'ok', 'oka', 'okey', 'okay', 'claro', 'correcto',
   'confirmo', 'confirmado', 'exacto', 'perfecto', 'va', 'vale', 'listo', 'adelante',
@@ -1398,10 +1464,21 @@ export async function handleInboundMessage(chat: WaChat, text: string): Promise<
   // 1) ¿Es un código de vinculación?
   const linked = await tryLinkByCode(chat.key, body, chat.isGroup)
   if (linked) {
-    const reply = chat.isGroup
-      ? `¡Listo! Este grupo quedó conectado a "${linked}". 🎉\nEscriban aquí sus ventas, gastos, clientes o citas y yo los anoto.`
-      : `¡Listo! Tu WhatsApp quedó conectado a "${linked}". 🎉\nEscríbeme tus ventas, gastos, clientes o citas y yo los anoto.`
     await logMessage({ workspaceId: null, chatKey: chat.key, direction: 'in', body, sender: chat.sender })
+
+    let reply: string
+    if (linked.estado === 'ajeno') {
+      // Se avisa sin nombrar el negocio del código: quien manda el código puede
+      // no ser el dueño de este teléfono.
+      reply = 'Ese código es de otra cuenta. Este WhatsApp ya está conectado a la tuya, así que no lo cambié.'
+    } else if (linked.estado === 'cambiado') {
+      reply = `Listo, ahora estás en "${linked.negocio}". Todo lo que me escribas se anota ahí.`
+    } else {
+      reply = chat.isGroup
+        ? `¡Listo! Este grupo quedó conectado a "${linked.negocio}". 🎉\nEscriban aquí sus ventas, gastos, clientes o citas y yo los anoto.`
+        : `¡Listo! Tu WhatsApp quedó conectado a "${linked.negocio}". 🎉\nEscríbeme tus ventas, gastos, clientes o citas y yo los anoto.`
+    }
+
     const biz = await resolveBusinessForChat(chat.key)
     await logMessage({ workspaceId: biz?.workspaceId ?? null, chatKey: chat.key, direction: 'out', body: reply })
     return { reply, workspaceId: biz?.workspaceId ?? null, handled: true }
@@ -1421,7 +1498,50 @@ export async function handleInboundMessage(chat: WaChat, text: string): Promise<
 
   await logMessage({ workspaceId: biz.workspaceId, chatKey: chat.key, direction: 'in', body, sender: chat.sender })
 
-  // 3) ¿Responde a algo que quedó pendiente de confirmar?
+  // 3) ¿Pide cambiar de negocio?
+  //
+  // Determinista y no una herramienta: es una operación exacta, no
+  // interpretativa. Que la decida el modelo sería caro (una llamada) y frágil
+  // (elegir mal el negocio manda la plata al lugar equivocado). En grupos no
+  // aplica: un grupo pertenece a un negocio, no a una persona.
+  if (!chat.isGroup) {
+    const destino = pedidoDeCambio(body)
+    if (destino !== null) {
+      const negocios = await negociosDelTelefono(chat.key)
+      let reply: string
+      if (negocios.length <= 1) {
+        reply = 'Solo tienes un negocio conectado a este número.'
+      } else if (!destino) {
+        reply = `Tus negocios: ${negocios.map(n => n.name).join(', ')}. Escríbeme "cambiar a <nombre>".`
+      } else {
+        const buscado = normalizar(destino)
+        const halladas = negocios.filter(n => normalizar(n.name).includes(buscado))
+        if (halladas.length === 0) {
+          reply = `No encontré "${destino}". Tus negocios: ${negocios.map(n => n.name).join(', ')}.`
+        } else if (halladas.length > 1) {
+          reply = `Hay varios que coinciden: ${halladas.map(n => n.name).join(', ')}. Sé más específico.`
+        } else {
+          const supabase = getSupabaseClient()
+          await supabase
+            .from('whatsapp_numbers')
+            .update({ workspace_id: halladas[0].id })
+            .eq('phone', chat.key)
+          // Lo pendiente era de otro negocio: dejarlo vivo lo aplicaría en el
+          // equivocado al primer "sí".
+          await supabase
+            .from('whatsapp_pending_actions')
+            .update({ status: 'cancelled' })
+            .eq('phone', chat.key)
+            .eq('status', 'pending')
+          reply = `Listo, ahora estás en "${halladas[0].name}".`
+        }
+      }
+      await logMessage({ workspaceId: biz.workspaceId, chatKey: chat.key, direction: 'out', body: reply })
+      return { reply, workspaceId: biz.workspaceId, handled: true }
+    }
+  }
+
+  // 4) ¿Responde a algo que quedó pendiente de confirmar?
   //
   // Va ANTES del agente y a propósito: un "sí" ejecuta el payload guardado tal
   // cual, sin que el modelo tenga que reconstruir de qué se hablaba. Además no
@@ -1445,7 +1565,7 @@ export async function handleInboundMessage(chat: WaChat, text: string): Promise<
     }
   }
 
-  // 4) ¿Está la IA configurada?
+  // 5) ¿Está la IA configurada?
   if (!aiConfigured()) {
     if (chat.isGroup) return { reply: null, workspaceId: biz.workspaceId, handled: true }
     const reply = 'Recibí tu mensaje, pero el asistente aún no está activo. Inténtalo más tarde.'
@@ -1453,7 +1573,7 @@ export async function handleInboundMessage(chat: WaChat, text: string): Promise<
     return { reply, workspaceId: biz.workspaceId, handled: true }
   }
 
-  // 5) Correr el agente.
+  // 6) Correr el agente.
   let reply: string | null
   try {
     reply = await runAgent(biz, chat, body)
