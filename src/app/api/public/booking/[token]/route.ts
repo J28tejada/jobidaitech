@@ -6,6 +6,8 @@ import { effectiveHours } from '@/lib/booking'
 import { postWebhook } from '@/lib/notify'
 import { notifyBookingReceived } from '@/lib/email'
 import { sendPushToUser } from '@/lib/push'
+import { avisar, destinatarios, telefonoDelNegocio, textoReservaNueva } from '@/lib/notificacionesWa'
+import { whatsappConfigured } from '@/lib/whatsapp'
 
 async function findWorkspace(idOrSlug: string) {
   const supabase = getSupabaseClient()
@@ -201,13 +203,38 @@ export async function POST(request: NextRequest, { params }: { params: { token: 
       })
     }
 
-    // Aviso al negocio (webhook → n8n → WhatsApp). Fire-and-forget: no bloquea
-    // ni afecta la reserva si falla.
+    // Aviso por WhatsApp. Fire-and-forget: no bloquea ni afecta la reserva.
+    //
+    // Si Evolution está configurado se envía DIRECTO, que es el camino corto y
+    // el que menos se rompe. El webhook a n8n queda solo como respaldo para
+    // cuando no lo está: rebotar por ahí agrega tres puntos de falla (que n8n
+    // corra, que el flujo esté armado, que la URL sea correcta) sin aportar nada
+    // ahora que la app envía sola. Son excluyentes a propósito: con ambos
+    // activos, el dueño recibiría cada reserva dos veces.
+    const whenTextWa = typeof body.startsAtText === 'string' ? body.startsAtText : ''
+    if (whatsappConfigured()) {
+      const destinos = destinatarios({
+        telefonoNegocio: await telefonoDelNegocio({ id: ws.id, booking_notify_phone: ws.booking_notify_phone }),
+        telefonoBarbero: staffPhone,
+      })
+      await avisar(
+        destinos,
+        textoReservaNueva({
+          negocio: ws.name,
+          cliente: name,
+          telefonoCliente: phone,
+          servicio: title || null,
+          barbero: staffName || null,
+          cuando: whenTextWa,
+        })
+      )
+    }
+
     // El webhook es GLOBAL de la plataforma (env BOOKING_NOTIFY_WEBHOOK_URL):
     // así el negocio solo pone su WhatsApp y la notificación ya funciona. Un
     // negocio puede sobreescribirlo con su propio webhook (booking_notify_url).
     const notifyUrl = (ws.booking_notify_url as string) || process.env.BOOKING_NOTIFY_WEBHOOK_URL || ''
-    if (notifyUrl && ws.booking_notify_phone) {
+    if (!whatsappConfigured() && notifyUrl && ws.booking_notify_phone) {
       const whenText = typeof body.startsAtText === 'string' ? body.startsAtText : ''
       await postWebhook(notifyUrl, {
         event: 'booking_created',
