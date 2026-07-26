@@ -14,6 +14,7 @@ import { aiConfigured, aiMissingKeyName } from './ai'
 import { runToolConversation, type AgentMessage, type AgentTool } from './aiAgent'
 import { normalizePhone } from './whatsapp'
 import { hasModule, type PlanTier, type ModuleKey } from './modules'
+import { archetypeFor, type Archetype } from './moduleProfiles'
 import { DEFAULT_CURRENCY, DEFAULT_LOCALE } from './format'
 
 const TZ = process.env.WHATSAPP_TZ || 'America/Santo_Domingo'
@@ -243,6 +244,59 @@ async function ensureDefaultProject(biz: WaBusiness): Promise<string | null> {
   return created?.id ?? null
 }
 
+/**
+ * Resuelve a qué proyecto va un movimiento.
+ *
+ * Sin nombre cae en "General", que es lo correcto para negocios donde cada venta
+ * es independiente. Con nombre busca por coincidencia parcial y, si no existe,
+ * lo crea: en obra el dueño menciona el trabajo antes de haberlo dado de alta en
+ * la app, y obligarlo a crearlo primero rompe la captura por chat.
+ *
+ * Si el nombre coincide con dos proyectos no se adivina. Imputar gastos a la
+ * obra equivocada corrompe justo el número que estos negocios necesitan.
+ */
+async function resolverProyecto(biz: WaBusiness, nombre: unknown): Promise<{ id: string } | { error: string }> {
+  const buscado = typeof nombre === 'string' ? nombre.trim() : ''
+  if (!buscado) {
+    const id = await ensureDefaultProject(biz)
+    return id ? { id } : { error: 'no se pudo preparar el registro' }
+  }
+
+  const supabase = getSupabaseClient()
+  const { data: hallados } = await supabase
+    .from('projects')
+    .select('id,name')
+    .eq('workspace_id', biz.workspaceId)
+    .ilike('name', `%${buscado}%`)
+    .limit(2)
+  if (hallados?.length === 1) return { id: (hallados[0] as any).id }
+  if (hallados && hallados.length > 1) {
+    return { error: `hay más de un proyecto que coincide con "${buscado}"; sé más específico` }
+  }
+
+  // `client` es NOT NULL y no se puede partir "obra de Pedro" en obra + cliente
+  // de forma confiable, así que se repite el nombre. El dueño lo corrige en la app.
+  const { data: creado, error } = await supabase
+    .from('projects')
+    .insert({
+      workspace_id: biz.workspaceId,
+      user_id: biz.userId,
+      name: buscado,
+      description: 'Creado por WhatsApp',
+      client: buscado,
+      start_date: new Date().toISOString().slice(0, 10),
+      status: 'active',
+      budget: 0,
+    })
+    .select('id')
+    .single()
+  if (error) {
+    console.error('resolverProyecto crear', error)
+    return { error: 'no se pudo crear el proyecto' }
+  }
+  return { id: (creado as any).id }
+}
+
 function toDateOnly(value: unknown): string {
   if (typeof value === 'string' && value.length >= 10) {
     const d = new Date(value)
@@ -266,8 +320,9 @@ async function aplicarMovimiento(biz: WaBusiness, input: any): Promise<string> {
     ? input.categoria.trim()
     : tipo === 'income' ? 'Ventas' : 'Gastos'
 
-  const projectId = await ensureDefaultProject(biz)
-  if (!projectId) return 'ERROR: no se pudo preparar el registro'
+  const proyecto = await resolverProyecto(biz, input?.proyecto)
+  if ('error' in proyecto) return `ERROR: ${proyecto.error}`
+  const projectId = proyecto.id
 
   const supabase = getSupabaseClient()
   const { data: cat } = await supabase
@@ -931,6 +986,46 @@ async function execConsultar(biz: WaBusiness, input: any): Promise<string> {
         .join('; ')
     }
 
+    case 'proyectos': {
+      // La pregunta de un negocio por obra no es "cuánto vendí" sino "cuánto
+      // gané en ESTE trabajo", así que se devuelve la ganancia por proyecto.
+      let qp = supabase
+        .from('projects')
+        .select('id,name,status,budget')
+        .eq('workspace_id', biz.workspaceId)
+        .order('created_at', { ascending: false })
+        .limit(limite)
+      if (buscar) qp = qp.ilike('name', `%${buscar}%`)
+      const { data: proys, error } = await qp
+      if (error) {
+        console.error('execConsultar proyectos', error)
+        return 'ERROR: no se pudo consultar'
+      }
+      if (!proys?.length) return buscar ? `Sin proyectos que coincidan con "${buscar}".` : 'Sin proyectos.'
+
+      const ids = (proys as any[]).map(p => p.id)
+      const { data: txs } = await supabase
+        .from('transactions')
+        .select('project_id,type,amount')
+        .eq('workspace_id', biz.workspaceId)
+        .in('project_id', ids)
+      const acum = new Map<string, { ing: number; gas: number }>()
+      for (const t of (txs ?? []) as any[]) {
+        const a = acum.get(t.project_id) ?? { ing: 0, gas: 0 }
+        if (t.type === 'income') a.ing += Number(t.amount) || 0
+        else a.gas += Number(t.amount) || 0
+        acum.set(t.project_id, a)
+      }
+      return (proys as any[])
+        .map(p => {
+          const a = acum.get(p.id) ?? { ing: 0, gas: 0 }
+          const pres = Number(p.budget) > 0 ? ` pres ${p.budget}` : ''
+          const est = p.status && p.status !== 'active' ? ` [${p.status}]` : ''
+          return `${p.name}${est}: ingresos ${a.ing}, gastos ${a.gas}, ganancia ${a.ing - a.gas}${pres}`
+        })
+        .join('; ')
+    }
+
     case 'oportunidades': {
       // Por defecto solo las abiertas: la pregunta es "qué tengo en el aire",
       // no el archivo histórico.
@@ -985,6 +1080,7 @@ function buildTools(biz: WaBusiness, chatKey: string): AgentTool[] {
         categoria: { type: 'string', description: 'Ej. Ventas, Insumos' },
         metodo_pago: { type: 'string', description: 'efectivo, transferencia o tarjeta' },
         fecha: { type: 'string', description: 'YYYY-MM-DD. Por defecto hoy.' },
+        proyecto: { type: 'string', description: 'Obra o trabajo al que va. Se crea si no existe.' },
       },
       required: ['tipo', 'monto'],
       additionalProperties: false,
@@ -996,12 +1092,16 @@ function buildTools(biz: WaBusiness, chatKey: string): AgentTool[] {
       const desc = typeof input?.descripcion === 'string' && input.descripcion.trim() ? ` por ${input.descripcion.trim()}` : ''
       const fecha = toDateOnly(input?.fecha)
       const cuando = fecha === new Date().toISOString().slice(0, 10) ? '' : ` del ${fecha}`
+      // La obra va en el resumen para que el dueño vea la imputación ANTES de
+      // aceptar: en negocios por proyecto, un gasto en la obra equivocada es un
+      // error caro y silencioso.
+      const obra = typeof input?.proyecto === 'string' && input.proyecto.trim() ? ` — ${input.proyecto.trim()}` : ''
       return crearPendiente(
         biz,
         chatKey,
         'movimiento',
         input,
-        `${esGasto ? 'gasto' : 'ingreso'} de ${monto} ${biz.currency}${desc}${cuando}`
+        `${esGasto ? 'gasto' : 'ingreso'} de ${monto} ${biz.currency}${desc}${cuando}${obra}`
       )
     },
   })
@@ -1170,7 +1270,7 @@ function buildTools(biz: WaBusiness, chatKey: string): AgentTool[] {
   // módulo: los esquemas viajan completos en CADA request, así que menos
   // superficie es directamente menos costo por mensaje. El enum se arma según
   // el plan para no ofrecerle al modelo recursos que no puede leer.
-  const recursos = ['movimientos']
+  const recursos = ['movimientos', 'proyectos']
   if (has('agenda')) recursos.push('citas')
   if (has('sales')) recursos.push('clientes')
   if (has('receivables')) recursos.push('cobros')
@@ -1216,10 +1316,28 @@ function localNow(locale: string): string {
 // El prompt se mantiene corto a propósito: va en CADA llamada, y con el modelo
 // por defecto (Haiku) el prefijo no alcanza el mínimo cacheable, así que cada
 // token de más se paga siempre. Condensar aquí es la palanca de costo directa.
+// Una línea por arquetipo, no un prompt por rubro: son más de sesenta rubros y
+// se reusa la misma clasificación que ordena el nav (moduleProfiles), para que
+// el agente y la app no digan cosas distintas sobre el mismo negocio.
+//
+// La de `projects` es la única que cambia comportamiento, y es deliberado: en
+// obra, un movimiento sin proyecto pierde la ganancia por trabajo, que es el
+// dato que justifica la app. En los demás rubros basta con orientar el foco.
+const FOCO_POR_ARQUETIPO: Record<Archetype, string> = {
+  projects: 'Trabaja por obra: si un ingreso o gasto no dice a qué trabajo va, pregúntalo y mándalo en "proyecto".',
+  appointments: 'Trabaja con citas: lo habitual son turnos y cobros del día.',
+  retail: 'Vende productos: lo habitual son ventas y movimientos de stock.',
+  food: 'Vende comida: lo habitual son ventas del día e insumos.',
+  creative: 'Trabaja por encargo: lo habitual son prospectos y trabajos entregados.',
+  general: '',
+}
+
 function systemPrompt(biz: WaBusiness, isGroup: boolean): string {
+  const foco = FOCO_POR_ARQUETIPO[archetypeFor(biz.businessType)]
   const lines = [
     `Asistente de "${biz.name}" (${biz.businessType}). El dueño te manda notas cortas por WhatsApp, en español coloquial y con errores: entiéndelas y regístralas con tus herramientas. Si pregunta por datos ya registrados, búscalos con "consultar".`,
     `Moneda: ${biz.currency}. Ahora: ${localNow(biz.locale)} (${TZ}).`,
+    ...(foco ? [foco] : []),
     ``,
     `REGLAS`,
     `1. Dinero, cita o stock: llama la herramienta y transmite el resumen que devuelva preguntando "¿Lo anoto?". NO digas que quedó guardado: la confirmación la maneja el sistema. Un cliente sin monto ni cita regístralo directo.`,

@@ -18,7 +18,9 @@ export const ORGANIZABLE_HREFS = [
   '/miembros',
 ]
 
-type Archetype = 'appointments' | 'retail' | 'food' | 'projects' | 'creative' | 'general'
+// Exportado: el agente de WhatsApp lo usa para adaptar su prompt al rubro, y
+// debe clasificar igual que el nav. Una segunda tabla de rubros se desincroniza.
+export type Archetype = 'appointments' | 'retail' | 'food' | 'projects' | 'creative' | 'general'
 
 // Módulos relevantes por arquetipo, en orden de importancia.
 const ARCHETYPE_HREFS: Record<Archetype, string[]> = {
