@@ -57,6 +57,7 @@ interface Staff {
   phone: string | null
   email: string | null
   imageUrl: string | null
+  serviceIds: string[]
   active: boolean
 }
 interface Appointment {
@@ -445,6 +446,7 @@ export default function AgendaBoard() {
       {showStaff && (
         <StaffManager
           staff={staff}
+          services={services}
           vertical={vertical}
           onClose={() => setShowStaff(false)}
           onChanged={async () => { await loadStatic() }}
@@ -1111,7 +1113,7 @@ function ServicesManager({ services, vertical, onClose, onChanged }: { services:
   )
 }
 
-function StaffManager({ staff, vertical, onClose, onChanged }: { staff: Staff[]; vertical: VerticalConfig; onClose: () => void; onChanged: () => void }) {
+function StaffManager({ staff, services, vertical, onClose, onChanged }: { staff: Staff[]; services: Service[]; vertical: VerticalConfig; onClose: () => void; onChanged: () => void }) {
   const toast = useToast()
   const confirm = useConfirm()
   const [list, setList] = useState<Staff[]>(staff)
@@ -1121,9 +1123,13 @@ function StaffManager({ staff, vertical, onClose, onChanged }: { staff: Staff[];
   const [phone, setPhone] = useState('')
   const [email, setEmail] = useState('')
   const [imageUrl, setImageUrl] = useState('')
+  const [serviceIds, setServiceIds] = useState<string[]>([])
   const [uploading, setUploading] = useState(false)
   const [saving, setSaving] = useState(false)
   const singular = vertical.staffSingular.toLowerCase()
+  const activeServices = services.filter(s => s.active !== false)
+  const toggleService = (id: string) => setServiceIds(prev => (prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]))
+  const serviceNames = (ids: string[]) => services.filter(s => ids.includes(s.id)).map(s => s.name).join(', ')
 
   const reload = async () => {
     const s = await fetch('/api/staff', { credentials: 'include' }).then(r => (r.ok ? r.json() : []))
@@ -1131,7 +1137,7 @@ function StaffManager({ staff, vertical, onClose, onChanged }: { staff: Staff[];
     onChanged()
   }
 
-  const resetForm = () => { setEditingId(null); setName(''); setPct(''); setPhone(''); setEmail(''); setImageUrl('') }
+  const resetForm = () => { setEditingId(null); setName(''); setPct(''); setPhone(''); setEmail(''); setImageUrl(''); setServiceIds([]) }
 
   const startEdit = (s: Staff) => {
     setEditingId(s.id)
@@ -1140,6 +1146,7 @@ function StaffManager({ staff, vertical, onClose, onChanged }: { staff: Staff[];
     setPhone(s.phone ?? '')
     setEmail(s.email ?? '')
     setImageUrl(s.imageUrl ?? '')
+    setServiceIds(Array.isArray(s.serviceIds) ? s.serviceIds : [])
   }
 
   const uploadImage = async (file: File) => {
@@ -1164,7 +1171,7 @@ function StaffManager({ staff, vertical, onClose, onChanged }: { staff: Staff[];
     if (!name.trim() || saving) return
     setSaving(true)
     try {
-      const payload = { name, commissionPct: Number(pct) || 0, phone, email, imageUrl: imageUrl || null }
+      const payload = { name, commissionPct: Number(pct) || 0, phone, email, imageUrl: imageUrl || null, serviceIds }
       const res = editingId
         ? await fetch(`/api/staff/${editingId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify(payload) })
         : await fetch('/api/staff', { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify(payload) })
@@ -1216,6 +1223,31 @@ function StaffManager({ staff, vertical, onClose, onChanged }: { staff: Staff[];
         <input value={pct} onChange={e => setPct(e.target.value)} type="number" step="1" min="0" max="100" className="input" placeholder="Comisión % (ej. 40)" />
         <input value={phone} onChange={e => setPhone(e.target.value)} type="tel" inputMode="tel" className="input" placeholder="WhatsApp (para avisarle de sus citas)" />
         <input value={email} onChange={e => setEmail(e.target.value)} type="email" className="input" placeholder="Correo (opcional)" />
+
+        {/* Servicios que hace este barbero. Vacío = hace todos. Se usa para
+            mostrar el barbero correcto en la reserva y calcular disponibilidad. */}
+        {activeServices.length > 0 && (
+          <div className="rounded-lg border border-gray-200 p-3">
+            <p className="text-xs font-medium text-gray-600 mb-1">¿Qué servicios hace?</p>
+            <p className="text-[11px] text-gray-400 mb-2">Si no marcas ninguno, se asume que hace todos.</p>
+            <div className="flex flex-wrap gap-2">
+              {activeServices.map(sv => {
+                const on = serviceIds.includes(sv.id)
+                return (
+                  <button
+                    key={sv.id}
+                    type="button"
+                    onClick={() => toggleService(sv.id)}
+                    className={`px-3 py-1.5 rounded-full text-sm font-medium border transition-colors ${on ? 'bg-primary-600 text-white border-primary-600' : 'bg-gray-100 text-gray-700 border-transparent hover:bg-gray-200'}`}
+                  >
+                    {on && <Check className="h-3.5 w-3.5 inline mr-1" />}{sv.name}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        )}
+
         <div className="flex gap-2">
           <button type="submit" disabled={saving || !name.trim()} className="btn btn-primary flex-1 flex items-center justify-center gap-2 disabled:opacity-60">
             {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : editingId ? <Check className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
@@ -1247,6 +1279,9 @@ function StaffManager({ staff, vertical, onClose, onChanged }: { staff: Staff[];
                   <p className="text-sm font-medium text-gray-900 truncate">{s.name}</p>
                   <p className="text-xs text-gray-500 truncate">
                     {s.commissionPct}% de comisión{s.phone ? ` · ${s.phone}` : ''}
+                  </p>
+                  <p className="text-[11px] text-gray-400 truncate">
+                    {s.serviceIds && s.serviceIds.length > 0 ? serviceNames(s.serviceIds) : 'Hace todos los servicios'}
                   </p>
                 </div>
               </div>

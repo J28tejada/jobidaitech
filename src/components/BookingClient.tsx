@@ -7,7 +7,7 @@ import { formatCurrency } from '@/lib/format'
 import type { BookingHours } from '@/lib/booking'
 
 interface Service { id: string; name: string; durationMin: number; price: number; imageUrl?: string | null }
-interface Staff { id: string; name: string; imageUrl?: string | null }
+interface Staff { id: string; name: string; imageUrl?: string | null; serviceIds?: string[] }
 interface Config { slotMin: number; deposit: number; hours: BookingHours }
 interface BookingData {
   enabled: boolean
@@ -54,8 +54,7 @@ export default function BookingClient({ id }: { id: string }) {
   const [serviceId, setServiceId] = useState('')
   const [staffId, setStaffId] = useState('') // '' = sin preferencia / cualquiera
   const [date, setDate] = useState(todayStr())
-  const [taken, setTaken] = useState<{ startsAt: string; durationMin: number; staffId: string | null }[]>([])
-  const [capacity, setCapacity] = useState(1)
+  const [taken, setTaken] = useState<{ startsAt: string; durationMin: number; staffId: string | null; serviceId: string | null }[]>([])
   const [slotIso, setSlotIso] = useState('')
   const [name, setName] = useState('')
   const [phone, setPhone] = useState('')
@@ -76,21 +75,37 @@ export default function BookingClient({ id }: { id: string }) {
     if (!data?.enabled || !date) return
     const from = new Date(`${date}T00:00:00`).toISOString()
     const to = new Date(`${date}T23:59:59`).toISOString()
-    // Pedimos TODAS las citas del día (cualquier barbero) + la capacidad; el
-    // filtrado por barbero se hace aquí para respetar la capacidad total.
+    // Pedimos TODAS las citas del día (cualquier barbero). La capacidad por
+    // servicio se calcula aquí con la lista de barberos y sus servicios.
     const url = `/api/public/booking/${id}/day?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`
     fetch(url)
-      .then(r => (r.ok ? r.json() : { taken: [], capacity: 1 }))
-      .then(d => { setTaken(d.taken || []); setCapacity(Math.max(1, Number(d.capacity) || 1)) })
-      .catch(() => { setTaken([]); setCapacity(1) })
+      .then(r => (r.ok ? r.json() : { taken: [] }))
+      .then(d => setTaken(d.taken || []))
+      .catch(() => setTaken([]))
     setSlotIso('')
   }, [data, date, id])
 
   const fmt = (n: number) => formatCurrency(n, { currency: data?.currency, locale: data?.locale })
   const service = data?.services?.find(s => s.id === serviceId)
   const hasServices = (data?.services?.length ?? 0) > 0
-  const hasStaff = (data?.staff?.length ?? 0) > 0
   const selectedStaff = data?.staff?.find(s => s.id === staffId)
+
+  // Barberos que pueden hacer el servicio elegido (los que no tienen servicios
+  // marcados hacen todos). Si aún no hay servicio elegido, se muestran todos.
+  const eligibleStaff = useMemo(() => {
+    const all = data?.staff ?? []
+    if (!serviceId) return all
+    return all.filter(s => !s.serviceIds || s.serviceIds.length === 0 || s.serviceIds.includes(serviceId))
+  }, [data, serviceId])
+  const hasStaff = eligibleStaff.length > 0
+  const eligibleIds = useMemo(() => new Set(eligibleStaff.map(s => s.id)), [eligibleStaff])
+  // Capacidad = nº de barberos que hacen ese servicio (mínimo 1 = "una silla").
+  const capacity = Math.max(1, eligibleStaff.length)
+
+  // Si el barbero elegido deja de poder hacer el servicio elegido, se deselecciona.
+  useEffect(() => {
+    if (staffId && !eligibleStaff.some(s => s.id === staffId)) setStaffId('')
+  }, [eligibleStaff, staffId])
 
   // Próximos días abiertos (según el horario por día del negocio) como fichas.
   const openDays = useMemo(() => {
@@ -141,13 +156,20 @@ export default function BookingClient({ id }: { id: string }) {
         const e = s + iv.durationMin * 60000
         return startMs < e && s < endMs
       })
-      // Lleno si ya hay tantas citas solapadas como capacidad (barberos), o si
-      // el barbero elegido ya tiene una cita en ese rango (no se dobla a nadie).
-      const full = overlapping.length >= capacity || (!!staffId && overlapping.some(iv => iv.staffId === staffId))
+      // Solo cuentan contra la capacidad las citas que ocupan a un barbero que
+      // hace ESTE servicio: las de un barbero elegible, o las "Sin preferencia"
+      // (sin barbero) del mismo servicio (o cualquiera si no hay servicio).
+      const relevant = overlapping.filter(iv =>
+        (iv.staffId && eligibleIds.has(iv.staffId)) ||
+        (!iv.staffId && (!serviceId || iv.serviceId === serviceId))
+      )
+      // Lleno si hay tantas citas relevantes como barberos que hacen el
+      // servicio, o si el barbero elegido ya tiene una cita en ese rango.
+      const full = relevant.length >= capacity || (!!staffId && overlapping.some(iv => iv.staffId === staffId))
       if (!full) out.push({ label: hm12(t), iso: start.toISOString(), hour: Math.floor(t / 60) })
     }
     return out
-  }, [data, service, hasServices, date, taken, durationFor, capacity, staffId])
+  }, [data, service, hasServices, date, taken, durationFor, capacity, staffId, serviceId, eligibleIds])
 
   // Agrupar horarios por franja para lectura rápida.
   const slotGroups = useMemo(() => {
@@ -356,7 +378,7 @@ export default function BookingClient({ id }: { id: string }) {
               <StepHead n={stepStaff} title="Elige tu barbero" />
               <div className="flex gap-3 overflow-x-auto pb-2 -mx-1 px-1">
                 <StaffChip label="Sin preferencia" sub="Cualquiera" active={staffId === ''} onClick={() => setStaffId('')} />
-                {(data.staff ?? []).map(s => (
+                {eligibleStaff.map(s => (
                   <StaffChip key={s.id} label={s.name} sub={initials(s.name)} imageUrl={s.imageUrl} active={staffId === s.id} onClick={() => setStaffId(s.id)} avatar />
                 ))}
               </div>
