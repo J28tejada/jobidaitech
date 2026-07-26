@@ -373,11 +373,36 @@ async function aplicarMovimiento(biz: WaBusiness, input: any): Promise<string> {
     ? input.categoria.trim()
     : tipo === 'income' ? 'Ventas' : 'Gastos'
 
+  const supabase = getSupabaseClient()
+
+  // En rubros que no trabajan por obra (barbería, tienda, restaurante) el gasto
+  // va a `expenses` y no a `transactions`. Esa tabla existe justamente porque
+  // `transactions.project_id` es NOT NULL y esos negocios no tienen proyectos:
+  // forzarlos a uno llamado "General" ensucia el dato y, sobre todo, el panel y
+  // /finanzas leen de `expenses`, así que un gasto en `transactions` les queda
+  // invisible. Los ingresos sí siguen en `transactions`, que es de donde el
+  // panel los suma.
+  const arq = archetypeFor(biz.businessType)
+  if (tipo === 'expense' && arq !== 'projects' && arq !== 'general') {
+    const { error: errGasto } = await supabase.from('expenses').insert({
+      workspace_id: biz.workspaceId,
+      user_id: biz.userId,
+      category,
+      description,
+      amount,
+      date: toDateOnly(input?.fecha),
+    })
+    if (errGasto) {
+      console.error('aplicarMovimiento gasto simple', errGasto)
+      return 'ERROR: no se pudo guardar el gasto'
+    }
+    return `OK: gasto de ${amount} registrado.`
+  }
+
   const proyecto = await resolverProyecto(biz, input?.proyecto)
   if ('error' in proyecto) return `ERROR: ${proyecto.error}`
   const projectId = proyecto.id
 
-  const supabase = getSupabaseClient()
   const { data: cat } = await supabase
     .from('categories')
     .select('id')
@@ -935,18 +960,48 @@ async function execConsultar(biz: WaBusiness, input: any): Promise<string> {
         console.error('execConsultar movimientos', error)
         return 'ERROR: no se pudo consultar'
       }
-      if (!data?.length) return `Sin movimientos entre ${desde} y ${hasta}.`
+      // En rubros sin obra los gastos viven en `expenses` (ver aplicarMovimiento).
+      // Hay que leer de las dos tablas o el agente respondería "gastaste 0"
+      // justo después de haber anotado un gasto él mismo.
+      const arqC = archetypeFor(biz.businessType)
+      let sueltos: any[] = []
+      if (arqC !== 'projects' && arqC !== 'general') {
+        const { data: ex } = await supabase
+          .from('expenses')
+          .select('amount,description,category,date')
+          .eq('workspace_id', biz.workspaceId)
+          .gte('date', desde)
+          .lte('date', hasta)
+          .order('date', { ascending: false })
+          .limit(200)
+        sueltos = (ex ?? []) as any[]
+      }
+
+      if (!data?.length && !sueltos.length) return `Sin movimientos entre ${desde} y ${hasta}.`
       let ing = 0
       let gas = 0
-      for (const t of data as any[]) {
+      for (const t of (data ?? []) as any[]) {
         if (t.type === 'income') ing += Number(t.amount) || 0
         else gas += Number(t.amount) || 0
       }
-      const filas = (data as any[])
+      for (const e of sueltos) gas += Number(e.amount) || 0
+
+      const lineas = [
+        ...((data ?? []) as any[]).map(t => ({
+          date: String(t.date),
+          txt: `${String(t.date).slice(5)} ${t.type === 'income' ? '+' : '-'}${t.amount} ${t.description || t.category_name || ''}`.trim(),
+        })),
+        ...sueltos.map(e => ({
+          date: String(e.date),
+          txt: `${String(e.date).slice(5)} -${e.amount} ${e.description || e.category || ''}`.trim(),
+        })),
+      ]
+        .sort((a, b) => (a.date < b.date ? 1 : -1))
         .slice(0, limite)
-        .map(t => `${String(t.date).slice(5)} ${t.type === 'income' ? '+' : '-'}${t.amount} ${t.description || t.category_name || ''}`.trim())
+        .map(l => l.txt)
         .join('; ')
-      return `${desde}..${hasta}: ingresos ${ing}, gastos ${gas}, ganancia ${ing - gas}, ${data.length} movs. Últimos: ${filas}`
+      const total = ((data ?? []) as any[]).length + sueltos.length
+      return `${desde}..${hasta}: ingresos ${ing}, gastos ${gas}, ganancia ${ing - gas}, ${total} movs. Últimos: ${lineas}`
     }
 
     case 'citas': {

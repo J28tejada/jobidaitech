@@ -263,6 +263,15 @@ export default function Dashboard() {
   // transacciones: ocultamos los KPIs de ingreso/ganancia por transacción
   // (saldrían en 0) y mostramos el ingreso de citas.
   const isAppointments = archetype === 'appointments';
+  // El ingreso de una barbería no es solo lo agendado: el que entra sin reservar
+  // es el caso normal, y quedaba invisible porque el KPI contaba únicamente
+  // citas `done`. Se suman los ingresos sueltos (transactions), que es donde los
+  // registra el agente de WhatsApp y la única vía para un walk-in.
+  const monthIncomeOther = stats.monthlyIncome ?? 0;
+  const monthIncomeAppointments = (agenda?.monthIncome ?? 0) + monthIncomeOther;
+  const appointmentsIncomeLabel = monthIncomeOther > 0
+    ? `${agenda?.monthDone ?? 0} citas + ${formatCurrency(monthIncomeOther)} sueltos`
+    : `${agenda?.monthDone ?? 0} citas atendidas`;
   const primary = primaryActionForBusiness(businessType);
   const primaryHref = primary.href;
   const ord = (href: string) => (href === primaryHref ? 'order-first ' : '');
@@ -345,10 +354,10 @@ export default function Dashboard() {
                     Ingreso del mes
                   </p>
                   <p className="text-xl font-bold text-gray-900 mb-1 break-words leading-tight">
-                    {formatCurrency(agenda?.monthIncome ?? 0)}
+                    {formatCurrency(monthIncomeAppointments)}
                   </p>
                   <p className="text-xs text-gray-500 truncate">
-                    {(agenda?.monthDone ?? 0)} citas atendidas
+                    {appointmentsIncomeLabel}
                   </p>
                 </div>
               </div>
