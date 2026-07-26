@@ -1285,7 +1285,7 @@ function buildTools(biz: WaBusiness, chatKey: string): AgentTool[] {
         recurso: { type: 'string', enum: recursos },
         desde: { type: 'string', description: 'YYYY-MM-DD. Movimientos: por defecto 30 días atrás.' },
         hasta: { type: 'string', description: 'YYYY-MM-DD. Por defecto hoy.' },
-        buscar: { type: 'string', description: 'Filtra por nombre (cliente, producto)' },
+        buscar: { type: 'string', description: 'Filtra por nombre. Úsalo SIEMPRE que pregunten por una obra, cliente o producto concreto.' },
         limite: { type: 'number', description: 'Máx. filas. Por defecto 5' },
       },
       required: ['recurso'],
