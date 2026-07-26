@@ -1,4 +1,4 @@
-// Gastos simples del negocio (sin proyecto). Ver migración 0035_expenses.sql.
+// Gastos simples del negocio (sin proyecto). Ver migración 0038_expenses.sql.
 
 // Categorías sugeridas (chips en el formulario). El negocio puede escribir otra.
 export const EXPENSE_CATEGORIES = [
