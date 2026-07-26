@@ -126,26 +126,36 @@ export async function POST(request: NextRequest, { params }: { params: { token: 
       clientId = created?.id ?? null
     }
 
-    // Chequeo básico de solape (mismo barbero, o la barbería si no hay barbero).
+    // Validación de disponibilidad por CAPACIDAD (autoridad final, evita el
+    // doble booking aunque el cliente muestre algo desactualizado o dos
+    // clientes reserven a la vez). Capacidad = nº de barberos activos (mín. 1).
+    // Se rechaza si el rango ya está lleno (tantas citas solapadas como
+    // capacidad) o si el barbero elegido ya tiene una cita en ese rango.
+    const { count: staffCount } = await supabase
+      .from('staff')
+      .select('id', { count: 'exact', head: true })
+      .eq('workspace_id', ws.id)
+      .eq('active', true)
+    const capacity = Math.max(1, staffCount ?? 0)
+
     const windowStart = new Date(starts.getTime() - 4 * 3600_000).toISOString()
     const windowEnd = new Date(starts.getTime() + 4 * 3600_000).toISOString()
-    const q = supabase
+    const { data: near } = await supabase
       .from('appointments')
       .select('starts_at, duration_min, staff_id')
       .eq('workspace_id', ws.id)
       .in('status', ['scheduled', 'confirmed', 'done'])
       .gte('starts_at', windowStart)
       .lte('starts_at', windowEnd)
-    if (staffId) q.eq('staff_id', staffId)
-    const { data: near } = await q
     const newStart = starts.getTime()
     const newEnd = newStart + durationMin * 60_000
-    const overlap = (near ?? []).some(a => {
+    const overlapping = (near ?? []).filter(a => {
       const s = new Date(a.starts_at).getTime()
       const e = s + Number(a.duration_min ?? 30) * 60_000
       return newStart < e && s < newEnd
     })
-    if (overlap) return NextResponse.json({ error: 'Ese horario ya no está disponible. Elige otro.' }, { status: 409 })
+    const full = overlapping.length >= capacity || (staffId ? overlapping.some(a => a.staff_id === staffId) : false)
+    if (full) return NextResponse.json({ error: 'Ese horario ya no está disponible. Elige otro.' }, { status: 409 })
 
     const { error } = await supabase.from('appointments').insert({
       workspace_id: ws.id,

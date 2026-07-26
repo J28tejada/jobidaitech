@@ -54,7 +54,8 @@ export default function BookingClient({ id }: { id: string }) {
   const [serviceId, setServiceId] = useState('')
   const [staffId, setStaffId] = useState('') // '' = sin preferencia / cualquiera
   const [date, setDate] = useState(todayStr())
-  const [taken, setTaken] = useState<{ startsAt: string; durationMin: number }[]>([])
+  const [taken, setTaken] = useState<{ startsAt: string; durationMin: number; staffId: string | null }[]>([])
+  const [capacity, setCapacity] = useState(1)
   const [slotIso, setSlotIso] = useState('')
   const [name, setName] = useState('')
   const [phone, setPhone] = useState('')
@@ -75,10 +76,15 @@ export default function BookingClient({ id }: { id: string }) {
     if (!data?.enabled || !date) return
     const from = new Date(`${date}T00:00:00`).toISOString()
     const to = new Date(`${date}T23:59:59`).toISOString()
-    const url = `/api/public/booking/${id}/day?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}${staffId ? `&staffId=${staffId}` : ''}`
-    fetch(url).then(r => (r.ok ? r.json() : { taken: [] })).then(d => setTaken(d.taken || [])).catch(() => setTaken([]))
+    // Pedimos TODAS las citas del día (cualquier barbero) + la capacidad; el
+    // filtrado por barbero se hace aquí para respetar la capacidad total.
+    const url = `/api/public/booking/${id}/day?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`
+    fetch(url)
+      .then(r => (r.ok ? r.json() : { taken: [], capacity: 1 }))
+      .then(d => { setTaken(d.taken || []); setCapacity(Math.max(1, Number(d.capacity) || 1)) })
+      .catch(() => { setTaken([]); setCapacity(1) })
     setSlotIso('')
-  }, [data, date, staffId, id])
+  }, [data, date, id])
 
   const fmt = (n: number) => formatCurrency(n, { currency: data?.currency, locale: data?.locale })
   const service = data?.services?.find(s => s.id === serviceId)
@@ -130,15 +136,18 @@ export default function BookingClient({ id }: { id: string }) {
       const startMs = start.getTime()
       const endMs = startMs + dur * 60000
       if (startMs < now + 5 * 60000) continue
-      const overlap = taken.some(iv => {
+      const overlapping = taken.filter(iv => {
         const s = new Date(iv.startsAt).getTime()
         const e = s + iv.durationMin * 60000
         return startMs < e && s < endMs
       })
-      if (!overlap) out.push({ label: hm12(t), iso: start.toISOString(), hour: Math.floor(t / 60) })
+      // Lleno si ya hay tantas citas solapadas como capacidad (barberos), o si
+      // el barbero elegido ya tiene una cita en ese rango (no se dobla a nadie).
+      const full = overlapping.length >= capacity || (!!staffId && overlapping.some(iv => iv.staffId === staffId))
+      if (!full) out.push({ label: hm12(t), iso: start.toISOString(), hour: Math.floor(t / 60) })
     }
     return out
-  }, [data, service, hasServices, date, taken, durationFor])
+  }, [data, service, hasServices, date, taken, durationFor, capacity, staffId])
 
   // Agrupar horarios por franja para lectura rápida.
   const slotGroups = useMemo(() => {
