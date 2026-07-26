@@ -825,18 +825,24 @@ async function aplicarPendiente(biz: WaBusiness, row: any): Promise<string> {
  * Los ERROR con motivo concreto ("no encontré una deuda abierta de Juan") se
  * transmiten tal cual: son accionables, a diferencia de un fallo genérico.
  */
-function textoConfirmacion(pendiente: any, res: string): string {
+function textoConfirmacion(pendiente: any, res: string, negocio: string): string {
   if (!res.startsWith('OK')) {
     return res.startsWith('ERROR: ')
       ? `Uy, ${res.slice(7)}.`
       : 'Uy, no pude guardarlo. ¿Lo intentamos de nuevo?'
   }
+  // Se nombra SIEMPRE el negocio. Sin eso, "Listo, anoté 5000" es ambiguo para
+  // quien tiene más de un espacio: el dato queda bien guardado, pero el dueño lo
+  // busca donde no está y concluye que la app perdió el registro. Quien tiene un
+  // solo negocio lee una redundancia inofensiva; quien tiene varios, la
+  // diferencia entre confiar o no en lo que le decimos.
+  const donde = negocio ? ` en ${negocio}` : ''
   // En abonos e inventario el detalle que devuelve la escritura trae el dato que
   // se quiere saber (saldo restante, stock resultante), y no incluye ids.
   if (pendiente.kind === 'abono' || pendiente.kind === 'inventario') {
-    return `${res.replace(/^OK:\s*/, '').trim()} ✅`
+    return `${res.replace(/^OK:\s*/, '').trim()}${donde} ✅`
   }
-  return `Listo, anoté ${pendiente.summary}. ✅`
+  return `Listo, anoté ${pendiente.summary}${donde}. ✅`
 }
 
 /**
@@ -1553,7 +1559,7 @@ export async function handleInboundMessage(chat: WaChat, text: string): Promise<
     const clase = claseRespuesta(body)
     if (clase === 'si') {
       const res = await aplicarPendiente(biz, pendiente)
-      const reply = textoConfirmacion(pendiente, res)
+      const reply = textoConfirmacion(pendiente, res, biz.name)
       await logMessage({ workspaceId: biz.workspaceId, chatKey: chat.key, direction: 'out', body: reply })
       return { reply, workspaceId: biz.workspaceId, handled: true }
     }
@@ -1633,7 +1639,7 @@ export async function handleSimulatedMessage(params: {
     const clase = claseRespuesta(body)
     if (clase === 'si') {
       const res = await aplicarPendiente(biz, pendiente)
-      const reply = textoConfirmacion(pendiente, res)
+      const reply = textoConfirmacion(pendiente, res, biz.name)
       await logMessage({ workspaceId: biz.workspaceId, chatKey: key, direction: 'out', body: reply })
       return { reply }
     }
