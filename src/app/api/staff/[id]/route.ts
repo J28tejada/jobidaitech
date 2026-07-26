@@ -34,6 +34,7 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
     if (body.phone !== undefined) patch.phone = typeof body.phone === 'string' && body.phone.trim() ? body.phone.trim() : null
     if (body.email !== undefined) patch.email = typeof body.email === 'string' && body.email.trim() ? body.email.trim() : null
     if (body.imageUrl !== undefined) patch.image_url = typeof body.imageUrl === 'string' && body.imageUrl.trim() ? body.imageUrl.trim() : null
+    if (body.serviceIds !== undefined) patch.service_ids = Array.isArray(body.serviceIds) ? body.serviceIds.map(String).filter(Boolean) : null
 
     const supabase = getSupabaseClient()
     const { data, error } = await supabase

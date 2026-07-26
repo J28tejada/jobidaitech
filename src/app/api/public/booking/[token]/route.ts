@@ -55,7 +55,15 @@ export async function GET(_request: NextRequest, { params }: { params: { token: 
         hours: effectiveHours(ws),
       },
       services: (services ?? []).map(s => ({ id: s.id, name: s.name, durationMin: Number(s.duration_min ?? 30), price: Number(s.price ?? 0), imageUrl: (s as { image_url?: string | null }).image_url ?? null })),
-      staff: (staff ?? []).map(s => ({ id: s.id, name: s.name, imageUrl: (s as { image_url?: string | null }).image_url ?? null })),
+      staff: (staff ?? []).map(s => {
+        const raw = (s as { service_ids?: unknown }).service_ids
+        return {
+          id: s.id,
+          name: s.name,
+          imageUrl: (s as { image_url?: string | null }).image_url ?? null,
+          serviceIds: Array.isArray(raw) ? raw.map(String) : [],
+        }
+      }),
     })
   } catch (error) {
     console.error(`GET /api/public/booking/${params.token}`, error)
@@ -128,23 +136,27 @@ export async function POST(request: NextRequest, { params }: { params: { token: 
       clientId = created?.id ?? null
     }
 
-    // Validación de disponibilidad por CAPACIDAD (autoridad final, evita el
-    // doble booking aunque el cliente muestre algo desactualizado o dos
-    // clientes reserven a la vez). Capacidad = nº de barberos activos (mín. 1).
-    // Se rechaza si el rango ya está lleno (tantas citas solapadas como
-    // capacidad) o si el barbero elegido ya tiene una cita en ese rango.
-    const { count: staffCount } = await supabase
+    // Validación de disponibilidad por CAPACIDAD por SERVICIO (autoridad final,
+    // evita el doble booking aunque el cliente muestre algo desactualizado o
+    // dos clientes reserven a la vez). Capacidad = nº de barberos que hacen
+    // ESTE servicio (mín. 1). Los que no tienen servicios marcados hacen todos.
+    const { data: allStaff } = await supabase
       .from('staff')
-      .select('id', { count: 'exact', head: true })
+      .select('id, service_ids')
       .eq('workspace_id', ws.id)
       .eq('active', true)
-    const capacity = Math.max(1, staffCount ?? 0)
+    const eligible = (allStaff ?? []).filter(s => {
+      const ids = Array.isArray((s as { service_ids?: unknown }).service_ids) ? ((s as { service_ids: unknown[] }).service_ids).map(String) : []
+      return ids.length === 0 || (serviceId ? ids.includes(serviceId) : true)
+    })
+    const eligibleIds = new Set(eligible.map(s => s.id))
+    const capacity = Math.max(1, eligible.length)
 
     const windowStart = new Date(starts.getTime() - 4 * 3600_000).toISOString()
     const windowEnd = new Date(starts.getTime() + 4 * 3600_000).toISOString()
     const { data: near } = await supabase
       .from('appointments')
-      .select('starts_at, duration_min, staff_id')
+      .select('starts_at, duration_min, staff_id, service_id')
       .eq('workspace_id', ws.id)
       .in('status', ['scheduled', 'confirmed', 'done'])
       .gte('starts_at', windowStart)
@@ -156,7 +168,12 @@ export async function POST(request: NextRequest, { params }: { params: { token: 
       const e = s + Number(a.duration_min ?? 30) * 60_000
       return newStart < e && s < newEnd
     })
-    const full = overlapping.length >= capacity || (staffId ? overlapping.some(a => a.staff_id === staffId) : false)
+    // Solo cuentan las citas que ocupan a un barbero que hace este servicio.
+    const relevant = overlapping.filter(a =>
+      (a.staff_id && eligibleIds.has(a.staff_id)) ||
+      (!a.staff_id && (!serviceId || a.service_id === serviceId))
+    )
+    const full = relevant.length >= capacity || (staffId ? overlapping.some(a => a.staff_id === staffId) : false)
     if (full) return NextResponse.json({ error: 'Ese horario ya no está disponible. Elige otro.' }, { status: 409 })
 
     const { error } = await supabase.from('appointments').insert({
