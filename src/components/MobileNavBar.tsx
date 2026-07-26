@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Home, FolderOpen, DollarSign, BarChart3, Settings, Plus, Film, CalendarClock, CalendarCheck, Boxes, Contact } from 'lucide-react';
+import { Home, FolderOpen, DollarSign, BarChart3, Settings, Plus, Film, CalendarClock, CalendarCheck, Boxes, Contact, Wallet } from 'lucide-react';
 
 import { primaryActionForBusiness } from '@/lib/moduleProfiles';
 
@@ -35,7 +35,11 @@ export default function MobileNavBar({ onQuickAction, businessType }: MobileNavB
     isAppointments
       ? { href: '/reservas', label: 'Reservas', icon: CalendarCheck }
       : { href: '/transacciones', label: 'Movimientos', icon: DollarSign },
-    { href: '/reportes', label: 'Reportes', icon: BarChart3 },
+    // Negocios de citas usan el reporte simple de dinero (/finanzas), no el
+    // reporte por proyectos: su ingreso viene de las citas atendidas.
+    isAppointments
+      ? { href: '/finanzas', label: 'Finanzas', icon: Wallet }
+      : { href: '/reportes', label: 'Reportes', icon: BarChart3 },
     { href: '/configuracion', label: 'Ajustes', icon: Settings },
   ];
 
