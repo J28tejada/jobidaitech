@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
+import ActionSheet from './ActionSheet'
 import { createPortal } from 'react-dom'
 import {
   Plus,
@@ -81,9 +82,7 @@ export default function OpportunitiesBoard() {
   const [loading, setLoading] = useState(true)
   const [showClosed, setShowClosed] = useState(false)
 
-  const [mounted, setMounted] = useState(false)
-  const [menu, setMenu] = useState<{ item: Opportunity; top: number; left: number } | null>(null)
-  const menuRef = useRef<HTMLDivElement>(null)
+  const [menuItem, setMenuItem] = useState<Opportunity | null>(null)
 
   const [showForm, setShowForm] = useState(false)
   const [editing, setEditing] = useState<Opportunity | null>(null)
@@ -92,25 +91,8 @@ export default function OpportunitiesBoard() {
   const [lostTarget, setLostTarget] = useState<Opportunity | null>(null)
 
   useEffect(() => {
-    setMounted(true)
     load()
   }, [])
-
-  useEffect(() => {
-    if (!menu) return
-    const close = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenu(null)
-    }
-    const onScroll = () => setMenu(null)
-    document.addEventListener('mousedown', close)
-    window.addEventListener('scroll', onScroll, true)
-    window.addEventListener('resize', onScroll)
-    return () => {
-      document.removeEventListener('mousedown', close)
-      window.removeEventListener('scroll', onScroll, true)
-      window.removeEventListener('resize', onScroll)
-    }
-  }, [menu])
 
   const load = async () => {
     try {
@@ -127,12 +109,6 @@ export default function OpportunitiesBoard() {
     } finally {
       setLoading(false)
     }
-  }
-
-  const openMenu = (e: React.MouseEvent, item: Opportunity) => {
-    e.stopPropagation()
-    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
-    setMenu({ item, top: rect.bottom + 6, left: Math.max(rect.right - 220, 8) })
   }
 
   const changeStage = async (item: Opportunity, stage: Stage) => {
@@ -183,7 +159,7 @@ export default function OpportunitiesBoard() {
             </div>
             {item.title && <p className="text-xs text-gray-500 truncate mt-0.5">{item.title}</p>}
           </div>
-          <button onClick={e => openMenu(e, item)} className="text-gray-400 hover:text-gray-600 p-1 flex-shrink-0">
+          <button onClick={() => setMenuItem(item)} className="text-gray-400 hover:text-gray-600 p-1 flex-shrink-0">
             <MoreVertical className="h-5 w-5" />
           </button>
         </div>
@@ -319,34 +295,22 @@ export default function OpportunitiesBoard() {
       )}
 
       {/* Menú */}
-      {mounted &&
-        menu &&
-        createPortal(
-          <div ref={menuRef} style={{ position: 'fixed', top: menu.top, left: menu.left, width: 220 }} className="bg-white rounded-xl shadow-lg border border-gray-200 py-1.5 z-[80]">
-            <Btn icon={ClipboardList} label="Registrar seguimiento" onClick={() => { const it = menu.item; setMenu(null); setActivityTarget(it) }} />
-            {menu.item.clientPhone && (
-              <a
-                href={waLink(menu.item.clientPhone, `Hola ${menu.item.clientName}`)}
-                target="_blank"
-                rel="noopener noreferrer"
-                onClick={() => setMenu(null)}
-                className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 text-left"
-              >
-                <MessageCircle className="h-4 w-4 text-green-500" /> WhatsApp
-              </a>
-            )}
-            <div className="border-t border-gray-100 my-1" />
-            {OPEN_STAGES.filter(s => s !== menu.item.stage).map(s => (
-              <Btn key={s} icon={MoveRight} label={`Mover a ${STAGE_META[s].label}`} onClick={() => { const it = menu.item; setMenu(null); changeStage(it, s) }} />
-            ))}
-            {menu.item.stage !== 'won' && <Btn icon={Trophy} color="text-success-600" label="Marcar ganada" onClick={() => { const it = menu.item; setMenu(null); setWonTarget(it) }} />}
-            {menu.item.stage !== 'lost' && <Btn icon={ThumbsDown} label="Marcar perdida" onClick={() => { const it = menu.item; setMenu(null); setLostTarget(it) }} />}
-            <div className="border-t border-gray-100 my-1" />
-            <Btn icon={Edit} label="Editar" onClick={() => { const it = menu.item; setMenu(null); setEditing(it); setShowForm(true) }} />
-            <Btn icon={Trash2} color="text-red-600" danger label="Eliminar" onClick={() => { const it = menu.item; setMenu(null); remove(it) }} />
-          </div>,
-          document.body
-        )}
+      {menuItem && (
+        <ActionSheet
+          title={menuItem.clientName}
+          subtitle={menuItem.title || undefined}
+          onClose={() => setMenuItem(null)}
+          actions={[
+            { icon: ClipboardList, label: 'Registrar seguimiento', onClick: () => { const it = menuItem; setMenuItem(null); setActivityTarget(it) } },
+            ...(menuItem.clientPhone ? [{ icon: MessageCircle, color: 'text-green-500', label: 'WhatsApp', href: waLink(menuItem.clientPhone, `Hola ${menuItem.clientName}`) }] : []),
+            ...OPEN_STAGES.filter(s => s !== menuItem.stage).map((s, idx) => ({ icon: MoveRight, label: `Mover a ${STAGE_META[s].label}`, divider: idx === 0, onClick: () => { const it = menuItem; setMenuItem(null); changeStage(it, s) } })),
+            ...(menuItem.stage !== 'won' ? [{ icon: Trophy, color: 'text-success-600', label: 'Marcar ganada', onClick: () => { const it = menuItem; setMenuItem(null); setWonTarget(it) } }] : []),
+            ...(menuItem.stage !== 'lost' ? [{ icon: ThumbsDown, label: 'Marcar perdida', onClick: () => { const it = menuItem; setMenuItem(null); setLostTarget(it) } }] : []),
+            { icon: Edit, label: 'Editar', divider: true, onClick: () => { const it = menuItem; setMenuItem(null); setEditing(it); setShowForm(true) } },
+            { icon: Trash2, label: 'Eliminar', danger: true, onClick: () => { const it = menuItem; setMenuItem(null); remove(it) } },
+          ]}
+        />
+      )}
 
       {showForm && (
         <OpportunityForm
@@ -390,13 +354,6 @@ export default function OpportunitiesBoard() {
   )
 }
 
-function Btn({ icon: Icon, label, onClick, color, danger }: { icon: any; label: string; onClick: () => void; color?: string; danger?: boolean }) {
-  return (
-    <button onClick={onClick} className={`w-full flex items-center gap-2.5 px-3 py-2 text-sm text-left ${danger ? 'text-red-600 hover:bg-red-50' : 'text-gray-700 hover:bg-gray-50'}`}>
-      <Icon className={`h-4 w-4 ${color ?? 'text-gray-400'}`} /> {label}
-    </button>
-  )
-}
 
 function Sheet({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
   return createPortal(

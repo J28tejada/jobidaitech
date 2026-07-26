@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
+import ActionSheet from './ActionSheet'
 import { createPortal } from 'react-dom'
 import {
   Plus,
@@ -91,9 +92,7 @@ export default function VideosBoard() {
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [selectMode, setSelectMode] = useState(false)
 
-  const [mounted, setMounted] = useState(false)
-  const [menu, setMenu] = useState<{ item: Video; top: number; left: number } | null>(null)
-  const menuRef = useRef<HTMLDivElement>(null)
+  const [menuItem, setMenuItem] = useState<Video | null>(null)
 
   const [showForm, setShowForm] = useState(false)
   const [editing, setEditing] = useState<Video | null>(null)
@@ -102,7 +101,6 @@ export default function VideosBoard() {
   const [showImport, setShowImport] = useState(false)
 
   useEffect(() => {
-    setMounted(true)
     loadStatic()
     // Botón "+" flotante: abrir el formulario de nuevo video.
     if (typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('new') === 'true') {
@@ -116,22 +114,6 @@ export default function VideosBoard() {
     loadVideos()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [from, to, clientFilter])
-
-  useEffect(() => {
-    if (!menu) return
-    const close = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenu(null)
-    }
-    const onScroll = () => setMenu(null)
-    document.addEventListener('mousedown', close)
-    window.addEventListener('scroll', onScroll, true)
-    window.addEventListener('resize', onScroll)
-    return () => {
-      document.removeEventListener('mousedown', close)
-      window.removeEventListener('scroll', onScroll, true)
-      window.removeEventListener('resize', onScroll)
-    }
-  }, [menu])
 
   const loadStatic = async () => {
     const [r, c] = await Promise.all([
@@ -162,12 +144,6 @@ export default function VideosBoard() {
       setLoading(false)
       setSelected(new Set())
     }
-  }
-
-  const openMenu = (e: React.MouseEvent, item: Video) => {
-    e.stopPropagation()
-    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
-    setMenu({ item, top: rect.bottom + 6, left: Math.max(rect.right - 200, 8) })
   }
 
   const remove = async (item: Video) => {
@@ -406,7 +382,7 @@ export default function VideosBoard() {
                     <td className="py-2.5 px-3 text-gray-600 whitespace-nowrap">{v.recorderName}</td>
                     <td className="py-2.5 px-3 text-right font-medium text-gray-900 whitespace-nowrap">{format(v.price)}</td>
                     <td className="py-2 px-2 print:hidden">
-                      <button onClick={e => openMenu(e, v)} className="text-gray-400 hover:text-gray-600 p-1">
+                      <button onClick={() => setMenuItem(v)} className="text-gray-400 hover:text-gray-600 p-1">
                         <MoreVertical className="h-4 w-4" />
                       </button>
                     </td>
@@ -438,16 +414,16 @@ export default function VideosBoard() {
       )}
 
       {/* Menú fila */}
-      {mounted && menu && createPortal(
-        <div ref={menuRef} style={{ position: 'fixed', top: menu.top, left: menu.left, width: 200 }} className="bg-white rounded-xl shadow-lg border border-gray-200 py-1.5 z-[80]">
-          <button onClick={() => { const it = menu.item; setMenu(null); setEditing(it); setShowForm(true) }} className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-left text-gray-700 hover:bg-gray-50">
-            <Edit className="h-4 w-4 text-gray-400" /> Editar
-          </button>
-          <button onClick={() => { const it = menu.item; setMenu(null); remove(it) }} className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-left text-red-600 hover:bg-red-50">
-            <Trash2 className="h-4 w-4 text-red-600" /> Eliminar
-          </button>
-        </div>,
-        document.body
+      {menuItem && (
+        <ActionSheet
+          title={menuItem.topic || 'Video'}
+          subtitle={menuItem.videoRef || undefined}
+          onClose={() => setMenuItem(null)}
+          actions={[
+            { icon: Edit, label: 'Editar', onClick: () => { const it = menuItem; setMenuItem(null); setEditing(it); setShowForm(true) } },
+            { icon: Trash2, label: 'Eliminar', danger: true, onClick: () => { const it = menuItem; setMenuItem(null); remove(it) } },
+          ]}
+        />
       )}
 
       {showForm && (
