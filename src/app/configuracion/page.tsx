@@ -8,6 +8,7 @@ import CategoryManager from '@/components/CategoryManager';
 import BusinessTypePicker from '@/components/BusinessTypePicker';
 import AppearanceSettings from '@/components/AppearanceSettings';
 import LoyaltySettings from '@/components/LoyaltySettings';
+import DeleteBusiness from '@/components/DeleteBusiness';
 import { BusinessType } from '@/types';
 import { CURRENCIES } from '@/lib/format';
 import { useCurrency } from '@/components/CurrencyProvider';
@@ -214,6 +215,9 @@ export default function ConfigurationPage() {
             Ver Tutorial de Inicio
           </button>
         </div>
+
+        {/* Zona de peligro: eliminar el negocio activo (solo dueño). */}
+        <DeleteBusiness />
       </div>
     </Layout>
   );
