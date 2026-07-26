@@ -272,6 +272,10 @@ export default function Dashboard() {
   const appointmentsIncomeLabel = monthIncomeOther > 0
     ? `${agenda?.monthDone ?? 0} citas + ${formatCurrency(monthIncomeOther)} sueltos`
     : `${agenda?.monthDone ?? 0} citas atendidas`;
+  // Mismo criterio del lado del gasto. Un gasto atado a un proyecto (o cargado
+  // antes de que existiera la tabla `expenses`) vive en transactions, y dejarlo
+  // fuera repetiría el problema que arregla el KPI de ingreso.
+  const monthExpensesAppointments = (expenseSum?.monthTotal ?? 0) + (stats.monthlyExpenses ?? 0);
   const primary = primaryActionForBusiness(businessType);
   const primaryHref = primary.href;
   const ord = (href: string) => (href === primaryHref ? 'order-first ' : '');
@@ -400,7 +404,7 @@ export default function Dashboard() {
                   {isAppointments ? 'Gastos del mes' : 'Gastos Totales'}
                 </p>
                 <p className="text-xl font-bold text-gray-900 mb-1 break-words leading-tight">
-                  {isAppointments ? formatCurrency(expenseSum?.monthTotal ?? 0) : formatCurrency(stats.totalExpenses)}
+                  {isAppointments ? formatCurrency(monthExpensesAppointments) : formatCurrency(stats.totalExpenses)}
                 </p>
                 <p className="text-xs text-gray-500 truncate">
                   {isAppointments
