@@ -733,6 +733,17 @@ function AppointmentForm({ appointment, services, staff, clients, vertical, onCl
 
   const selService = services.find(x => x.id === serviceId)
 
+  // Barberos que hacen el servicio elegido (los que no tienen servicios
+  // marcados hacen todos; sin servicio elegido, se muestran todos).
+  const eligibleStaff = staff.filter(
+    s => s.active && (!s.serviceIds || s.serviceIds.length === 0 || !serviceId || s.serviceIds.includes(serviceId))
+  )
+  // Si el barbero asignado deja de poder hacer el servicio elegido, se limpia.
+  useEffect(() => {
+    if (staffId && !eligibleStaff.some(s => s.id === staffId)) setStaffId('')
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [serviceId])
+
   const submit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (saving) return
@@ -849,8 +860,11 @@ function AppointmentForm({ appointment, services, staff, clients, vertical, onCl
             <label className="label">{vertical.staffSingular}</label>
             <select className="input" value={staffId} onChange={e => setStaffId(e.target.value)}>
               <option value="">— Sin asignar —</option>
-              {staff.filter(s => s.active).map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+              {eligibleStaff.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
             </select>
+            {serviceId && eligibleStaff.length === 0 && (
+              <p className="text-xs text-amber-600 mt-1">Ningún {vertical.staffSingular.toLowerCase()} tiene marcado este servicio.</p>
+            )}
           </div>
         )}
 
@@ -1409,6 +1423,15 @@ function WalkInForm({ services, staff, clients, vertical, onClose, onSaved }: { 
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  // Barberos que hacen el servicio elegido (vacío = hace todos).
+  const eligibleStaff = staff.filter(
+    s => s.active && (!s.serviceIds || s.serviceIds.length === 0 || !serviceId || s.serviceIds.includes(serviceId))
+  )
+  useEffect(() => {
+    if (staffId && !eligibleStaff.some(s => s.id === staffId)) setStaffId('')
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [serviceId])
+
   const submit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (saving) return
@@ -1472,7 +1495,7 @@ function WalkInForm({ services, staff, clients, vertical, onClose, onSaved }: { 
             <label className="label">{vertical.staffSingular}</label>
             <select className="input" value={staffId} onChange={e => setStaffId(e.target.value)}>
               <option value="">— Sin asignar —</option>
-              {staff.filter(s => s.active).map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+              {eligibleStaff.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
             </select>
           </div>
         )}
