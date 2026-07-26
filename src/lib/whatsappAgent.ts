@@ -425,6 +425,67 @@ async function aplicarAbono(biz: WaBusiness, input: any): Promise<string> {
   return `OK: abono de ${aplicar} registrado. ${objetivo.client} debe ${resta}.`
 }
 
+/**
+ * Mueve stock. Replica la convención de /api/products/[id]/movements, que es la
+ * que ya usa la app: `inventory_movements.quantity` guarda el delta CON SIGNO
+ * (negativo en salidas, no la cantidad absoluta) y `products.stock` se reescribe
+ * a mano, porque no hay trigger que lo haga. Si se guardara la cantidad sin
+ * signo, el historial quedaría inconsistente con el de la app.
+ */
+async function aplicarInventario(biz: WaBusiness, input: any): Promise<string> {
+  const nombre = typeof input?.producto === 'string' ? input.producto.trim() : ''
+  if (!nombre) return 'ERROR: falta el producto'
+  const cantidad = Number(input?.cantidad)
+  if (!Number.isFinite(cantidad) || cantidad <= 0) return 'ERROR: cantidad inválida'
+
+  const supabase = getSupabaseClient()
+  const { data: prods, error } = await supabase
+    .from('products')
+    .select('id,name,stock,unit')
+    .eq('workspace_id', biz.workspaceId)
+    .eq('active', true)
+    .ilike('name', `%${nombre}%`)
+    .limit(2)
+  if (error) {
+    console.error('aplicarInventario buscar', error)
+    return 'ERROR: no se pudo mover el stock'
+  }
+  if (!prods?.length) return `ERROR: no encontré el producto "${nombre}"`
+  // Con dos coincidencias no se adivina: mover el stock del producto equivocado
+  // es peor que pedir precisión.
+  if (prods.length > 1) return `ERROR: hay más de un producto que coincide con "${nombre}"; sé más específico`
+
+  const prod = prods[0] as any
+  const actual = Number(prod.stock ?? 0)
+  const delta = input?.accion === 'entrada' ? cantidad : -cantidad
+  const nuevo = Number((actual + delta).toFixed(2))
+  if (nuevo < 0) return `ERROR: solo hay ${actual} de ${prod.name}`
+
+  const { error: errMov } = await supabase.from('inventory_movements').insert({
+    product_id: prod.id,
+    workspace_id: biz.workspaceId,
+    user_id: biz.userId,
+    type: delta > 0 ? 'in' : 'out',
+    quantity: delta,
+    note: typeof input?.nota === 'string' && input.nota.trim() ? input.nota.trim() : 'Registrado por WhatsApp',
+  })
+  if (errMov) {
+    console.error('aplicarInventario movimiento', errMov)
+    return 'ERROR: no se pudo mover el stock'
+  }
+
+  const { error: errUpd } = await supabase
+    .from('products')
+    .update({ stock: nuevo })
+    .eq('id', prod.id)
+    .eq('workspace_id', biz.workspaceId)
+  if (errUpd) {
+    console.error('aplicarInventario stock', errUpd)
+    return 'ERROR: se anotó el movimiento pero no se pudo actualizar el stock'
+  }
+  return `OK: ${prod.name} queda en ${nuevo} ${prod.unit || ''}`.trim()
+}
+
 /** Escribe la cita. Igual que el movimiento: solo se llama al confirmar. */
 async function aplicarCita(biz: WaBusiness, input: any): Promise<string> {
   const clientName = typeof input?.cliente === 'string' ? input.cliente.trim() : ''
@@ -478,7 +539,7 @@ async function aplicarCita(biz: WaBusiness, input: any): Promise<string> {
 // Efecto lateral bienvenido: un "sí" se resuelve sin llamar al modelo, así que
 // la confirmación —el mensaje más frecuente del flujo— pasa a costar cero.
 
-type TipoPendiente = 'movimiento' | 'cita' | 'deuda' | 'abono'
+type TipoPendiente = 'movimiento' | 'cita' | 'deuda' | 'abono' | 'inventario'
 
 const PENDIENTE_VIGENCIA_MIN = 30
 
@@ -566,6 +627,9 @@ async function aplicarPendiente(biz: WaBusiness, row: any): Promise<string> {
     case 'abono':
       res = await aplicarAbono(biz, row.payload)
       break
+    case 'inventario':
+      res = await aplicarInventario(biz, row.payload)
+      break
     default:
       res = await aplicarMovimiento(biz, row.payload)
   }
@@ -588,7 +652,11 @@ function textoConfirmacion(pendiente: any, res: string): string {
       ? `Uy, ${res.slice(7)}.`
       : 'Uy, no pude guardarlo. ¿Lo intentamos de nuevo?'
   }
-  if (pendiente.kind === 'abono') return `${res.replace(/^OK:\s*/, '').trim()} ✅`
+  // En abonos e inventario el detalle que devuelve la escritura trae el dato que
+  // se quiere saber (saldo restante, stock resultante), y no incluye ids.
+  if (pendiente.kind === 'abono' || pendiente.kind === 'inventario') {
+    return `${res.replace(/^OK:\s*/, '').trim()} ✅`
+  }
   return `Listo, anoté ${pendiente.summary}. ✅`
 }
 
@@ -932,6 +1000,35 @@ function buildTools(biz: WaBusiness, chatKey: string): AgentTool[] {
     })
   }
 
+  // Inventario (módulo inventory). Solo movimientos: crear productos pide
+  // precio, costo, unidad y mínimo, y eso por chat es más friccioso que hacerlo
+  // en la app. Si el producto no existe, se devuelve un error accionable.
+  if (has('inventory')) {
+    tools.push({
+      name: 'inventario',
+      description: 'Suma o descuenta stock de un producto que ya existe.',
+      schema: {
+        type: 'object',
+        properties: {
+          accion: { type: 'string', enum: ['entrada', 'salida'] },
+          producto: { type: 'string', description: 'Nombre, aunque sea parcial' },
+          cantidad: { type: 'number', description: 'Siempre positivo' },
+          nota: { type: 'string' },
+        },
+        required: ['accion', 'producto', 'cantidad'],
+        additionalProperties: false,
+      },
+      run: input => {
+        const cantidad = Number(input?.cantidad)
+        if (!Number.isFinite(cantidad) || cantidad <= 0) return Promise.resolve('ERROR: cantidad inválida')
+        const producto = typeof input?.producto === 'string' ? input.producto.trim() : ''
+        if (!producto) return Promise.resolve('ERROR: falta el producto')
+        const verbo = input?.accion === 'entrada' ? 'entrada' : 'salida'
+        return crearPendiente(biz, chatKey, 'inventario', input, `${verbo} de ${cantidad} de ${producto}`)
+      },
+    })
+  }
+
   // Consulta (solo lectura). UNA herramienta parametrizada en vez de una por
   // módulo: los esquemas viajan completos en CADA request, así que menos
   // superficie es directamente menos costo por mensaje. El enum se arma según
@@ -987,7 +1084,7 @@ function systemPrompt(biz: WaBusiness, isGroup: boolean): string {
     `Moneda: ${biz.currency}. Ahora: ${localNow(biz.locale)} (${TZ}).`,
     ``,
     `REGLAS`,
-    `1. Dinero o cita: llama la herramienta y transmite el resumen que devuelva preguntando "¿Lo anoto?". NO digas que quedó guardado: la confirmación la maneja el sistema. Un cliente sin monto ni cita regístralo directo.`,
+    `1. Dinero, cita o stock: llama la herramienta y transmite el resumen que devuelva preguntando "¿Lo anoto?". NO digas que quedó guardado: la confirmación la maneja el sistema. Un cliente sin monto ni cita regístralo directo.`,
     `2. Varias cosas en un mensaje: resúmelas todas y confirma una sola vez.`,
     `3. Falta un dato: pregúntalo, corto y concreto. Nunca inventes.`,
     `4. Fechas relativas ("mañana 3pm", "el viernes"): resuélvelas con la fecha actual, en ISO 8601 con zona horaria.`,
