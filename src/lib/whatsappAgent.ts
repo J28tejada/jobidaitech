@@ -425,6 +425,74 @@ async function aplicarAbono(biz: WaBusiness, input: any): Promise<string> {
   return `OK: abono de ${aplicar} registrado. ${objetivo.client} debe ${resta}.`
 }
 
+const ETAPAS_ABIERTAS = ['new', 'contacted', 'quoted']
+
+/**
+ * Crea una oportunidad o la mueve de etapa. Pasa por confirmación como el resto:
+ * lleva un monto asociado, y la regla del prompt ya distingue "cliente suelto"
+ * (directo) de cualquier cosa con plata.
+ */
+async function aplicarOportunidad(biz: WaBusiness, input: any): Promise<string> {
+  const cliente = typeof input?.cliente === 'string' ? input.cliente.trim() : ''
+  if (!cliente) return 'ERROR: falta el cliente'
+  const supabase = getSupabaseClient()
+
+  if (input?.accion === 'mover') {
+    const etapa = String(input?.etapa || '')
+    if (!['contacted', 'quoted', 'won', 'lost'].includes(etapa)) return 'ERROR: etapa inválida'
+
+    const { data: ops, error } = await supabase
+      .from('opportunities')
+      .select('id,client_name,title')
+      .eq('workspace_id', biz.workspaceId)
+      .in('stage', ETAPAS_ABIERTAS)
+      .ilike('client_name', `%${cliente}%`)
+      .order('created_at', { ascending: false })
+      .limit(2)
+    if (error) {
+      console.error('aplicarOportunidad buscar', error)
+      return 'ERROR: no se pudo actualizar la oportunidad'
+    }
+    if (!ops?.length) return `ERROR: no encontré una oportunidad abierta de "${cliente}"`
+    if (ops.length > 1) return `ERROR: hay más de una oportunidad abierta de "${cliente}"; sé más específico`
+
+    const op = ops[0] as any
+    const cambios: Record<string, unknown> = { stage: etapa }
+    if (etapa === 'lost' && typeof input?.motivo === 'string' && input.motivo.trim()) {
+      cambios.lost_reason = input.motivo.trim()
+    }
+    const { error: errUpd } = await supabase.from('opportunities').update(cambios).eq('id', op.id)
+    if (errUpd) {
+      console.error('aplicarOportunidad mover', errUpd)
+      return 'ERROR: no se pudo actualizar la oportunidad'
+    }
+    const etiqueta = etapa === 'won' ? 'ganada' : etapa === 'lost' ? 'perdida' : etapa === 'quoted' ? 'cotizada' : 'contactada'
+    return `OK: la oportunidad de ${op.client_name} quedó ${etiqueta}.`
+  }
+
+  const valor = Number(input?.valor)
+  const { data, error } = await supabase
+    .from('opportunities')
+    .insert({
+      workspace_id: biz.workspaceId,
+      user_id: biz.userId,
+      client_name: cliente,
+      client_phone: typeof input?.telefono === 'string' ? normalizePhone(input.telefono) || null : null,
+      title: typeof input?.titulo === 'string' && input.titulo.trim() ? input.titulo.trim() : null,
+      stage: 'new',
+      value: Number.isFinite(valor) && valor > 0 ? valor : 0,
+      source: 'whatsapp',
+      notes: typeof input?.notas === 'string' && input.notas.trim() ? input.notas.trim() : null,
+    })
+    .select('id')
+    .single()
+  if (error) {
+    console.error('aplicarOportunidad crear', error)
+    return 'ERROR: no se pudo guardar la oportunidad'
+  }
+  return `OK: oportunidad de ${cliente} registrada (id ${data?.id}).`
+}
+
 /**
  * Mueve stock. Replica la convención de /api/products/[id]/movements, que es la
  * que ya usa la app: `inventory_movements.quantity` guarda el delta CON SIGNO
@@ -539,7 +607,7 @@ async function aplicarCita(biz: WaBusiness, input: any): Promise<string> {
 // Efecto lateral bienvenido: un "sí" se resuelve sin llamar al modelo, así que
 // la confirmación —el mensaje más frecuente del flujo— pasa a costar cero.
 
-type TipoPendiente = 'movimiento' | 'cita' | 'deuda' | 'abono' | 'inventario'
+type TipoPendiente = 'movimiento' | 'cita' | 'deuda' | 'abono' | 'inventario' | 'oportunidad'
 
 const PENDIENTE_VIGENCIA_MIN = 30
 
@@ -629,6 +697,9 @@ async function aplicarPendiente(biz: WaBusiness, row: any): Promise<string> {
       break
     case 'inventario':
       res = await aplicarInventario(biz, row.payload)
+      break
+    case 'oportunidad':
+      res = await aplicarOportunidad(biz, row.payload)
       break
     default:
       res = await aplicarMovimiento(biz, row.payload)
@@ -860,6 +931,30 @@ async function execConsultar(biz: WaBusiness, input: any): Promise<string> {
         .join('; ')
     }
 
+    case 'oportunidades': {
+      // Por defecto solo las abiertas: la pregunta es "qué tengo en el aire",
+      // no el archivo histórico.
+      let q = supabase
+        .from('opportunities')
+        .select('client_name,title,stage,value,next_action')
+        .eq('workspace_id', biz.workspaceId)
+        .in('stage', ETAPAS_ABIERTAS)
+        .order('created_at', { ascending: false })
+        .limit(limite)
+      if (buscar) q = q.ilike('client_name', `%${buscar}%`)
+      const { data, error } = await q
+      if (error) {
+        console.error('execConsultar oportunidades', error)
+        return 'ERROR: no se pudo consultar'
+      }
+      if (!data?.length) return 'Sin oportunidades abiertas.'
+      const total = (data as any[]).reduce((s, o) => s + (Number(o.value) || 0), 0)
+      const lista = (data as any[])
+        .map(o => `${o.client_name}${o.title ? ` (${o.title})` : ''} ${o.stage}${Number(o.value) > 0 ? ` ${o.value}` : ''}`)
+        .join('; ')
+      return `${data.length} abiertas por ${total}. ${lista}`
+    }
+
     default:
       return 'ERROR: recurso no válido'
   }
@@ -1029,6 +1124,48 @@ function buildTools(biz: WaBusiness, chatKey: string): AgentTool[] {
     })
   }
 
+  // Oportunidades (módulo crm). Es el encaje más natural con WhatsApp: los
+  // prospectos ya llegan por ahí y hoy se pierden si no se cargan a mano.
+  if (has('crm')) {
+    tools.push({
+      name: 'oportunidad',
+      description: 'Registra un prospecto interesado, o mueve uno a otra etapa.',
+      schema: {
+        type: 'object',
+        properties: {
+          accion: { type: 'string', enum: ['crear', 'mover'] },
+          cliente: { type: 'string' },
+          titulo: { type: 'string', description: 'Qué quiere (ej. peinado de novia)' },
+          valor: { type: 'number', description: 'Monto estimado' },
+          etapa: { type: 'string', enum: ['contacted', 'quoted', 'won', 'lost'], description: 'Solo para mover' },
+          motivo: { type: 'string', description: 'Por qué se perdió, solo con etapa lost' },
+          telefono: { type: 'string' },
+          notas: { type: 'string' },
+        },
+        required: ['accion', 'cliente'],
+        additionalProperties: false,
+      },
+      run: input => {
+        const cliente = typeof input?.cliente === 'string' ? input.cliente.trim() : ''
+        if (!cliente) return Promise.resolve('ERROR: falta el cliente')
+        let resumen: string
+        if (input?.accion === 'mover') {
+          const etiquetas: Record<string, string> = {
+            contacted: 'contactada', quoted: 'cotizada', won: 'ganada', lost: 'perdida',
+          }
+          const etiqueta = etiquetas[String(input?.etapa)] || String(input?.etapa)
+          resumen = `la oportunidad de ${cliente} como ${etiqueta}`
+        } else {
+          const valor = Number(input?.valor)
+          const monto = Number.isFinite(valor) && valor > 0 ? ` por ~${valor} ${biz.currency}` : ''
+          const que = typeof input?.titulo === 'string' && input.titulo.trim() ? ` (${input.titulo.trim()})` : ''
+          resumen = `oportunidad de ${cliente}${que}${monto}`
+        }
+        return crearPendiente(biz, chatKey, 'oportunidad', input, resumen)
+      },
+    })
+  }
+
   // Consulta (solo lectura). UNA herramienta parametrizada en vez de una por
   // módulo: los esquemas viajan completos en CADA request, así que menos
   // superficie es directamente menos costo por mensaje. El enum se arma según
@@ -1038,6 +1175,7 @@ function buildTools(biz: WaBusiness, chatKey: string): AgentTool[] {
   if (has('sales')) recursos.push('clientes')
   if (has('receivables')) recursos.push('cobros')
   if (has('inventory')) recursos.push('inventario')
+  if (has('crm')) recursos.push('oportunidades')
   tools.push({
     name: 'consultar',
     description: 'Consulta lo ya registrado para responder preguntas del dueño.',
