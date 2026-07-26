@@ -5,7 +5,7 @@
 //
 // Variables de entorno:
 //   GEMINI_API_KEY          Llave de Google AI Studio (proveedor por defecto)
-//   GEMINI_MODEL            Default gemini-3.5-flash
+//   GEMINI_MODEL            Default gemini-3.1-flash-lite
 //   GEMINI_THINKING_LEVEL   MINIMAL | LOW | MEDIUM | HIGH (default LOW)
 //   ANTHROPIC_API_KEY       Llave de Claude (alternativa)
 //   ANTHROPIC_MODEL         Default claude-haiku-4-5
@@ -16,8 +16,12 @@ import Anthropic from '@anthropic-ai/sdk'
 
 export type AiProviderName = 'google' | 'anthropic'
 
-// 3.5 en vez de 3.6: más estable/rodado. 3.6 es muy reciente.
-export const DEFAULT_GOOGLE_MODEL = 'gemini-3.5-flash'
+// Variante `lite`: en tier gratuito los modelos completos traen un tope diario
+// muy bajo (gemini-3.5-flash da 20 peticiones/día por proyecto), y un solo
+// mensaje con herramientas gasta 2 o más. Las `lite` tienen cuota bastante más
+// holgada y para este agente —notas cortas, herramientas simples— alcanzan.
+// Con facturación activa conviene volver a un modelo completo.
+export const DEFAULT_GOOGLE_MODEL = 'gemini-3.1-flash-lite'
 export const DEFAULT_ANTHROPIC_MODEL = 'claude-haiku-4-5'
 
 function googleKey(): string | undefined {
