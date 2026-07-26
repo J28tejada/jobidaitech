@@ -36,8 +36,18 @@ function autorizado(request: NextRequest): boolean {
   return header === esperado || query === esperado
 }
 
+/** ¿Corrió la migración 0039? Sin `reminded_at` no hay forma de no duplicar. */
+async function columnaRecordatorioLista(): Promise<boolean> {
+  try {
+    const { error } = await getSupabaseClient().from('appointments').select('reminded_at').limit(1)
+    return !error
+  } catch {
+    return false
+  }
+}
+
 /** Citas que empiezan dentro de la ventana y todavía no se avisaron. */
-async function recordarCitas(): Promise<{ enviados: number; citas: number }> {
+async function recordarCitas(): Promise<{ enviados: number; citas: number; error?: string }> {
   const supabase = getSupabaseClient()
   const ahora = Date.now()
   const desde = new Date(ahora + MIN_ANTES * 60_000).toISOString()
@@ -52,8 +62,12 @@ async function recordarCitas(): Promise<{ enviados: number; citas: number }> {
     .lte('starts_at', hasta)
     .limit(100)
   if (error) {
+    // Se devuelve el motivo en vez de un 0 pelado: "no había citas" y "la
+    // consulta falló" se veían idénticos desde afuera, y un recordatorio que
+    // nunca sale por una migración sin correr no se nota hasta que un cliente
+    // real se queda esperando.
     console.error('recordarCitas', error)
-    return { enviados: 0, citas: 0 }
+    return { enviados: 0, citas: 0, error: error.message }
   }
   if (!citas?.length) return { enviados: 0, citas: 0 }
 
@@ -164,6 +178,7 @@ export async function GET(request: NextRequest) {
     servicio: 'recordatorios',
     tokenConfigurado: Boolean(process.env.CRON_TOKEN),
     whatsappConfigurado: whatsappConfigured(),
+    migracion0039: await columnaRecordatorioLista(),
     autorizado: autorizado(request),
   })
 }
