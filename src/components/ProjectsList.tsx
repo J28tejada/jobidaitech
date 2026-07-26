@@ -1,7 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
-import { createPortal } from 'react-dom';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSearchParams } from 'next/navigation';
 import { Project, Transaction } from '@/types';
@@ -21,6 +20,7 @@ import {
   Send,
   FolderOpen,
 } from 'lucide-react';
+import ActionSheet from './ActionSheet';
 import ProjectForm from './ProjectForm';
 import TransactionForm from './TransactionForm';
 import MoveProjectModal from './MoveProjectModal';
@@ -46,36 +46,11 @@ export default function ProjectsList() {
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
   const [movingProject, setMovingProject] = useState<Project | null>(null);
   const [transferProject, setTransferProject] = useState<Project | null>(null);
-  const [menu, setMenu] = useState<{ project: Project; top: number; left: number } | null>(null);
-  const [mounted, setMounted] = useState(false);
-  const menuRef = useRef<HTMLDivElement>(null);
+  const [menuProject, setMenuProject] = useState<Project | null>(null);
 
   useEffect(() => {
     fetchProjects();
-    setMounted(true);
   }, []);
-
-  useEffect(() => {
-    if (!menu) return;
-    const close = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenu(null);
-    };
-    const onScroll = () => setMenu(null);
-    document.addEventListener('mousedown', close);
-    window.addEventListener('scroll', onScroll, true);
-    window.addEventListener('resize', onScroll);
-    return () => {
-      document.removeEventListener('mousedown', close);
-      window.removeEventListener('scroll', onScroll, true);
-      window.removeEventListener('resize', onScroll);
-    };
-  }, [menu]);
-
-  const openMenu = (e: React.MouseEvent, project: Project) => {
-    e.stopPropagation();
-    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    setMenu({ project, top: rect.bottom + 6, left: Math.max(rect.right - 208, 8) });
-  };
 
   useEffect(() => {
     // Si hay un query param ?new=true, abrir el formulario de proyecto
@@ -314,7 +289,7 @@ export default function ProjectsList() {
                 {getStatusBadge(project.status)}
               </div>
               <button
-                onClick={(e) => openMenu(e, project)}
+                onClick={() => setMenuProject(project)}
                 className="text-gray-400 hover:text-gray-600 p-1 -m-1"
                 title="Opciones"
               >
@@ -367,46 +342,20 @@ export default function ProjectsList() {
         ))}
       </div>
 
-      {/* Menú de opciones por proyecto (portal, se abre desde los tres puntos) */}
-      {mounted && menu && createPortal(
-        <div
-          ref={menuRef}
-          style={{ position: 'fixed', top: menu.top, left: menu.left, width: 200 }}
-          className="bg-white rounded-xl shadow-lg border border-gray-200 py-1.5 z-[80]"
-        >
-          <button
-            onClick={() => { const p = menu.project; setMenu(null); router.push(`/proyectos/${p.id}`); }}
-            className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 text-left"
-          >
-            <Eye className="h-4 w-4 text-gray-400" /> Ver detalles
-          </button>
-          <button
-            onClick={() => { const p = menu.project; setMenu(null); handleEditProject(p); }}
-            className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 text-left"
-          >
-            <Edit className="h-4 w-4 text-gray-400" /> Editar
-          </button>
-          <button
-            onClick={() => { const p = menu.project; setMenu(null); setMovingProject(p); }}
-            className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 text-left"
-          >
-            <ArrowRightLeft className="h-4 w-4 text-gray-400" /> Mover a otro espacio
-          </button>
-          <button
-            onClick={() => { const p = menu.project; setMenu(null); setTransferProject(p); }}
-            className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 text-left"
-          >
-            <Send className="h-4 w-4 text-gray-400" /> Transferir a otra cuenta
-          </button>
-          <div className="border-t border-gray-100 my-1" />
-          <button
-            onClick={() => { const p = menu.project; setMenu(null); handleDeleteProject(p.id); }}
-            className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-red-600 hover:bg-red-50 text-left"
-          >
-            <Trash2 className="h-4 w-4" /> Eliminar
-          </button>
-        </div>,
-        document.body
+      {/* Opciones por proyecto (hoja inferior) */}
+      {menuProject && (
+        <ActionSheet
+          title={menuProject.name}
+          subtitle={menuProject.client || undefined}
+          onClose={() => setMenuProject(null)}
+          actions={[
+            { icon: Eye, label: 'Ver detalles', onClick: () => { const p = menuProject; setMenuProject(null); router.push(`/proyectos/${p.id}`); } },
+            { icon: Edit, label: 'Editar', onClick: () => { const p = menuProject; setMenuProject(null); handleEditProject(p); } },
+            { icon: ArrowRightLeft, label: 'Mover a otro espacio', onClick: () => { const p = menuProject; setMenuProject(null); setMovingProject(p); } },
+            { icon: Send, label: 'Transferir a otra cuenta', onClick: () => { const p = menuProject; setMenuProject(null); setTransferProject(p); } },
+            { icon: Trash2, label: 'Eliminar', danger: true, divider: true, onClick: () => { const p = menuProject; setMenuProject(null); handleDeleteProject(p.id); } },
+          ]}
+        />
       )}
 
       {filteredProjects.length === 0 && (

@@ -1,7 +1,8 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
+import ActionSheet from './ActionSheet'
 import {
   Plus,
   MoreVertical,
@@ -71,9 +72,7 @@ export default function InventoryList() {
   const [search, setSearch] = useState('')
   const [onlyLow, setOnlyLow] = useState(false)
 
-  const [mounted, setMounted] = useState(false)
-  const [menu, setMenu] = useState<{ item: Product; top: number; left: number } | null>(null)
-  const menuRef = useRef<HTMLDivElement>(null)
+  const [menuItem, setMenuItem] = useState<Product | null>(null)
 
   const [showForm, setShowForm] = useState(false)
   const [editing, setEditing] = useState<Product | null>(null)
@@ -81,7 +80,6 @@ export default function InventoryList() {
   const [historyTarget, setHistoryTarget] = useState<Product | null>(null)
 
   useEffect(() => {
-    setMounted(true)
     load()
     // Botón "+" flotante: abrir el formulario de nuevo producto.
     if (typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('new') === 'true') {
@@ -90,22 +88,6 @@ export default function InventoryList() {
       window.history.replaceState({}, '', window.location.pathname)
     }
   }, [])
-
-  useEffect(() => {
-    if (!menu) return
-    const close = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenu(null)
-    }
-    const onScroll = () => setMenu(null)
-    document.addEventListener('mousedown', close)
-    window.addEventListener('scroll', onScroll, true)
-    window.addEventListener('resize', onScroll)
-    return () => {
-      document.removeEventListener('mousedown', close)
-      window.removeEventListener('scroll', onScroll, true)
-      window.removeEventListener('resize', onScroll)
-    }
-  }, [menu])
 
   const load = async () => {
     try {
@@ -129,12 +111,6 @@ export default function InventoryList() {
     } finally {
       setLoading(false)
     }
-  }
-
-  const openMenu = (e: React.MouseEvent, item: Product) => {
-    e.stopPropagation()
-    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
-    setMenu({ item, top: rect.bottom + 6, left: Math.max(rect.right - 220, 8) })
   }
 
   const archive = async (item: Product) => {
@@ -303,7 +279,7 @@ export default function InventoryList() {
                     </button>
                   </>
                 )}
-                <button onClick={e => openMenu(e, item)} className="text-gray-400 hover:text-gray-600 p-1" title="Opciones">
+                <button onClick={() => setMenuItem(item)} className="text-gray-400 hover:text-gray-600 p-1" title="Opciones">
                   <MoreVertical className="h-5 w-5" />
                 </button>
               </div>
@@ -313,93 +289,24 @@ export default function InventoryList() {
       )}
 
       {/* Menú de opciones (portal) */}
-      {mounted &&
-        menu &&
-        createPortal(
-          <div
-            ref={menuRef}
-            style={{ position: 'fixed', top: menu.top, left: menu.left, width: 212 }}
-            className="bg-white rounded-xl shadow-lg border border-gray-200 py-1.5 z-[80]"
-          >
-            {menu.item.active && (
-              <>
-                <button
-                  onClick={() => {
-                    const it = menu.item
-                    setMenu(null)
-                    setMoveTarget({ product: it, type: 'in' })
-                  }}
-                  className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 text-left"
-                >
-                  <PackagePlus className="h-4 w-4 text-success-600" /> Registrar entrada
-                </button>
-                <button
-                  onClick={() => {
-                    const it = menu.item
-                    setMenu(null)
-                    setMoveTarget({ product: it, type: 'out' })
-                  }}
-                  className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 text-left"
-                >
-                  <PackageMinus className="h-4 w-4 text-danger-600" /> Registrar salida
-                </button>
-                <button
-                  onClick={() => {
-                    const it = menu.item
-                    setMenu(null)
-                    setMoveTarget({ product: it, type: 'adjust' })
-                  }}
-                  className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 text-left"
-                >
-                  <SlidersHorizontal className="h-4 w-4 text-gray-400" /> Ajustar stock
-                </button>
-              </>
-            )}
-            <button
-              onClick={() => {
-                const it = menu.item
-                setMenu(null)
-                setHistoryTarget(it)
-              }}
-              className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 text-left"
-            >
-              <History className="h-4 w-4 text-gray-400" /> Ver movimientos
-            </button>
-            <button
-              onClick={() => {
-                const it = menu.item
-                setMenu(null)
-                setEditing(it)
-                setShowForm(true)
-              }}
-              className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 text-left"
-            >
-              <Edit className="h-4 w-4 text-gray-400" /> Editar
-            </button>
-            <button
-              onClick={() => {
-                const it = menu.item
-                setMenu(null)
-                archive(it)
-              }}
-              className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 text-left"
-            >
-              <Archive className="h-4 w-4 text-gray-400" /> {menu.item.active ? 'Archivar' : 'Reactivar'}
-            </button>
-            <div className="border-t border-gray-100 my-1" />
-            <button
-              onClick={() => {
-                const it = menu.item
-                setMenu(null)
-                remove(it)
-              }}
-              className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-red-600 hover:bg-red-50 text-left"
-            >
-              <Trash2 className="h-4 w-4" /> Eliminar
-            </button>
-          </div>,
-          document.body
-        )}
+      {menuItem && (
+        <ActionSheet
+          title={menuItem.name}
+          subtitle={menuItem.sku ? `SKU: ${menuItem.sku}` : undefined}
+          onClose={() => setMenuItem(null)}
+          actions={[
+            ...(menuItem.active ? [
+              { icon: PackagePlus, color: 'text-success-600', label: 'Registrar entrada', onClick: () => { const it = menuItem; setMenuItem(null); setMoveTarget({ product: it, type: 'in' as const }) } },
+              { icon: PackageMinus, color: 'text-danger-600', label: 'Registrar salida', onClick: () => { const it = menuItem; setMenuItem(null); setMoveTarget({ product: it, type: 'out' as const }) } },
+              { icon: SlidersHorizontal, label: 'Ajustar stock', onClick: () => { const it = menuItem; setMenuItem(null); setMoveTarget({ product: it, type: 'adjust' as const }) } },
+            ] : []),
+            { icon: History, label: 'Ver movimientos', onClick: () => { const it = menuItem; setMenuItem(null); setHistoryTarget(it) } },
+            { icon: Edit, label: 'Editar', onClick: () => { const it = menuItem; setMenuItem(null); setEditing(it); setShowForm(true) } },
+            { icon: Archive, label: menuItem.active ? 'Archivar' : 'Reactivar', onClick: () => { const it = menuItem; setMenuItem(null); archive(it) } },
+            { icon: Trash2, label: 'Eliminar', danger: true, divider: true, onClick: () => { const it = menuItem; setMenuItem(null); remove(it) } },
+          ]}
+        />
+      )}
 
       {showForm && (
         <ProductForm

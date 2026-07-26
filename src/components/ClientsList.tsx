@@ -1,9 +1,10 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { Plus, Search, MoreVertical, Users, Edit, Trash2, MessageCircle, Loader2, X, ClipboardList, Scissors, CalendarClock, Gift, HeartHandshake } from 'lucide-react'
 
+import ActionSheet from './ActionSheet'
 import { useCurrency } from './CurrencyProvider'
 
 import { useToast } from './Toaster'
@@ -30,9 +31,7 @@ export default function ClientsList() {
   const [items, setItems] = useState<Client[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
-  const [mounted, setMounted] = useState(false)
-  const [menu, setMenu] = useState<{ item: Client; top: number; left: number } | null>(null)
-  const menuRef = useRef<HTMLDivElement>(null)
+  const [menuItem, setMenuItem] = useState<Client | null>(null)
   const [showForm, setShowForm] = useState(false)
   const [editing, setEditing] = useState<Client | null>(null)
   const [historyClient, setHistoryClient] = useState<Client | null>(null)
@@ -40,25 +39,8 @@ export default function ClientsList() {
   const [showImport, setShowImport] = useState(false)
 
   useEffect(() => {
-    setMounted(true)
     load()
   }, [])
-
-  useEffect(() => {
-    if (!menu) return
-    const close = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenu(null)
-    }
-    const onScroll = () => setMenu(null)
-    document.addEventListener('mousedown', close)
-    window.addEventListener('scroll', onScroll, true)
-    window.addEventListener('resize', onScroll)
-    return () => {
-      document.removeEventListener('mousedown', close)
-      window.removeEventListener('scroll', onScroll, true)
-      window.removeEventListener('resize', onScroll)
-    }
-  }, [menu])
 
   const load = async () => {
     try {
@@ -70,12 +52,6 @@ export default function ClientsList() {
     } finally {
       setLoading(false)
     }
-  }
-
-  const openMenu = (e: React.MouseEvent, item: Client) => {
-    e.stopPropagation()
-    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
-    setMenu({ item, top: rect.bottom + 6, left: Math.max(rect.right - 200, 8) })
   }
 
   const remove = async (item: Client) => {
@@ -182,7 +158,7 @@ export default function ClientsList() {
                     <MessageCircle className="h-4 w-4" />
                   </a>
                 )}
-                <button onClick={e => openMenu(e, item)} className="text-gray-400 hover:text-gray-600 p-1" title="Opciones">
+                <button onClick={() => setMenuItem(item)} className="text-gray-400 hover:text-gray-600 p-1" title="Opciones">
                   <MoreVertical className="h-5 w-5" />
                 </button>
               </div>
@@ -191,36 +167,19 @@ export default function ClientsList() {
         </div>
       )}
 
-      {mounted &&
-        menu &&
-        createPortal(
-          <div
-            ref={menuRef}
-            style={{ position: 'fixed', top: menu.top, left: menu.left, width: 192 }}
-            className="bg-white rounded-xl shadow-lg border border-gray-200 py-1.5 z-[80]"
-          >
-            <button
-              onClick={() => { const it = menu.item; setMenu(null); setHistoryClient(it) }}
-              className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 text-left"
-            >
-              <ClipboardList className="h-4 w-4 text-gray-400" /> Ficha / historial
-            </button>
-            <button
-              onClick={() => { const it = menu.item; setMenu(null); setEditing(it); setShowForm(true) }}
-              className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 text-left"
-            >
-              <Edit className="h-4 w-4 text-gray-400" /> Editar
-            </button>
-            <div className="border-t border-gray-100 my-1" />
-            <button
-              onClick={() => { const it = menu.item; setMenu(null); remove(it) }}
-              className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-red-600 hover:bg-red-50 text-left"
-            >
-              <Trash2 className="h-4 w-4" /> Eliminar
-            </button>
-          </div>,
-          document.body
-        )}
+      {menuItem && (
+        <ActionSheet
+          title={menuItem.name}
+          subtitle={menuItem.phone || undefined}
+          onClose={() => setMenuItem(null)}
+          actions={[
+            ...(waLink(menuItem.phone) ? [{ icon: MessageCircle, label: 'WhatsApp', href: waLink(menuItem.phone)!, color: 'text-green-500' }] : []),
+            { icon: ClipboardList, label: 'Ficha / historial', onClick: () => { const it = menuItem; setMenuItem(null); setHistoryClient(it) } },
+            { icon: Edit, label: 'Editar', onClick: () => { const it = menuItem; setMenuItem(null); setEditing(it); setShowForm(true) } },
+            { icon: Trash2, label: 'Eliminar', danger: true, divider: true, onClick: () => { const it = menuItem; setMenuItem(null); remove(it) } },
+          ]}
+        />
+      )}
 
       {showForm && (
         <ClientForm

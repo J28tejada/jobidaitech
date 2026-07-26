@@ -1,7 +1,8 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
+import ActionSheet from './ActionSheet'
 import {
   Plus,
   MoreVertical,
@@ -74,34 +75,15 @@ export default function QuotesList() {
   const [loading, setLoading] = useState(true)
   const [statusFilter, setStatusFilter] = useState<string>('all')
 
-  const [mounted, setMounted] = useState(false)
-  const [menu, setMenu] = useState<{ item: Quote; top: number; left: number } | null>(null)
-  const menuRef = useRef<HTMLDivElement>(null)
+  const [menuItem, setMenuItem] = useState<Quote | null>(null)
 
   const [showForm, setShowForm] = useState(false)
   const [editing, setEditing] = useState<Quote | null>(null)
   const [convertTarget, setConvertTarget] = useState<Quote | null>(null)
 
   useEffect(() => {
-    setMounted(true)
     load()
   }, [])
-
-  useEffect(() => {
-    if (!menu) return
-    const close = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenu(null)
-    }
-    const onScroll = () => setMenu(null)
-    document.addEventListener('mousedown', close)
-    window.addEventListener('scroll', onScroll, true)
-    window.addEventListener('resize', onScroll)
-    return () => {
-      document.removeEventListener('mousedown', close)
-      window.removeEventListener('scroll', onScroll, true)
-      window.removeEventListener('resize', onScroll)
-    }
-  }, [menu])
 
   const load = async () => {
     try {
@@ -118,11 +100,6 @@ export default function QuotesList() {
     }
   }
 
-  const openMenu = (e: React.MouseEvent, item: Quote) => {
-    e.stopPropagation()
-    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
-    setMenu({ item, top: rect.bottom + 6, left: Math.max(rect.right - 220, 8) })
-  }
 
   const setStatus = async (item: Quote, status: string, successMsg: string) => {
     const res = await fetch(`/api/quotes/${item.id}/status`, {
@@ -235,7 +212,7 @@ export default function QuotesList() {
                 <p className="text-base font-bold text-gray-900">{format(item.total)}</p>
                 {item.validUntil && <p className="text-xs text-gray-500">Vence {new Date(item.validUntil).toLocaleDateString('es-ES')}</p>}
               </div>
-              <button onClick={e => openMenu(e, item)} className="text-gray-400 hover:text-gray-600 p-1 flex-shrink-0" title="Opciones">
+              <button onClick={() => setMenuItem(item)} className="text-gray-400 hover:text-gray-600 p-1 flex-shrink-0" title="Opciones">
                 <MoreVertical className="h-5 w-5" />
               </button>
             </div>
@@ -243,27 +220,23 @@ export default function QuotesList() {
         </div>
       )}
 
-      {mounted &&
-        menu &&
-        createPortal(
-          <div
-            ref={menuRef}
-            style={{ position: 'fixed', top: menu.top, left: menu.left, width: 220 }}
-            className="bg-white rounded-xl shadow-lg border border-gray-200 py-1.5 z-[80]"
-          >
-            <MenuBtn icon={MessageCircle} color="text-green-500" label="Compartir por WhatsApp" onClick={() => { const it = menu.item; setMenu(null); share(it) }} />
-            <MenuBtn icon={Link2} label="Copiar enlace" onClick={() => { const it = menu.item; setMenu(null); copyLink(it) }} />
-            <MenuBtn icon={Edit} label="Editar" onClick={() => { const it = menu.item; setMenu(null); setEditing(it); setShowForm(true) }} />
-            <div className="border-t border-gray-100 my-1" />
-            {item_status(menu.item, 'sent') && <MenuBtn icon={Send} label="Marcar enviada" onClick={() => { const it = menu.item; setMenu(null); setStatus(it, 'sent', 'Marcada como enviada') }} />}
-            {menu.item.status !== 'accepted' && <MenuBtn icon={CheckCircle2} color="text-success-600" label="Marcar aceptada" onClick={() => { const it = menu.item; setMenu(null); setStatus(it, 'accepted', 'Marcada como aceptada') }} />}
-            {menu.item.status !== 'rejected' && <MenuBtn icon={XCircle} label="Marcar rechazada" onClick={() => { const it = menu.item; setMenu(null); setStatus(it, 'rejected', 'Marcada como rechazada') }} />}
-            {!menu.item.projectId && <MenuBtn icon={FolderPlus} color="text-primary-600" label="Convertir a proyecto" onClick={() => { const it = menu.item; setMenu(null); setConvertTarget(it) }} />}
-            <div className="border-t border-gray-100 my-1" />
-            <MenuBtn icon={Trash2} color="text-red-600" danger label="Eliminar" onClick={() => { const it = menu.item; setMenu(null); remove(it) }} />
-          </div>,
-          document.body
-        )}
+      {menuItem && (
+        <ActionSheet
+          title={menuItem.clientName}
+          subtitle={`${menuItem.number}${menuItem.title ? ` · ${menuItem.title}` : ''}`}
+          onClose={() => setMenuItem(null)}
+          actions={[
+            { icon: MessageCircle, color: 'text-green-500', label: 'Compartir por WhatsApp', onClick: () => { const it = menuItem; setMenuItem(null); share(it) } },
+            { icon: Link2, label: 'Copiar enlace', onClick: () => { const it = menuItem; setMenuItem(null); copyLink(it) } },
+            { icon: Edit, label: 'Editar', onClick: () => { const it = menuItem; setMenuItem(null); setEditing(it); setShowForm(true) } },
+            ...(item_status(menuItem, 'sent') ? [{ icon: Send, label: 'Marcar enviada', divider: true, onClick: () => { const it = menuItem; setMenuItem(null); setStatus(it, 'sent', 'Marcada como enviada') } }] : []),
+            ...(menuItem.status !== 'accepted' ? [{ icon: CheckCircle2, color: 'text-success-600', label: 'Marcar aceptada', onClick: () => { const it = menuItem; setMenuItem(null); setStatus(it, 'accepted', 'Marcada como aceptada') } }] : []),
+            ...(menuItem.status !== 'rejected' ? [{ icon: XCircle, label: 'Marcar rechazada', onClick: () => { const it = menuItem; setMenuItem(null); setStatus(it, 'rejected', 'Marcada como rechazada') } }] : []),
+            ...(!menuItem.projectId ? [{ icon: FolderPlus, color: 'text-primary-600', label: 'Convertir a proyecto', onClick: () => { const it = menuItem; setMenuItem(null); setConvertTarget(it) } }] : []),
+            { icon: Trash2, label: 'Eliminar', danger: true, divider: true, onClick: () => { const it = menuItem; setMenuItem(null); remove(it) } },
+          ]}
+        />
+      )}
 
       {showForm && (
         <QuoteForm
@@ -298,17 +271,6 @@ export default function QuotesList() {
 function item_status(q: Quote, target: string) {
   // Mostrar "Marcar enviada" solo si aún es borrador.
   return target === 'sent' && q.status === 'draft'
-}
-
-function MenuBtn({ icon: Icon, label, onClick, color, danger }: { icon: any; label: string; onClick: () => void; color?: string; danger?: boolean }) {
-  return (
-    <button
-      onClick={onClick}
-      className={`w-full flex items-center gap-2.5 px-3 py-2 text-sm text-left ${danger ? 'text-red-600 hover:bg-red-50' : 'text-gray-700 hover:bg-gray-50'}`}
-    >
-      <Icon className={`h-4 w-4 ${color ?? 'text-gray-400'}`} /> {label}
-    </button>
-  )
 }
 
 // ---------------------------------------------------------------------------
