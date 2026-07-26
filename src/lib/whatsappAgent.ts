@@ -17,6 +17,12 @@ import { hasModule, type PlanTier, type ModuleKey } from './modules'
 import { archetypeFor, type Archetype } from './moduleProfiles'
 import { DEFAULT_CURRENCY, DEFAULT_LOCALE } from './format'
 
+// Marca de origen en todo lo que escribe el agente. Un registro que entró por
+// chat tiene que ser tan auditable como uno tecleado en la app: sin esto, ante
+// un "¿esto quién lo puso?" no hay a qué mirar.
+const ORIGEN = 'whatsapp'
+const NOTA_ORIGEN = 'Registrado por WhatsApp'
+
 const TZ = process.env.WHATSAPP_TZ || 'America/Santo_Domingo'
 const MAX_TOOL_ITERATIONS = 4
 const HISTORY_LIMIT = 12
@@ -366,9 +372,12 @@ async function aplicarMovimiento(biz: WaBusiness, input: any): Promise<string> {
   const tipo = input?.tipo === 'gasto' ? 'expense' : 'income'
   const amount = Number(input?.monto)
   if (!Number.isFinite(amount) || amount <= 0) return 'ERROR: monto inválido'
-  const description = typeof input?.descripcion === 'string' && input.descripcion.trim()
-    ? input.descripcion.trim()
-    : tipo === 'income' ? 'Ingreso' : 'Gasto'
+  // Descripción y categoría son obligatorias, igual que al cargar desde la app
+  // (POST /api/transactions las exige). Antes se rellenaban con "Ingreso"/
+  // "Gasto": el registro entraba, pero quedaba un monto sin concepto, imposible
+  // de auditar después. Es preferible que el agente pregunte una vez.
+  const description = typeof input?.descripcion === 'string' ? input.descripcion.trim() : ''
+  if (!description) return 'ERROR: falta decir de qué fue'
   const category = typeof input?.categoria === 'string' && input.categoria.trim()
     ? input.categoria.trim()
     : tipo === 'income' ? 'Ventas' : 'Gastos'
@@ -391,6 +400,7 @@ async function aplicarMovimiento(biz: WaBusiness, input: any): Promise<string> {
       description,
       amount,
       date: toDateOnly(input?.fecha),
+      source: ORIGEN,
     })
     if (errGasto) {
       console.error('aplicarMovimiento gasto simple', errGasto)
@@ -425,6 +435,7 @@ async function aplicarMovimiento(biz: WaBusiness, input: any): Promise<string> {
       date: toDateOnly(input?.fecha),
       payment_method: typeof input?.metodo_pago === 'string' && input.metodo_pago.trim() ? input.metodo_pago.trim() : 'cash',
       attachments: [],
+      source: ORIGEN,
     })
     .select('id')
     .single()
@@ -458,7 +469,8 @@ async function execRegistrarCliente(biz: WaBusiness, input: any): Promise<string
       workspace_id: biz.workspaceId,
       name,
       phone: phone || null,
-      notes: typeof input?.notas === 'string' && input.notas.trim() ? input.notas.trim() : null,
+      notes: typeof input?.notas === 'string' && input.notas.trim() ? input.notas.trim() : NOTA_ORIGEN,
+      source: ORIGEN,
     })
     .select('id')
     .single()
@@ -487,6 +499,7 @@ async function aplicarDeuda(biz: WaBusiness, input: any): Promise<string> {
       amount,
       due_date: typeof input?.vence === 'string' && input.vence.length >= 10 ? toDateOnly(input.vence) : null,
       status: 'open',
+      source: ORIGEN,
     })
     .select('id')
     .single()
@@ -668,7 +681,7 @@ async function aplicarInventario(biz: WaBusiness, input: any): Promise<string> {
     user_id: biz.userId,
     type: delta > 0 ? 'in' : 'out',
     quantity: delta,
-    note: typeof input?.nota === 'string' && input.nota.trim() ? input.nota.trim() : 'Registrado por WhatsApp',
+    note: typeof input?.nota === 'string' && input.nota.trim() ? input.nota.trim() : NOTA_ORIGEN,
   })
   if (errMov) {
     console.error('aplicarInventario movimiento', errMov)
@@ -713,7 +726,7 @@ async function aplicarCita(biz: WaBusiness, input: any): Promise<string> {
       duration_min: Math.round(durationMin),
       price,
       status: 'scheduled',
-      notes: typeof input?.notas === 'string' && input.notas.trim() ? input.notas.trim() : 'Registrado por WhatsApp',
+      notes: typeof input?.notas === 'string' && input.notas.trim() ? input.notas.trim() : NOTA_ORIGEN,
     })
     .select('id')
     .single()
@@ -1203,18 +1216,23 @@ function buildTools(biz: WaBusiness, chatKey: string): AgentTool[] {
       properties: {
         tipo: { type: 'string', enum: ['ingreso', 'gasto'] },
         monto: { type: 'number', description: 'Solo el número' },
-        descripcion: { type: 'string', description: 'Qué fue (ej. corte de pelo)' },
+        descripcion: { type: 'string', description: 'De qué fue, concreto (ej. corte de pelo, 3 sacos de cemento). Si no lo dijo, pregúntalo.' },
         categoria: { type: 'string', description: 'Ej. Ventas, Insumos' },
         metodo_pago: { type: 'string', description: 'efectivo, transferencia o tarjeta' },
         fecha: { type: 'string', description: 'YYYY-MM-DD. Por defecto hoy.' },
         proyecto: { type: 'string', description: 'Obra o trabajo al que va. Se crea si no existe.' },
       },
-      required: ['tipo', 'monto'],
+      // `descripcion` es obligatoria igual que en la app: un monto sin concepto
+      // entra a la base pero no se puede auditar después.
+      required: ['tipo', 'monto', 'descripcion'],
       additionalProperties: false,
     },
     run: input => {
       const monto = Number(input?.monto)
       if (!Number.isFinite(monto) || monto <= 0) return Promise.resolve('ERROR: monto inválido')
+      if (!(typeof input?.descripcion === 'string' && input.descripcion.trim())) {
+        return Promise.resolve('ERROR: falta decir de qué fue; pregúntaselo')
+      }
       const esGasto = input?.tipo === 'gasto'
       const desc = typeof input?.descripcion === 'string' && input.descripcion.trim() ? ` por ${input.descripcion.trim()}` : ''
       const fecha = toDateOnly(input?.fecha)
