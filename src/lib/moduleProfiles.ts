@@ -24,7 +24,7 @@ export type Archetype = 'appointments' | 'retail' | 'food' | 'projects' | 'creat
 
 // Módulos relevantes por arquetipo, en orden de importancia.
 const ARCHETYPE_HREFS: Record<Archetype, string[]> = {
-  appointments: ['/agenda', '/reservas', '/clientes', '/cobros', '/cotizaciones'],
+  appointments: ['/agenda', '/reservas', '/finanzas', '/clientes', '/cobros', '/cotizaciones'],
   retail: ['/inventario', '/clientes', '/cobros'],
   food: ['/inventario', '/cobros', '/clientes'],
   projects: ['/proyectos', '/cotizaciones', '/cobros', '/clientes'],
