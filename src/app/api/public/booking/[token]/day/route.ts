@@ -2,7 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 
 import { getSupabaseClient } from '@/lib/supabase'
 
-// Intervalos ocupados de un día (para calcular huecos en el cliente).
+// Intervalos ocupados de un día + capacidad del negocio (para calcular huecos
+// en el cliente). La capacidad = cantidad de barberos activos (mínimo 1). Un
+// horario se considera lleno si ya hay tantas citas solapadas como capacidad.
 export async function GET(request: NextRequest, { params }: { params: { token: string } }) {
   try {
     const supabase = getSupabaseClient()
@@ -20,30 +22,39 @@ export async function GET(request: NextRequest, { params }: { params: { token: s
         .maybeSingle()
       ws = bySlug.data ?? null
     }
-    if (!ws || !ws.booking_enabled) return NextResponse.json({ taken: [] })
+    if (!ws || !ws.booking_enabled) return NextResponse.json({ taken: [], capacity: 1 })
 
     const { searchParams } = new URL(request.url)
     const from = searchParams.get('from')
     const to = searchParams.get('to')
-    const staffId = searchParams.get('staffId')
-    if (!from || !to) return NextResponse.json({ taken: [] })
+    if (!from || !to) return NextResponse.json({ taken: [], capacity: 1 })
 
-    const q = supabase
+    // Capacidad = nº de barberos activos (mínimo 1 si no hay barberos: la
+    // barbería es "una silla"). Determina cuántas citas simultáneas caben.
+    const { count: staffCount } = await supabase
+      .from('staff')
+      .select('id', { count: 'exact', head: true })
+      .eq('workspace_id', ws.id)
+      .eq('active', true)
+    const capacity = Math.max(1, staffCount ?? 0)
+
+    // Devolvemos TODAS las citas del día (de cualquier barbero, incluidas las
+    // "Sin preferencia" sin barbero asignado). El cliente decide con capacity.
+    const { data, error } = await supabase
       .from('appointments')
       .select('starts_at, duration_min, staff_id')
       .eq('workspace_id', ws.id)
       .in('status', ['scheduled', 'confirmed', 'done'])
       .gte('starts_at', from)
       .lte('starts_at', to)
-    if (staffId) q.eq('staff_id', staffId)
-
-    const { data, error } = await q
     if (error) throw error
+
     return NextResponse.json({
-      taken: (data ?? []).map(a => ({ startsAt: a.starts_at, durationMin: Number(a.duration_min ?? 30) })),
+      capacity,
+      taken: (data ?? []).map(a => ({ startsAt: a.starts_at, durationMin: Number(a.duration_min ?? 30), staffId: a.staff_id ?? null })),
     })
   } catch (error) {
     console.error(`GET /api/public/booking/${params.token}/day`, error)
-    return NextResponse.json({ taken: [] })
+    return NextResponse.json({ taken: [], capacity: 1 })
   }
 }
