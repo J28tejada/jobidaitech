@@ -37,6 +37,7 @@ export default function Dashboard() {
   const [pipeline, setPipeline] = useState<{ openValue: number; followUpsDue: number } | null>(null);
   const [agenda, setAgenda] = useState<{ todayCount: number; todayIncome: number; monthIncome: number; monthDone: number } | null>(null);
   const [videos, setVideos] = useState<{ monthCount: number; monthTotal: number } | null>(null);
+  const [expenseSum, setExpenseSum] = useState<{ monthTotal: number; monthCount: number } | null>(null);
   const [businessType, setBusinessType] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [showProjectForm, setShowProjectForm] = useState(false);
@@ -51,6 +52,7 @@ export default function Dashboard() {
     fetchPipeline();
     fetchAgenda();
     fetchVideos();
+    fetchExpenses();
     fetch('/api/subscription', { credentials: 'include' })
       .then(r => (r.ok ? r.json() : null))
       .then(d => { if (d && typeof d.businessType === 'string') setBusinessType(d.businessType); })
@@ -65,6 +67,20 @@ export default function Dashboard() {
       const data = await response.json();
       if (data && typeof data.monthCount === 'number') {
         setVideos({ monthCount: data.monthCount, monthTotal: data.monthTotal ?? 0 });
+      }
+    } catch {
+      // silencioso
+    }
+  };
+
+  const fetchExpenses = async () => {
+    try {
+      const tz = new Date().getTimezoneOffset();
+      const response = await fetch(`/api/expenses/summary?tzOffset=${tz}`, { credentials: 'include' });
+      if (!response.ok) return;
+      const data = await response.json();
+      if (data && typeof data.monthTotal === 'number') {
+        setExpenseSum({ monthTotal: data.monthTotal, monthCount: data.monthCount ?? 0 });
       }
     } catch {
       // silencioso
@@ -316,8 +332,8 @@ export default function Dashboard() {
 
         {isAppointments ? (
           <button
-            onClick={() => router.push('/agenda')}
-            className={`${ord('/agenda')}card cursor-pointer hover:shadow-lg transition-all duration-200 text-left border-l-4 border-l-success-600 w-full overflow-hidden group`}
+            onClick={() => router.push('/finanzas')}
+            className="card cursor-pointer hover:shadow-lg transition-all duration-200 text-left border-l-4 border-l-success-600 w-full overflow-hidden group"
           >
             <div className="flex items-start justify-between w-full min-w-0">
               <div className="flex items-center flex-1 min-w-0">
@@ -361,26 +377,31 @@ export default function Dashboard() {
           </div>
         )}
 
-        <div className="card border-l-4 border-l-danger-600 hover:shadow-lg transition-all duration-200 w-full overflow-hidden">
+        <button
+          onClick={() => router.push(isAppointments ? '/finanzas' : '/reportes')}
+          className="card cursor-pointer hover:shadow-lg transition-all duration-200 text-left border-l-4 border-l-danger-600 w-full overflow-hidden group"
+        >
           <div className="flex items-start justify-between w-full min-w-0">
             <div className="flex items-center flex-1 min-w-0">
-              <div className="p-3 bg-danger-100 rounded-lg">
+              <div className="p-3 bg-danger-100 rounded-lg group-hover:bg-danger-200 transition-colors">
                 <TrendingDown className="h-6 w-6 text-danger-600" />
               </div>
               <div className="ml-4 flex-1 min-w-0">
                 <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1 truncate">
-                  Gastos Totales
+                  {isAppointments ? 'Gastos del mes' : 'Gastos Totales'}
                 </p>
                 <p className="text-xl font-bold text-gray-900 mb-1 break-words leading-tight">
-                  {formatCurrency(stats.totalExpenses)}
+                  {isAppointments ? formatCurrency(expenseSum?.monthTotal ?? 0) : formatCurrency(stats.totalExpenses)}
                 </p>
                 <p className="text-xs text-gray-500 truncate">
-                  {formatCurrency(stats.monthlyExpenses)} este mes
+                  {isAppointments
+                    ? ((expenseSum?.monthCount ?? 0) > 0 ? `${expenseSum?.monthCount} gasto(s) · ver detalle` : 'Registrar gastos')
+                    : `${formatCurrency(stats.monthlyExpenses)} este mes`}
                 </p>
               </div>
             </div>
           </div>
-        </div>
+        </button>
 
         {!isAppointments && (
           <div className="card border-l-4 border-l-yellow-500 hover:shadow-lg transition-all duration-200 w-full overflow-hidden">
