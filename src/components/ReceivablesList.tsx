@@ -1,10 +1,9 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import {
   Plus,
-  MoreVertical,
   Coins,
   MessageCircle,
   CheckCircle2,
@@ -16,6 +15,8 @@ import {
   AlertTriangle,
   Loader2,
   X,
+  Phone,
+  ChevronRight,
 } from 'lucide-react'
 
 import { SUPPORT } from '@/lib/support'
@@ -80,34 +81,14 @@ export default function ReceivablesList() {
   const [projects, setProjects] = useState<ProjectOption[]>([])
   const [statusFilter, setStatusFilter] = useState<'open' | 'paid' | 'all'>('open')
 
-  const [mounted, setMounted] = useState(false)
-  const [menu, setMenu] = useState<{ item: Receivable; top: number; left: number } | null>(null)
-  const menuRef = useRef<HTMLDivElement>(null)
-
   const [showForm, setShowForm] = useState(false)
   const [editing, setEditing] = useState<Receivable | null>(null)
   const [abonoTarget, setAbonoTarget] = useState<Receivable | null>(null)
+  const [detail, setDetail] = useState<Receivable | null>(null)
 
   useEffect(() => {
-    setMounted(true)
     load()
   }, [])
-
-  useEffect(() => {
-    if (!menu) return
-    const close = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenu(null)
-    }
-    const onScroll = () => setMenu(null)
-    document.addEventListener('mousedown', close)
-    window.addEventListener('scroll', onScroll, true)
-    window.addEventListener('resize', onScroll)
-    return () => {
-      document.removeEventListener('mousedown', close)
-      window.removeEventListener('scroll', onScroll, true)
-      window.removeEventListener('resize', onScroll)
-    }
-  }, [menu])
 
   const load = async () => {
     try {
@@ -136,12 +117,6 @@ export default function ReceivablesList() {
     } finally {
       setLoading(false)
     }
-  }
-
-  const openMenu = (e: React.MouseEvent, item: Receivable) => {
-    e.stopPropagation()
-    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
-    setMenu({ item, top: rect.bottom + 6, left: Math.max(rect.right - 216, 8) })
   }
 
   const updateStatus = async (item: Receivable, status: 'paid' | 'cancelled') => {
@@ -250,7 +225,11 @@ export default function ReceivablesList() {
           {visible.map(item => {
             const overdue = isOverdue(item)
             return (
-              <div key={item.id} className="card flex items-center justify-between gap-3">
+              <button
+                key={item.id}
+                onClick={() => setDetail(item)}
+                className="card w-full text-left flex items-center justify-between gap-3 hover:border-primary-300 transition-colors"
+              >
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <h3 className="text-sm font-semibold text-gray-900 truncate">{item.client}</h3>
@@ -278,107 +257,27 @@ export default function ReceivablesList() {
                     {item.status === 'open' ? 'Saldo' : `Total ${formatCurrency(item.amount)}`}
                   </p>
                 </div>
-                <div className="flex items-center gap-1 flex-shrink-0">
-                  {item.status === 'open' && (
-                    <button
-                      onClick={() => setAbonoTarget(item)}
-                      className="btn btn-success text-xs hidden sm:inline-flex items-center"
-                      title="Registrar abono"
-                    >
-                      <Coins className="h-3.5 w-3.5 mr-1" /> Abono
-                    </button>
-                  )}
-                  <button onClick={e => openMenu(e, item)} className="text-gray-400 hover:text-gray-600 p-1" title="Opciones">
-                    <MoreVertical className="h-5 w-5" />
-                  </button>
-                </div>
-              </div>
+                <ChevronRight className="h-5 w-5 text-gray-300 flex-shrink-0" />
+              </button>
             )
           })}
         </div>
       )}
 
-      {/* Menú de opciones (portal) */}
-      {mounted &&
-        menu &&
-        createPortal(
-          <div
-            ref={menuRef}
-            style={{ position: 'fixed', top: menu.top, left: menu.left, width: 208 }}
-            className="bg-white rounded-xl shadow-lg border border-gray-200 py-1.5 z-[80]"
-          >
-            {menu.item.status === 'open' && (
-              <button
-                onClick={() => {
-                  const it = menu.item
-                  setMenu(null)
-                  setAbonoTarget(it)
-                }}
-                className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 text-left"
-              >
-                <Coins className="h-4 w-4 text-gray-400" /> Registrar abono
-              </button>
-            )}
-            {reminderLink(menu.item, formatCurrency) && (
-              <a
-                href={reminderLink(menu.item, formatCurrency)!}
-                target="_blank"
-                rel="noopener noreferrer"
-                onClick={() => setMenu(null)}
-                className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 text-left"
-              >
-                <MessageCircle className="h-4 w-4 text-green-500" /> Recordar por WhatsApp
-              </a>
-            )}
-            <button
-              onClick={() => {
-                const it = menu.item
-                setMenu(null)
-                setEditing(it)
-                setShowForm(true)
-              }}
-              className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 text-left"
-            >
-              <Edit className="h-4 w-4 text-gray-400" /> Editar
-            </button>
-            {menu.item.status === 'open' && (
-              <button
-                onClick={() => {
-                  const it = menu.item
-                  setMenu(null)
-                  updateStatus(it, 'paid')
-                }}
-                className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 text-left"
-              >
-                <CheckCircle2 className="h-4 w-4 text-success-600" /> Marcar como pagada
-              </button>
-            )}
-            {menu.item.status === 'open' && (
-              <button
-                onClick={() => {
-                  const it = menu.item
-                  setMenu(null)
-                  updateStatus(it, 'cancelled')
-                }}
-                className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 text-left"
-              >
-                <XCircle className="h-4 w-4 text-gray-400" /> Cancelar
-              </button>
-            )}
-            <div className="border-t border-gray-100 my-1" />
-            <button
-              onClick={() => {
-                const it = menu.item
-                setMenu(null)
-                remove(it)
-              }}
-              className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-red-600 hover:bg-red-50 text-left"
-            >
-              <Trash2 className="h-4 w-4" /> Eliminar
-            </button>
-          </div>,
-          document.body
-        )}
+      {/* Detalle de la cuenta (hoja inferior, como en Agenda) */}
+      {detail && (
+        <ReceivableDetail
+          item={detail}
+          fmt={formatCurrency}
+          reminder={reminderLink(detail, formatCurrency)}
+          onClose={() => setDetail(null)}
+          onAbono={() => { const it = detail; setDetail(null); setAbonoTarget(it) }}
+          onEdit={() => { const it = detail; setDetail(null); setEditing(it); setShowForm(true) }}
+          onPaid={() => { const it = detail; setDetail(null); updateStatus(it, 'paid') }}
+          onCancel={() => { const it = detail; setDetail(null); updateStatus(it, 'cancelled') }}
+          onDelete={() => { const it = detail; setDetail(null); remove(it) }}
+        />
+      )}
 
       {showForm && (
         <ReceivableForm
@@ -430,6 +329,123 @@ function Sheet({ title, onClose, children }: { title: string; onClose: () => voi
       </div>
     </div>,
     document.body
+  )
+}
+
+function ActionBtn({ icon: Icon, label, onClick, color, danger }: { icon: any; label: string; onClick: () => void; color?: string; danger?: boolean }) {
+  return (
+    <button onClick={onClick} className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm text-left transition-colors ${danger ? 'text-red-600 hover:bg-red-50' : 'text-gray-700 hover:bg-gray-50'}`}>
+      <Icon className={`h-4 w-4 ${color ?? 'text-gray-400'}`} /> {label}
+    </button>
+  )
+}
+
+function InfoRow({ label, value, danger }: { label: string; value: string; danger?: boolean }) {
+  return (
+    <div className="flex justify-between gap-3 py-1.5">
+      <span className="text-sm text-gray-500 flex-shrink-0">{label}</span>
+      <span className={`text-sm font-medium text-right break-words ${danger ? 'text-danger-600' : 'text-gray-900'}`}>{value}</span>
+    </div>
+  )
+}
+
+function ReceivableDetail({
+  item,
+  fmt,
+  reminder,
+  onClose,
+  onAbono,
+  onEdit,
+  onPaid,
+  onCancel,
+  onDelete,
+}: {
+  item: Receivable
+  fmt: (n: number) => string
+  reminder: string | null
+  onClose: () => void
+  onAbono: () => void
+  onEdit: () => void
+  onPaid: () => void
+  onCancel: () => void
+  onDelete: () => void
+}) {
+  const overdue = isOverdue(item)
+  const digits = (item.clientPhone || '').replace(/\D/g, '')
+  const statusLabel = item.status === 'paid' ? 'Pagada' : item.status === 'cancelled' ? 'Cancelada' : overdue ? 'Vencida' : 'Abierta'
+  const statusClass = item.status === 'paid' ? 'badge-success' : item.status === 'cancelled' || overdue ? 'badge-danger' : 'badge-warning'
+
+  return (
+    <Sheet title="Detalle de la cuenta" onClose={onClose}>
+      {/* Saldo + estado */}
+      <div className="flex items-start justify-between mb-4">
+        <div>
+          <p className={`text-2xl font-bold ${overdue ? 'text-danger-600' : 'text-gray-900'}`}>
+            {fmt(item.status === 'open' ? item.balance : 0)}
+          </p>
+          <p className="text-sm text-gray-500">{item.status === 'open' ? 'Saldo pendiente' : `Total ${fmt(item.amount)}`}</p>
+        </div>
+        <span className={`badge ${statusClass}`}>{statusLabel}</span>
+      </div>
+
+      {overdue && (
+        <div className="rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-sm p-3 mb-4">
+          Esta cuenta está vencida. Envíale un recordatorio o registra su abono.
+        </div>
+      )}
+
+      {/* Cliente + contacto */}
+      <div className="rounded-xl border border-gray-200 p-3 mb-4 flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-sm font-semibold text-gray-900 truncate">{item.client}</p>
+          {item.clientPhone && <p className="text-xs text-gray-500 truncate">{item.clientPhone}</p>}
+        </div>
+        {digits && (
+          <div className="flex gap-2 flex-shrink-0">
+            <a href={`tel:${digits}`} className="h-9 w-9 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center text-gray-700" aria-label="Llamar">
+              <Phone className="h-4 w-4" />
+            </a>
+            <a href={`https://wa.me/${digits}`} target="_blank" rel="noopener noreferrer" className="h-9 w-9 rounded-full bg-green-50 hover:bg-green-100 flex items-center justify-center text-green-600" aria-label="WhatsApp">
+              <MessageCircle className="h-4 w-4" />
+            </a>
+          </div>
+        )}
+      </div>
+
+      {/* Info */}
+      <div className="divide-y divide-gray-100 mb-4">
+        {item.description && <InfoRow label="Descripción" value={item.description} />}
+        <InfoRow label="Total" value={fmt(item.amount)} />
+        {item.paid > 0 && <InfoRow label="Abonado" value={fmt(item.paid)} />}
+        {item.dueDate && <InfoRow label="Vence" value={formatDate(item.dueDate) ?? ''} danger={overdue} />}
+      </div>
+
+      {/* Recordar por WhatsApp */}
+      {reminder && (
+        <a href={reminder} target="_blank" rel="noopener noreferrer" className="btn btn-secondary w-full flex items-center justify-center gap-2 mb-3">
+          <MessageCircle className="h-4 w-4 text-green-500" /> Recordar por WhatsApp
+        </a>
+      )}
+
+      {/* Acciones de estado (solo cuentas abiertas) */}
+      {item.status === 'open' && (
+        <div className="rounded-xl border border-gray-100 overflow-hidden mb-3">
+          <ActionBtn icon={Coins} color="text-success-600" label="Registrar abono" onClick={onAbono} />
+          <ActionBtn icon={CheckCircle2} color="text-success-600" label="Marcar como pagada" onClick={onPaid} />
+          <ActionBtn icon={XCircle} label="Cancelar" onClick={onCancel} />
+        </div>
+      )}
+
+      {/* Editar / Eliminar */}
+      <div className="flex gap-2">
+        <button onClick={onEdit} className="btn btn-secondary flex-1 flex items-center justify-center gap-1.5">
+          <Edit className="h-4 w-4" /> Editar
+        </button>
+        <button onClick={onDelete} className="btn flex-1 flex items-center justify-center gap-1.5 text-red-600 border border-red-200 hover:bg-red-50">
+          <Trash2 className="h-4 w-4" /> Eliminar
+        </button>
+      </div>
+    </Sheet>
   )
 }
 
