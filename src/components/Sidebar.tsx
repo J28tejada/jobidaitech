@@ -31,7 +31,7 @@ import {
 } from 'lucide-react'
 import { useSessionContext, useSupabaseClient } from '@supabase/auth-helpers-react'
 
-import { ORGANIZABLE_HREFS, relevantHrefsForBusiness } from '@/lib/moduleProfiles'
+import { ORGANIZABLE_HREFS, relevantHrefsForBusiness, hiddenNavHrefsForBusiness } from '@/lib/moduleProfiles'
 
 type NavItem = { name: string; href: string; icon: typeof Home; moduleKey?: string }
 
@@ -123,9 +123,11 @@ export default function Sidebar() {
           <ul className="space-y-2">
             {(() => {
               const byHref: Record<string, NavItem> = Object.fromEntries(navigation.map(i => [i.href, i]))
-              const relevant = relevantHrefsForBusiness(businessType).filter(h => byHref[h])
+              // Rutas ocultas para el rubro (ej. Cotizaciones/Reportes/Transacciones en citas).
+              const hidden = new Set(hiddenNavHrefsForBusiness(businessType))
+              const relevant = relevantHrefsForBusiness(businessType).filter(h => byHref[h] && !hidden.has(h))
               const relevantSet = new Set(relevant)
-              const others = ORGANIZABLE_HREFS.filter(h => !relevantSet.has(h) && byHref[h])
+              const others = ORGANIZABLE_HREFS.filter(h => !relevantSet.has(h) && byHref[h] && !hidden.has(h))
               const moreOpen = showMore || others.includes(pathname)
 
               const renderItem = (item?: NavItem) => {
@@ -152,8 +154,8 @@ export default function Sidebar() {
                 <>
                   {renderItem(byHref['/'])}
                   {relevant.map(h => renderItem(byHref[h]))}
-                  {renderItem(byHref['/transacciones'])}
-                  {renderItem(byHref['/reportes'])}
+                  {!hidden.has('/transacciones') && renderItem(byHref['/transacciones'])}
+                  {!hidden.has('/reportes') && renderItem(byHref['/reportes'])}
 
                   {others.length > 0 && (
                     <>

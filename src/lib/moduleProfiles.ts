@@ -24,7 +24,7 @@ export type Archetype = 'appointments' | 'retail' | 'food' | 'projects' | 'creat
 
 // Módulos relevantes por arquetipo, en orden de importancia.
 const ARCHETYPE_HREFS: Record<Archetype, string[]> = {
-  appointments: ['/agenda', '/reservas', '/finanzas', '/clientes', '/cobros', '/cotizaciones'],
+  appointments: ['/agenda', '/reservas', '/finanzas', '/clientes', '/cobros'],
   retail: ['/inventario', '/clientes', '/cobros'],
   food: ['/inventario', '/cobros', '/clientes'],
   projects: ['/proyectos', '/cotizaciones', '/cobros', '/clientes'],
@@ -63,6 +63,18 @@ export function archetypeFor(businessType: string | null | undefined): Archetype
 /** Rutas relevantes (ordenadas) para un tipo de negocio. */
 export function relevantHrefsForBusiness(businessType: string | null | undefined): string[] {
   return ARCHETYPE_HREFS[archetypeFor(businessType)]
+}
+
+// Rutas que NO tienen sentido para ciertos rubros y se ocultan por completo del
+// menú (ni en "Más"). En negocios de citas, la contabilidad por proyecto
+// (Cotizaciones, Reportes, Transacciones) no aplica: usan Finanzas.
+const ARCHETYPE_HIDDEN: Partial<Record<Archetype, string[]>> = {
+  appointments: ['/cotizaciones', '/reportes', '/transacciones'],
+}
+
+/** Rutas a ocultar del menú para un tipo de negocio. */
+export function hiddenNavHrefsForBusiness(businessType: string | null | undefined): string[] {
+  return ARCHETYPE_HIDDEN[archetypeFor(businessType)] ?? []
 }
 
 // Acción principal (botón "+" flotante) por arquetipo: a qué crear va directo.

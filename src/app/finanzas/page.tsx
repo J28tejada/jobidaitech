@@ -37,6 +37,7 @@ export default function FinanzasPage() {
   const [loading, setLoading] = useState(true)
   const [showExpense, setShowExpense] = useState(false)
   const [editing, setEditing] = useState<Expense | null>(null)
+  const [editIncome, setEditIncome] = useState<IncomeLoose | null>(null)
 
   const { from, to, label } = useMemo(() => {
     const now = new Date()
@@ -98,6 +99,16 @@ export default function FinanzasPage() {
     if (!ok) return
     const res = await fetch(`/api/expenses/${e.id}`, { method: 'DELETE', credentials: 'include' })
     if (res.ok) { toast.success('Gasto eliminado'); load() }
+    else toast.error('No se pudo eliminar')
+  }
+
+  // Los ingresos "sueltos" (walk-in / WhatsApp) viven en transactions y sí se
+  // pueden editar/eliminar. Los de una cita atendida se editan en la Agenda.
+  const delIncome = async (t: IncomeLoose) => {
+    const ok = await confirm({ title: 'Eliminar ingreso', message: `¿Eliminar este ingreso de ${format(t.amount)}?`, confirmText: 'Eliminar', danger: true })
+    if (!ok) return
+    const res = await fetch(`/api/transactions/${t.id}`, { method: 'DELETE', credentials: 'include' })
+    if (res.ok) { toast.success('Ingreso eliminado'); load() }
     else toast.error('No se pudo eliminar')
   }
 
@@ -209,7 +220,11 @@ export default function FinanzasPage() {
                           {t.source === 'whatsapp' ? ' · vía WhatsApp' : ''}
                         </p>
                       </div>
-                      <span className="text-sm font-semibold text-success-600 flex-shrink-0">{format(Number(t.amount ?? 0))}</span>
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        <span className="text-sm font-semibold text-success-600">{format(Number(t.amount ?? 0))}</span>
+                        <button onClick={() => setEditIncome(t)} className="text-gray-400 hover:text-gray-600 p-1" aria-label="Editar"><Edit className="h-4 w-4" /></button>
+                        <button onClick={() => delIncome(t)} className="text-danger-500 hover:text-danger-700 p-1" aria-label="Eliminar"><Trash2 className="h-4 w-4" /></button>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -258,7 +273,75 @@ export default function FinanzasPage() {
           onSaved={() => { setShowExpense(false); load() }}
         />
       )}
+
+      {editIncome && (
+        <IncomeForm
+          income={editIncome}
+          onClose={() => setEditIncome(null)}
+          onSaved={() => { setEditIncome(null); load() }}
+        />
+      )}
     </Layout>
+  )
+}
+
+function IncomeForm({ income, onClose, onSaved }: { income: IncomeLoose; onClose: () => void; onSaved: () => void }) {
+  const toast = useToast()
+  const [amount, setAmount] = useState(String(income.amount ?? ''))
+  const [description, setDescription] = useState(income.description ?? '')
+  const [category, setCategory] = useState(income.category ?? '')
+  const [date, setDate] = useState(income.date ? income.date.slice(0, 10) : todayStr())
+  const [saving, setSaving] = useState(false)
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (saving) return
+    const amt = Number(amount)
+    if (!Number.isFinite(amt) || amt <= 0) { toast.error('Indica un monto válido'); return }
+    setSaving(true)
+    try {
+      const payload = { type: 'income', amount: amt, description: description || 'Ingreso', category: category || 'Ventas', date }
+      const res = await fetch(`/api/transactions/${income.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify(payload) })
+      if (res.ok) { toast.success('Ingreso actualizado'); onSaved() }
+      else { const b = await res.json().catch(() => null); toast.error(b?.error || 'No se pudo guardar') }
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return createPortal(
+    <div className="fixed inset-0 z-[90] flex items-end sm:items-center justify-center">
+      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
+      <div className="relative bg-white w-full sm:max-w-md rounded-t-2xl sm:rounded-2xl shadow-xl max-h-[92vh] overflow-y-auto">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 sticky top-0 bg-white z-10">
+          <h2 className="text-lg font-semibold text-gray-900">Editar ingreso</h2>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 p-1"><X className="h-5 w-5" /></button>
+        </div>
+        <form onSubmit={submit} className="p-5 space-y-4">
+          <div>
+            <label className="label">Monto</label>
+            <input value={amount} onChange={e => setAmount(e.target.value)} type="number" step="0.01" min="0" className="input" placeholder="0.00" autoFocus />
+          </div>
+          <div>
+            <label className="label">Descripción</label>
+            <input value={description} onChange={e => setDescription(e.target.value)} className="input" placeholder="Ej. Corte de pelo" />
+          </div>
+          <div>
+            <label className="label">Categoría</label>
+            <input value={category} onChange={e => setCategory(e.target.value)} className="input" placeholder="Ventas" />
+          </div>
+          <div>
+            <label className="label">Fecha</label>
+            <input value={date} onChange={e => setDate(e.target.value)} type="date" className="input" />
+          </div>
+          <button type="submit" disabled={saving} className="btn btn-primary w-full flex items-center justify-center gap-2 disabled:opacity-60">
+            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+            Guardar cambios
+          </button>
+        </form>
+      </div>
+    </div>,
+    document.body
   )
 }
 
