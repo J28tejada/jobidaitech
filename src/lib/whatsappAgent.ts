@@ -382,6 +382,17 @@ async function aplicarMovimiento(biz: WaBusiness, input: any): Promise<string> {
     ? input.categoria.trim()
     : tipo === 'income' ? 'Ventas' : 'Gastos'
 
+  // `monto` es SIEMPRE el de cada unidad. Con cantidad > 1 y agrupar=false se
+  // escribe una fila por unidad; con agrupar=true, una sola por el total. La
+  // decisión la toma el dueño, no nosotros: diez cortes como diez registros
+  // sirven para contar clientes y ver el ticket promedio; como uno solo, para
+  // cerrar el día rápido. Ninguna de las dos es correcta siempre.
+  const cantidad = Math.max(1, Math.round(Number(input?.cantidad) || 1))
+  const agrupar = input?.agrupar !== false
+  const filas = cantidad > 1 && !agrupar ? cantidad : 1
+  const montoPorFila = cantidad > 1 && agrupar ? amount * cantidad : amount
+  const descFila = cantidad > 1 && agrupar ? `${description} (${cantidad} x ${amount})` : description
+
   const supabase = getSupabaseClient()
 
   // En rubros que no trabajan por obra (barbería, tienda, restaurante) el gasto
@@ -393,20 +404,24 @@ async function aplicarMovimiento(biz: WaBusiness, input: any): Promise<string> {
   // panel los suma.
   const arq = archetypeFor(biz.businessType)
   if (tipo === 'expense' && arq !== 'projects' && arq !== 'general') {
-    const { error: errGasto } = await supabase.from('expenses').insert({
-      workspace_id: biz.workspaceId,
-      user_id: biz.userId,
-      category,
-      description,
-      amount,
-      date: toDateOnly(input?.fecha),
-      source: ORIGEN,
-    })
+    const { error: errGasto } = await supabase.from('expenses').insert(
+      Array.from({ length: filas }, () => ({
+        workspace_id: biz.workspaceId,
+        user_id: biz.userId,
+        category,
+        description: descFila,
+        amount: montoPorFila,
+        date: toDateOnly(input?.fecha),
+        source: ORIGEN,
+      }))
+    )
     if (errGasto) {
       console.error('aplicarMovimiento gasto simple', errGasto)
       return 'ERROR: no se pudo guardar el gasto'
     }
-    return `OK: gasto de ${amount} registrado.`
+    return filas > 1
+      ? `OK: ${filas} gastos de ${montoPorFila} registrados.`
+      : `OK: gasto de ${montoPorFila} registrado.`
   }
 
   const proyecto = await resolverProyecto(biz, input?.proyecto)
@@ -421,29 +436,30 @@ async function aplicarMovimiento(biz: WaBusiness, input: any): Promise<string> {
     .eq('type', tipo)
     .maybeSingle()
 
-  const { data, error } = await supabase
-    .from('transactions')
-    .insert({
+  const { error } = await supabase.from('transactions').insert(
+    Array.from({ length: filas }, () => ({
       workspace_id: biz.workspaceId,
       user_id: biz.userId,
       project_id: projectId,
       type: tipo,
       category_id: cat?.id ?? null,
       category_name: category,
-      description,
-      amount,
+      description: descFila,
+      amount: montoPorFila,
       date: toDateOnly(input?.fecha),
       payment_method: typeof input?.metodo_pago === 'string' && input.metodo_pago.trim() ? input.metodo_pago.trim() : 'cash',
       attachments: [],
       source: ORIGEN,
-    })
-    .select('id')
-    .single()
+    }))
+  )
   if (error) {
     console.error('aplicarMovimiento', error)
     return 'ERROR: no se pudo guardar el movimiento'
   }
-  return `OK: ${tipo === 'income' ? 'ingreso' : 'gasto'} de ${amount} registrado (id ${data?.id}).`
+  const que = tipo === 'income' ? 'ingreso' : 'gasto'
+  return filas > 1
+    ? `OK: ${filas} ${que}s de ${montoPorFila} registrados.`
+    : `OK: ${que} de ${montoPorFila} registrado.`
 }
 
 async function execRegistrarCliente(biz: WaBusiness, input: any): Promise<string> {
@@ -1221,6 +1237,8 @@ function buildTools(biz: WaBusiness, chatKey: string): AgentTool[] {
         metodo_pago: { type: 'string', description: 'efectivo, transferencia o tarjeta' },
         fecha: { type: 'string', description: 'YYYY-MM-DD. Por defecto hoy.' },
         proyecto: { type: 'string', description: 'Obra o trabajo al que va. Se crea si no existe.' },
+        cantidad: { type: 'number', description: 'Cuántas unidades iguales (ej. 10 cortes). Por defecto 1.' },
+        agrupar: { type: 'boolean', description: 'Con cantidad > 1: true = un solo registro por el total, false = uno por unidad. Pregúntaselo, no lo decidas.' },
       },
       // `descripcion` es obligatoria igual que en la app: un monto sin concepto
       // entra a la base pero no se puede auditar después.
@@ -1233,6 +1251,16 @@ function buildTools(biz: WaBusiness, chatKey: string): AgentTool[] {
       if (!(typeof input?.descripcion === 'string' && input.descripcion.trim())) {
         return Promise.resolve('ERROR: falta decir de qué fue; pregúntaselo')
       }
+      // Con varias unidades, cómo agruparlas la decide el dueño. Se corta acá y
+      // no se deja al criterio del modelo: diez cortes en un solo registro
+      // pierden la cuenta de clientes; en diez, ensucian el listado si él quería
+      // el total del día. Ninguna opción es la correcta siempre.
+      const cant = Math.round(Number(input?.cantidad) || 1)
+      if (cant > 1 && typeof input?.agrupar !== 'boolean') {
+        return Promise.resolve(
+          `ERROR: son ${cant} unidades. Pregúntale si quiere ${cant} registros individuales o uno solo por el total, y vuelve a llamar con "agrupar".`
+        )
+      }
       const esGasto = input?.tipo === 'gasto'
       const desc = typeof input?.descripcion === 'string' && input.descripcion.trim() ? ` por ${input.descripcion.trim()}` : ''
       const fecha = toDateOnly(input?.fecha)
@@ -1241,12 +1269,20 @@ function buildTools(biz: WaBusiness, chatKey: string): AgentTool[] {
       // aceptar: en negocios por proyecto, un gasto en la obra equivocada es un
       // error caro y silencioso.
       const obra = typeof input?.proyecto === 'string' && input.proyecto.trim() ? ` — ${input.proyecto.trim()}` : ''
+      // El resumen dice cómo va a quedar guardado, no solo cuánto: es la última
+      // pantalla antes de escribir, y "10 registros" contra "1 registro" no se
+      // deduce del monto.
+      const forma = cant > 1
+        ? input?.agrupar
+          ? `1 registro de ${monto * cant} ${biz.currency} (${cant} x ${monto})`
+          : `${cant} registros de ${monto} ${biz.currency} c/u`
+        : `de ${monto} ${biz.currency}`
       return crearPendiente(
         biz,
         chatKey,
         'movimiento',
         input,
-        `${esGasto ? 'gasto' : 'ingreso'} de ${monto} ${biz.currency}${desc}${cuando}${obra}`
+        `${esGasto ? 'gasto' : 'ingreso'} ${forma}${desc}${cuando}${obra}`
       )
     },
   })
