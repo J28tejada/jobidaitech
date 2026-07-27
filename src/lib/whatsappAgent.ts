@@ -809,6 +809,10 @@ async function crearPendiente(
     console.error('crearPendiente', error)
     return 'ERROR: no se pudo preparar la confirmación'
   }
+  const cant = Math.round(Number(payload?.cantidad) || 1)
+  if (kind === 'movimiento' && cant > 1) {
+    return `PENDIENTE: ${resumen}. Pregúntale EXACTAMENTE si quiere que lo guarde como ${cant} registros individuales o como uno solo por el total. No lo decidas vos.`
+  }
   return `PENDIENTE: ${resumen}. Pídele confirmación al dueño; no lo des por hecho.`
 }
 
@@ -925,6 +929,19 @@ function pedidoDeCambio(texto: string): string | null {
   if (/^(cambiar de negocio|cambiar negocio|que negocios tengo|mis negocios|listar negocios)$/.test(t)) return ''
   const m = t.match(/^(?:cambia|cambiar|cambiame|pasa|pasar|pasame|ir|irme)\s+(?:a|al)\s+(?:negocio\s+)?(.+)$/)
   return m ? m[1].trim() : null
+}
+
+/**
+ * Interpreta cómo quiere agrupar N unidades iguales.
+ * Devuelve true (uno solo por el total), false (uno por unidad) o null si la
+ * respuesta no lo aclara y hay que volver a preguntar.
+ */
+function claseAgrupacion(texto: string): boolean | null {
+  const t = normalizar(texto)
+  if (!t || t.split(/\s+/).length > 6) return null
+  if (/\b(junto|juntos|junta|juntas|uno solo|una sola|todo junto|todos juntos|agrupado|agrupa|uno|total|el total|sumado)\b/.test(t)) return true
+  if (/\b(individual|individuales|separado|separados|separada|separadas|uno por uno|cada uno|por separado|detallado|dividido)\b/.test(t)) return false
+  return null
 }
 
 const AFIRMACIONES = new Set([
@@ -1251,16 +1268,16 @@ function buildTools(biz: WaBusiness, chatKey: string): AgentTool[] {
       if (!(typeof input?.descripcion === 'string' && input.descripcion.trim())) {
         return Promise.resolve('ERROR: falta decir de qué fue; pregúntaselo')
       }
-      // Con varias unidades, cómo agruparlas la decide el dueño. Se corta acá y
-      // no se deja al criterio del modelo: diez cortes en un solo registro
-      // pierden la cuenta de clientes; en diez, ensucian el listado si él quería
-      // el total del día. Ninguna opción es la correcta siempre.
+      // Con varias unidades, cómo agruparlas lo decide el dueño y la pregunta va
+      // dentro de la confirmación, no antes.
+      //
+      // El primer intento fue devolver un error pidiéndole al modelo que
+      // preguntara, pero el modelo simplemente inventó el valor y siguió de
+      // largo: no hay forma de verificar desde acá si preguntó. Al meter la
+      // elección en la confirmación —que ya es determinista— la respuesta del
+      // dueño es la única fuente, y se descarta lo que el modelo haya supuesto.
       const cant = Math.round(Number(input?.cantidad) || 1)
-      if (cant > 1 && typeof input?.agrupar !== 'boolean') {
-        return Promise.resolve(
-          `ERROR: son ${cant} unidades. Pregúntale si quiere ${cant} registros individuales o uno solo por el total, y vuelve a llamar con "agrupar".`
-        )
-      }
+      if (cant > 1) delete input.agrupar
       const esGasto = input?.tipo === 'gasto'
       const desc = typeof input?.descripcion === 'string' && input.descripcion.trim() ? ` por ${input.descripcion.trim()}` : ''
       const fecha = toDateOnly(input?.fecha)
@@ -1273,9 +1290,7 @@ function buildTools(biz: WaBusiness, chatKey: string): AgentTool[] {
       // pantalla antes de escribir, y "10 registros" contra "1 registro" no se
       // deduce del monto.
       const forma = cant > 1
-        ? input?.agrupar
-          ? `1 registro de ${monto * cant} ${biz.currency} (${cant} x ${monto})`
-          : `${cant} registros de ${monto} ${biz.currency} c/u`
+        ? `de ${cant} x ${monto} ${biz.currency} (total ${cant * monto})`
         : `de ${monto} ${biz.currency}`
       return crearPendiente(
         biz,
@@ -1665,7 +1680,31 @@ export async function handleInboundMessage(chat: WaChat, text: string): Promise<
   // sigue su curso normal (puede ser una corrección: "sí pero eran 300").
   const pendiente = await pendienteVigente(chat.key)
   if (pendiente) {
-    const clase = claseRespuesta(body)
+    // Con varias unidades hay una decisión antes del sí/no: juntas o separadas.
+    // Se resuelve acá y no en el modelo, que ya demostró que inventa el valor en
+    // vez de preguntar. Un "sí" a secas no alcanza: no dice cómo agrupar.
+    const cantPend = Math.round(Number(pendiente.payload?.cantidad) || 1)
+    const faltaAgrupar = pendiente.kind === 'movimiento' && cantPend > 1 && typeof pendiente.payload?.agrupar !== 'boolean'
+    if (faltaAgrupar) {
+      const eleccion = claseAgrupacion(body)
+      if (eleccion === null) {
+        if (claseRespuesta(body) === 'no') {
+          await cerrarPendiente(pendiente.id, 'cancelled')
+          const reply = 'Listo, no lo anoto.'
+          await logMessage({ workspaceId: biz.workspaceId, chatKey: chat.key, direction: 'out', body: reply })
+          return { reply, workspaceId: biz.workspaceId, handled: true }
+        }
+        // Si no es ni una cosa ni la otra, se sigue al agente: puede ser una
+        // corrección ("eran 600 cada uno") y no una respuesta a la pregunta.
+      } else {
+        const payload = { ...pendiente.payload, agrupar: eleccion }
+        const res = await aplicarPendiente(biz, { ...pendiente, payload })
+        const reply = textoConfirmacion({ ...pendiente, summary: res.replace(/^OK:\s*/, '').replace(/\.$/, '') }, res, biz.name)
+        await logMessage({ workspaceId: biz.workspaceId, chatKey: chat.key, direction: 'out', body: reply })
+        return { reply, workspaceId: biz.workspaceId, handled: true }
+      }
+    }
+    const clase = faltaAgrupar ? null : claseRespuesta(body)
     if (clase === 'si') {
       const res = await aplicarPendiente(biz, pendiente)
       const reply = textoConfirmacion(pendiente, res, biz.name)
