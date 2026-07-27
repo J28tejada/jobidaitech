@@ -635,19 +635,51 @@ function textoAvisoCliente(biz: WaBusiness, cita: any, personalizado?: unknown):
 }
 
 /**
+ * Instancia de Evolution con el WhatsApp propio del negocio, o null si todavía
+ * no lo conectó.
+ */
+export async function instanciaDelNegocio(workspaceId: string): Promise<string | null> {
+  try {
+    const { data } = await getSupabaseClient()
+      .from('workspaces')
+      .select('evolution_instance')
+      .eq('id', workspaceId)
+      .maybeSingle()
+    return (data as any)?.evolution_instance ?? null
+  } catch (error) {
+    console.error('instanciaDelNegocio', error)
+    return null
+  }
+}
+
+/**
  * Manda el recordatorio al cliente. Solo se llama al confirmar, como todo lo que
  * sale hacia afuera.
+ *
+ * Sale por el WhatsApp del NEGOCIO. Si no lo conectó, no se manda ni se cae al
+ * número de la plataforma: al cliente le llegaría desde un número que no tiene
+ * agendado —se lee como spam— y le cargaría a Jobidai la reputación de
+ * mensajería de todos sus negocios.
  */
 async function aplicarAvisoCliente(biz: WaBusiness, input: any): Promise<string> {
   const nombre = typeof input?.cliente === 'string' ? input.cliente.trim() : ''
   if (!nombre) return 'ERROR: falta el cliente'
 
+  const instancia = await instanciaDelNegocio(biz.workspaceId)
+  if (!instancia) {
+    return 'ERROR: todavía no conectaste el WhatsApp del negocio. Entrá a Ajustes → WhatsApp del negocio y conectalo; así el mensaje le llega a tu cliente desde TU número'
+  }
+
   const r = await proximaCitaDe(biz, nombre)
   if ('error' in r) return `ERROR: ${r.error}`
 
-  const enviado = await sendWhatsAppText(r.cita.client_phone, textoAvisoCliente(biz, r.cita, input?.mensaje))
+  const enviado = await sendWhatsAppText(
+    r.cita.client_phone,
+    textoAvisoCliente(biz, r.cita, input?.mensaje),
+    instancia
+  )
   if (!enviado) return 'ERROR: no se pudo enviar el mensaje'
-  return `OK: le avisé a ${r.cita.client_name}.`
+  return `OK: le avisé a ${r.cita.client_name} desde tu número.`
 }
 
 const ETAPAS_ABIERTAS = ['new', 'contacted', 'quoted']
@@ -1717,6 +1749,18 @@ export async function handleInboundMessage(chat: WaChat, text: string): Promise<
       reply = chat.isGroup
         ? `¡Listo! Este grupo quedó conectado a "${linked.negocio}". 🎉\nEscriban aquí sus ventas, gastos, clientes o citas y yo los anoto.`
         : `¡Listo! Tu WhatsApp quedó conectado a "${linked.negocio}". 🎉\nEscríbeme tus ventas, gastos, clientes o citas y yo los anoto.`
+
+      // Invitación a conectar el número del negocio. Va solo al vincular por
+      // primera vez, solo en chat directo, solo si el rubro maneja citas y solo
+      // si no lo conectó ya: un negocio sin clientes a quienes recordarles nada
+      // leería una función que no le sirve, y eso enseña a ignorar los avisos.
+      const bizNuevo = await resolveBusinessForChat(chat.key)
+      if (!chat.isGroup && bizNuevo && archetypeFor(bizNuevo.businessType) === 'appointments') {
+        const yaTiene = await instanciaDelNegocio(bizNuevo.workspaceId)
+        if (!yaTiene) {
+          reply += `\n\n📲 ¿Querés mandarle recordatorios a tus clientes? Conectá el WhatsApp de tu negocio en Ajustes → WhatsApp del negocio, y los mensajes les van a llegar desde TU número, no desde el mío.`
+        }
+      }
     }
 
     const biz = await resolveBusinessForChat(chat.key)

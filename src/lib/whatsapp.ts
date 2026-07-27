@@ -59,11 +59,15 @@ export function parseChatJid(jid: string | null | undefined): { key: string; isG
  */
 export async function sendWhatsAppText(
   destination: string,
-  text: string
+  text: string,
+  instanceOverride?: string | null
 ): Promise<boolean> {
   const base = process.env.EVOLUTION_API_URL
   const apiKey = process.env.EVOLUTION_API_KEY
-  const instance = process.env.EVOLUTION_INSTANCE
+  // Sin override sale por el número de la plataforma, que es lo correcto para
+  // hablarle al DUEÑO. Para escribirle a un cliente del negocio hay que pasar la
+  // instancia de ese negocio; quien llama decide, y no hay fallback silencioso.
+  const instance = instanceOverride || process.env.EVOLUTION_INSTANCE
   // Un JID (contiene @) se envía tal cual (grupos); si no, es un teléfono.
   const number = destination && destination.indexOf('@') !== -1 ? destination : normalizePhone(destination)
 

@@ -9,6 +9,7 @@ import BusinessTypePicker from '@/components/BusinessTypePicker';
 import AppearanceSettings from '@/components/AppearanceSettings';
 import LoyaltySettings from '@/components/LoyaltySettings';
 import WhatsAppConnect from '@/components/WhatsAppConnect';
+import WhatsAppNegocio from '@/components/WhatsAppNegocio';
 import DeleteBusiness from '@/components/DeleteBusiness';
 import { BusinessType } from '@/types';
 import { CURRENCIES } from '@/lib/format';
@@ -161,6 +162,13 @@ export default function ConfigurationPage() {
 
         {/* Conectar WhatsApp (asistente de captura por IA) */}
         <WhatsAppConnect />
+
+        {/* WhatsApp propio del negocio: el número desde el que salen los
+            mensajes a SUS clientes. Va debajo del anterior y con textos que
+            insisten en la diferencia, porque confundirlos es fácil y el síntoma
+            —recordatorios saliendo del número equivocado— no se ve. Solo en
+            rubros con agenda: sin citas no hay a quién recordarle nada. */}
+        {hasAgenda && <WhatsAppNegocio />}
 
         {/* Apariencia */}
         <AppearanceSettings />

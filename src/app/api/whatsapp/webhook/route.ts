@@ -92,6 +92,16 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ok: true }) // ignorar payloads no-JSON sin reintentos
   }
 
+  // Los números propios de los negocios también apuntan su webhook acá, pero lo
+  // que les entra son SUS clientes, no el dueño hablando con el asistente. Si el
+  // agente contestara ahí, un cliente que responde "ok gracias" a su recordatorio
+  // recibiría "Hola, soy el asistente de Jobidai" desde el número de su barbería.
+  const instanciaPlataforma = process.env.EVOLUTION_INSTANCE
+  const instanciaEntrante = typeof body?.instance === 'string' ? body.instance : ''
+  if (instanciaPlataforma && instanciaEntrante && instanciaEntrante !== instanciaPlataforma) {
+    return NextResponse.json({ ok: true, skipped: 'instancia de negocio' })
+  }
+
   const parsed = parseInbound(body)
   if (!parsed || parsed.fromMe) {
     return NextResponse.json({ ok: true, skipped: true })
