@@ -36,12 +36,24 @@ export function destinatarios(params: {
   return salida
 }
 
-/** Envía a varios destinos sin propagar fallos. */
-export async function avisar(destinos: string[], texto: string): Promise<void> {
+/**
+ * Envía a varios destinos sin propagar fallos.
+ *
+ * Con `workspaceId` además deja el aviso en la bitácora del chat. Eso no es
+ * cosmético: el agente arma su contexto desde `whatsapp_messages`, así que sin
+ * esto el dueño recibe "⏰ En 10 minutos: Juan", responde "avísale" y el modelo
+ * no tiene idea de a quién se refiere.
+ */
+export async function avisar(destinos: string[], texto: string, workspaceId?: string): Promise<void> {
   if (!whatsappConfigured() || !texto) return
   for (const d of destinos) {
     try {
       await sendWhatsAppText(d, texto)
+      if (workspaceId) {
+        await getSupabaseClient()
+          .from('whatsapp_messages')
+          .insert({ workspace_id: workspaceId, phone: d, direction: 'out', body: texto })
+      }
     } catch (error) {
       console.error('avisar', error)
     }

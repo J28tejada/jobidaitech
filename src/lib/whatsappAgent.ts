@@ -12,7 +12,7 @@
 import { getSupabaseClient } from './supabase'
 import { aiConfigured, aiMissingKeyName } from './ai'
 import { runToolConversation, type AgentMessage, type AgentTool } from './aiAgent'
-import { normalizePhone } from './whatsapp'
+import { normalizePhone, sendWhatsAppText } from './whatsapp'
 import { hasModule, type PlanTier, type ModuleKey } from './modules'
 import { archetypeFor, type Archetype } from './moduleProfiles'
 import { DEFAULT_CURRENCY, DEFAULT_LOCALE } from './format'
@@ -587,6 +587,69 @@ async function aplicarAbono(biz: WaBusiness, input: any): Promise<string> {
   return `OK: abono de ${aplicar} registrado. ${objetivo.client} debe ${resta}.`
 }
 
+/**
+ * Busca la próxima cita de un cliente por nombre. Devuelve la cita o el motivo.
+ *
+ * Se limita a citas FUTURAS y no canceladas a propósito: es lo que acota a quién
+ * se le puede escribir. Sin ese filtro, el agente se convertiría en un canal
+ * para mandar WhatsApp a cualquier número que aparezca en la base, y eso es
+ * exactamente por lo que WhatsApp cierra cuentas.
+ */
+async function proximaCitaDe(
+  biz: WaBusiness,
+  nombre: string
+): Promise<{ cita: any } | { error: string }> {
+  const supabase = getSupabaseClient()
+  const { data, error } = await supabase
+    .from('appointments')
+    .select('id,client_name,client_phone,title,starts_at')
+    .eq('workspace_id', biz.workspaceId)
+    .in('status', ['scheduled', 'confirmed'])
+    .gte('starts_at', new Date().toISOString())
+    .ilike('client_name', `%${nombre}%`)
+    .order('starts_at', { ascending: true })
+    .limit(2)
+  if (error) {
+    console.error('proximaCitaDe', error)
+    return { error: 'no se pudo buscar la cita' }
+  }
+  if (!data?.length) return { error: `no encontré una cita próxima de "${nombre}"` }
+  if (data.length > 1) return { error: `"${nombre}" tiene más de una cita próxima; sé más específico` }
+  const cita = data[0] as any
+  if (!cita.client_phone) return { error: `la cita de ${cita.client_name} no tiene teléfono guardado` }
+  return { cita }
+}
+
+/** Texto que se le manda al cliente. Siempre identifica al negocio. */
+function textoAvisoCliente(biz: WaBusiness, cita: any, personalizado?: unknown): string {
+  const cuando = new Intl.DateTimeFormat(biz.locale || DEFAULT_LOCALE, {
+    dateStyle: 'short',
+    timeStyle: 'short',
+    timeZone: TZ,
+  }).format(new Date(cita.starts_at))
+  const extra = typeof personalizado === 'string' && personalizado.trim() ? `\n${personalizado.trim()}` : ''
+  const serv = cita.title ? ` (${cita.title})` : ''
+  // El nombre del negocio va sí o sí: al cliente le entra un mensaje de un
+  // número que no tiene agendado, y sin saber de quién es parece spam.
+  return `Hola ${cita.client_name}, te recordamos tu cita en ${biz.name}${serv}: ${cuando}.${extra}`
+}
+
+/**
+ * Manda el recordatorio al cliente. Solo se llama al confirmar, como todo lo que
+ * sale hacia afuera.
+ */
+async function aplicarAvisoCliente(biz: WaBusiness, input: any): Promise<string> {
+  const nombre = typeof input?.cliente === 'string' ? input.cliente.trim() : ''
+  if (!nombre) return 'ERROR: falta el cliente'
+
+  const r = await proximaCitaDe(biz, nombre)
+  if ('error' in r) return `ERROR: ${r.error}`
+
+  const enviado = await sendWhatsAppText(r.cita.client_phone, textoAvisoCliente(biz, r.cita, input?.mensaje))
+  if (!enviado) return 'ERROR: no se pudo enviar el mensaje'
+  return `OK: le avisé a ${r.cita.client_name}.`
+}
+
 const ETAPAS_ABIERTAS = ['new', 'contacted', 'quoted']
 
 /**
@@ -769,7 +832,7 @@ async function aplicarCita(biz: WaBusiness, input: any): Promise<string> {
 // Efecto lateral bienvenido: un "sí" se resuelve sin llamar al modelo, así que
 // la confirmación —el mensaje más frecuente del flujo— pasa a costar cero.
 
-type TipoPendiente = 'movimiento' | 'cita' | 'deuda' | 'abono' | 'inventario' | 'oportunidad'
+type TipoPendiente = 'movimiento' | 'cita' | 'deuda' | 'abono' | 'inventario' | 'oportunidad' | 'aviso_cliente'
 
 const PENDIENTE_VIGENCIA_MIN = 30
 
@@ -867,6 +930,9 @@ async function aplicarPendiente(biz: WaBusiness, row: any): Promise<string> {
     case 'oportunidad':
       res = await aplicarOportunidad(biz, row.payload)
       break
+    case 'aviso_cliente':
+      res = await aplicarAvisoCliente(biz, row.payload)
+      break
     default:
       res = await aplicarMovimiento(biz, row.payload)
   }
@@ -899,6 +965,11 @@ function textoConfirmacion(pendiente: any, res: string, negocio: string): string
   // se quiere saber (saldo restante, stock resultante), y no incluye ids.
   if (pendiente.kind === 'abono' || pendiente.kind === 'inventario') {
     return `${res.replace(/^OK:\s*/, '').trim()}${donde} ✅`
+  }
+  // Un aviso al cliente no se "anota": se manda. Decirle "anoté" al dueño lo
+  // dejaría sin saber si el mensaje salió.
+  if (pendiente.kind === 'aviso_cliente') {
+    return `${res.replace(/^OK:\s*/, '').trim()} ✅`
   }
   return `Listo, anoté ${pendiente.summary}${donde}. ✅`
 }
@@ -1458,6 +1529,45 @@ function buildTools(biz: WaBusiness, chatKey: string): AgentTool[] {
           resumen = `oportunidad de ${cliente}${que}${monto}`
         }
         return crearPendiente(biz, chatKey, 'oportunidad', input, resumen)
+      },
+    })
+  }
+
+  // Avisar al cliente de su cita (módulo agenda).
+  //
+  // Es la única herramienta que manda un mensaje FUERA del chat del dueño, y por
+  // eso es la más acotada: solo a alguien con una cita próxima registrada, nunca
+  // a un número suelto. Sin ese límite, el agente sería un canal para mandar
+  // WhatsApp a cualquiera de la base, que es justo por lo que se cierran cuentas.
+  if (has('agenda')) {
+    tools.push({
+      name: 'avisar_cliente',
+      description: 'Le envía a un cliente un recordatorio de su próxima cita.',
+      schema: {
+        type: 'object',
+        properties: {
+          cliente: { type: 'string', description: 'Nombre, aunque sea parcial' },
+          mensaje: { type: 'string', description: 'Algo extra que quiera agregarle. Opcional.' },
+        },
+        required: ['cliente'],
+        additionalProperties: false,
+      },
+      run: async input => {
+        const nombre = typeof input?.cliente === 'string' ? input.cliente.trim() : ''
+        if (!nombre) return 'ERROR: falta el cliente'
+        // Se resuelve la cita ANTES de confirmar para que el resumen muestre a
+        // quién y qué se va a mandar. Confirmar a ciegas un mensaje que sale
+        // hacia afuera no es confirmar.
+        const r = await proximaCitaDe(biz, nombre)
+        if ('error' in r) return `ERROR: ${r.error}`
+        const texto = textoAvisoCliente(biz, r.cita, input?.mensaje)
+        return crearPendiente(
+          biz,
+          chatKey,
+          'aviso_cliente',
+          input,
+          `este mensaje a ${r.cita.client_name} (${r.cita.client_phone}):\n\n"${texto}"`
+        )
       },
     })
   }

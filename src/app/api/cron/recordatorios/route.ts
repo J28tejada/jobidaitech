@@ -110,7 +110,10 @@ async function recordarCitas(): Promise<{ enviados: number; citas: number; error
         telefonoCliente: c.client_phone,
         servicio: c.title,
         minutos,
-      })
+      }),
+      // Queda en la bitácora para que el dueño pueda responder "avísale" y el
+      // agente sepa de qué cita habla.
+      c.workspace_id
     )
     enviados += destinos.length
   }
@@ -142,7 +145,8 @@ async function recordatorioDiario(): Promise<{ enviados: number }> {
     if (!tel) continue
     await avisar(
       [tel],
-      '👷 ¿Ya anotaste los gastos e ingresos de hoy?\nMándamelos por aquí y los registro en la obra que me digas.'
+      '👷 ¿Ya anotaste los gastos e ingresos de hoy?\nMándamelos por aquí y los registro en la obra que me digas.',
+      w.id
     )
     enviados++
   }
