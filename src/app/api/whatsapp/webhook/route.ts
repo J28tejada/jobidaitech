@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 
 import { handleInboundMessage, type WaChat } from '@/lib/whatsappAgent'
+import { esNotaDeVoz, textoDeNotaDeVoz } from '@/lib/audioWa'
 import { sendWhatsAppText, whatsappConfigured, parseChatJid, normalizePhone } from '@/lib/whatsapp'
 
 export const runtime = 'nodejs'
@@ -20,6 +21,8 @@ interface Parsed {
   chat: WaChat
   text: string
   fromMe: boolean
+  /** Mensaje crudo de Evolution. Necesario para pedirle el audio descifrado. */
+  data?: any
 }
 
 /** Extrae el chat y el texto de los formatos conocidos. Devuelve null si no aplica. */
@@ -66,7 +69,7 @@ function parseInbound(body: any): Parsed | null {
     entry.text ??
     ''
 
-  return { chat: { jid: remoteJid, key, isGroup, sender }, text, fromMe: Boolean(key0.fromMe) }
+  return { chat: { jid: remoteJid, key, isGroup, sender }, text, fromMe: Boolean(key0.fromMe), data: entry }
 }
 
 function authorized(request: NextRequest): boolean {
@@ -90,21 +93,48 @@ export async function POST(request: NextRequest) {
   }
 
   const parsed = parseInbound(body)
-  // Ignorar: eventos que no son mensajes de texto entrantes y nuestros propios envíos.
-  if (!parsed || !parsed.text || parsed.fromMe) {
+  if (!parsed || parsed.fromMe) {
+    return NextResponse.json({ ok: true, skipped: true })
+  }
+
+  // Notas de voz: se transcriben y siguen el mismo camino que un mensaje escrito.
+  let texto = parsed.text
+  let transcripcion: string | null = null
+  if (!texto && esNotaDeVoz(parsed.data)) {
+    const r = await textoDeNotaDeVoz(parsed.data)
+    if ('error' in r) {
+      // Se responde en vez de callar: si manda un audio y no pasa nada, el dueño
+      // no sabe si lo ignoramos o si falló.
+      if (!parsed.chat.isGroup && whatsappConfigured()) {
+        await sendWhatsAppText(parsed.chat.key, r.error)
+      }
+      return NextResponse.json({ ok: true, error: r.error })
+    }
+    texto = r.texto
+    transcripcion = r.texto
+  }
+
+  if (!texto) {
     return NextResponse.json({ ok: true, skipped: true })
   }
 
   try {
-    const result = await handleInboundMessage(parsed.chat, parsed.text)
+    const result = await handleInboundMessage(parsed.chat, texto)
     // Responder por Evolution si está configurado. Para grupos, el destino es el
     // JID del grupo; para directos, el teléfono. Además devolvemos la respuesta en
     // el JSON para que n8n (u otro puente) pueda enviarla si así lo prefiere.
-    if (result.reply && whatsappConfigured()) {
+    // Con audio se antepone lo que se entendió. Es la única forma de que el
+    // dueño detecte una transcripción errónea ANTES de confirmar: "quinientos"
+    // oído como "cinco mil" pasa desapercibido si solo ve el resumen.
+    const reply = result.reply && transcripcion
+      ? `🎤 Escuché: “${transcripcion}”\n\n${result.reply}`
+      : result.reply
+
+    if (reply && whatsappConfigured()) {
       const destination = parsed.chat.isGroup ? parsed.chat.jid : parsed.chat.key
-      await sendWhatsAppText(destination, result.reply)
+      await sendWhatsAppText(destination, reply)
     }
-    return NextResponse.json({ ok: true, reply: result.reply })
+    return NextResponse.json({ ok: true, reply })
   } catch (error) {
     console.error('POST /api/whatsapp/webhook', error)
     // Respondemos 200 igualmente para evitar reintentos en bucle del proveedor.
