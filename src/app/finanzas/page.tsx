@@ -12,6 +12,10 @@ import { EXPENSE_CATEGORIES } from '@/lib/expenses'
 
 interface Expense { id: string; category: string; description: string; amount: number; date: string | null }
 interface IncomeItem { id: string; clientName: string; title: string; price: number; tip: number; startsAt: string | null }
+// Ingreso que no viene de una cita agendada: el walk-in que se anota por
+// WhatsApp o a mano. Vive en `transactions` y antes no aparecía en ningún lado
+// de esta pantalla, ni en el total ni en el detalle.
+interface IncomeLoose { id: string; description: string; category: string; amount: number; date: string | null; source: string | null }
 
 const pad = (n: number) => String(n).padStart(2, '0')
 const isoDay = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
@@ -28,6 +32,7 @@ export default function FinanzasPage() {
   const [customFrom, setCustomFrom] = useState('')
   const [customTo, setCustomTo] = useState('')
   const [income, setIncome] = useState<IncomeItem[]>([])
+  const [loose, setLoose] = useState<IncomeLoose[]>([])
   const [expenses, setExpenses] = useState<Expense[]>([])
   const [loading, setLoading] = useState(true)
   const [showExpense, setShowExpense] = useState(false)
@@ -54,19 +59,24 @@ export default function FinanzasPage() {
   const load = async () => {
     setLoading(true)
     try {
-      // Ingresos = citas atendidas (status=done) en el rango; gastos simples en el rango.
+      // Ingresos = citas atendidas (status=done) + ingresos sueltos
+      // (transactions, que es donde caen los del agente y el walk-in);
+      // gastos simples en el rango.
       const fromIso = new Date(`${from}T00:00:00`).toISOString()
       const toIso = new Date(`${to}T23:59:59`).toISOString()
-      const [incRes, expRes] = await Promise.all([
+      const [incRes, looseRes, expRes] = await Promise.all([
         fetch(`/api/appointments?from=${encodeURIComponent(fromIso)}&to=${encodeURIComponent(toIso)}&status=done`, { credentials: 'include' }),
+        fetch(`/api/transactions?type=income&from=${from}&to=${to}&pageSize=200`, { credentials: 'include' }),
         fetch(`/api/expenses?from=${from}&to=${to}`, { credentials: 'include' }),
       ])
       const inc = incRes.ok ? await incRes.json() : []
+      const looseJson = looseRes.ok ? await looseRes.json() : null
       const exp = expRes.ok ? await expRes.json() : []
       setIncome(Array.isArray(inc) ? inc : [])
+      setLoose(Array.isArray(looseJson?.items) ? looseJson.items : [])
       setExpenses(Array.isArray(exp) ? exp : [])
     } catch {
-      setIncome([]); setExpenses([])
+      setIncome([]); setLoose([]); setExpenses([])
     } finally {
       setLoading(false)
     }
@@ -74,7 +84,12 @@ export default function FinanzasPage() {
 
   useEffect(() => { load() }, [from, to]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const incomeTotal = useMemo(() => income.reduce((s, a) => s + Number(a.price ?? 0) + Number(a.tip ?? 0), 0), [income])
+  const incomeTotal = useMemo(
+    () =>
+      income.reduce((s, a) => s + Number(a.price ?? 0) + Number(a.tip ?? 0), 0) +
+      loose.reduce((s, t) => s + Number(t.amount ?? 0), 0),
+    [income, loose]
+  )
   const expenseTotal = useMemo(() => expenses.reduce((s, e) => s + Number(e.amount ?? 0), 0), [expenses])
   const balance = incomeTotal - expenseTotal
 
@@ -131,7 +146,10 @@ export default function FinanzasPage() {
               <div>
                 <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Ingresos</p>
                 <p className="text-2xl font-bold text-gray-900">{format(incomeTotal)}</p>
-                <p className="text-xs text-gray-500 mt-0.5">{income.length} cita(s) atendida(s)</p>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  {income.length} cita(s) atendida(s)
+                  {loose.length > 0 ? ` · ${loose.length} suelto(s)` : ''}
+                </p>
               </div>
               <div className="p-3 bg-success-100 rounded-lg"><TrendingUp className="h-6 w-6 text-success-600" /></div>
             </div>
@@ -162,12 +180,12 @@ export default function FinanzasPage() {
           <div className="flex items-center justify-center py-12"><Loader2 className="h-6 w-6 animate-spin text-primary-600" /></div>
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Ingresos (citas atendidas) */}
+            {/* Ingresos: citas atendidas + sueltos (walk-in / WhatsApp) */}
             <div className="card">
               <h2 className="text-lg font-semibold text-gray-900 mb-1">Ingresos del periodo</h2>
-              <p className="text-xs text-gray-500 mb-4">De tus citas atendidas. Se registran solas al marcar una cita como atendida.</p>
-              {income.length === 0 ? (
-                <p className="text-sm text-gray-500 text-center py-6">Sin citas atendidas en este periodo.</p>
+              <p className="text-xs text-gray-500 mb-4">De tus citas atendidas y de lo que anotes aparte, por WhatsApp o a mano.</p>
+              {income.length === 0 && loose.length === 0 ? (
+                <p className="text-sm text-gray-500 text-center py-6">Sin ingresos en este periodo.</p>
               ) : (
                 <div className="divide-y divide-gray-100">
                   {income.map(a => (
@@ -179,6 +197,19 @@ export default function FinanzasPage() {
                         </p>
                       </div>
                       <span className="text-sm font-semibold text-success-600 flex-shrink-0">{format(Number(a.price ?? 0) + Number(a.tip ?? 0))}</span>
+                    </div>
+                  ))}
+                  {loose.map(t => (
+                    <div key={t.id} className="flex items-center justify-between py-2.5 gap-3">
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-gray-900 truncate">{t.description || t.category || 'Ingreso'}</p>
+                        <p className="text-xs text-gray-500 truncate">
+                          {t.category || 'Ingreso'}
+                          {t.date ? ` · ${new Date(t.date).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })}` : ''}
+                          {t.source === 'whatsapp' ? ' · vía WhatsApp' : ''}
+                        </p>
+                      </div>
+                      <span className="text-sm font-semibold text-success-600 flex-shrink-0">{format(Number(t.amount ?? 0))}</span>
                     </div>
                   ))}
                 </div>
