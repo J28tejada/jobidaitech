@@ -1758,7 +1758,7 @@ export async function handleInboundMessage(chat: WaChat, text: string): Promise<
       if (!chat.isGroup && bizNuevo && archetypeFor(bizNuevo.businessType) === 'appointments') {
         const yaTiene = await instanciaDelNegocio(bizNuevo.workspaceId)
         if (!yaTiene) {
-          reply += `\n\n📲 ¿Querés mandarle recordatorios a tus clientes? Conectá el WhatsApp de tu negocio en Ajustes → WhatsApp del negocio, y los mensajes les van a llegar desde TU número, no desde el mío.`
+          reply += `\n\n📲 ¿Quieres mandarle recordatorios a tus clientes? Conecta el WhatsApp de tu negocio en la aplicación de Jobidai → Ajustes → WhatsApp del negocio, y los mensajes les van a llegar desde TU número.`
         }
       }
     }
