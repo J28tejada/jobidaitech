@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 
-import { handleInboundMessage, type WaChat } from '@/lib/whatsappAgent'
+import { handleInboundMessage, resolveBusinessForChat, type WaChat } from '@/lib/whatsappAgent'
 import { esNotaDeVoz, textoDeNotaDeVoz } from '@/lib/audioWa'
+import { esImagen, procesarImagen, type Adjunto } from '@/lib/imagenWa'
 import { sendWhatsAppText, whatsappConfigured, parseChatJid, normalizePhone } from '@/lib/whatsapp'
 
 export const runtime = 'nodejs'
@@ -107,8 +108,29 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ok: true, skipped: true })
   }
 
-  // Notas de voz: se transcriben y siguen el mismo camino que un mensaje escrito.
+  // Fotos de comprobantes: se guardan y se leen. Se resuelve el negocio primero
+  // porque el archivo se guarda bajo su carpeta; sin negocio vinculado no hay
+  // dónde ponerlo y no tiene sentido gastar una lectura del modelo.
   let texto = parsed.text
+  let adjunto: Adjunto | null = null
+  let lectura: string | null = null
+  if (esImagen(parsed.data)) {
+    const biz = await resolveBusinessForChat(parsed.chat.key)
+    if (biz) {
+      const r = await procesarImagen(parsed.data, biz.workspaceId)
+      if ('error' in r) {
+        if (!parsed.chat.isGroup && whatsappConfigured()) {
+          await sendWhatsAppText(parsed.chat.key, r.error)
+        }
+        return NextResponse.json({ ok: true, error: r.error })
+      }
+      texto = r.texto
+      adjunto = r.adjunto
+      lectura = r.texto
+    }
+  }
+
+  // Notas de voz: se transcriben y siguen el mismo camino que un mensaje escrito.
   let transcripcion: string | null = null
   if (!texto && esNotaDeVoz(parsed.data)) {
     const r = await textoDeNotaDeVoz(parsed.data)
@@ -129,16 +151,19 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const result = await handleInboundMessage(parsed.chat, texto)
+    const result = await handleInboundMessage(parsed.chat, texto, adjunto)
     // Responder por Evolution si está configurado. Para grupos, el destino es el
     // JID del grupo; para directos, el teléfono. Además devolvemos la respuesta en
     // el JSON para que n8n (u otro puente) pueda enviarla si así lo prefiere.
     // Con audio se antepone lo que se entendió. Es la única forma de que el
     // dueño detecte una transcripción errónea ANTES de confirmar: "quinientos"
     // oído como "cinco mil" pasa desapercibido si solo ve el resumen.
-    const reply = result.reply && transcripcion
-      ? `🎤 Escuché: “${transcripcion}”\n\n${result.reply}`
-      : result.reply
+    // Con audio o foto se antepone lo que se entendió: es la única forma de que
+    // el dueño detecte una lectura errada ANTES de confirmar. Un "500" leído
+    // como "5000" pasa desapercibido si solo ve el resumen.
+    let reply = result.reply
+    if (reply && transcripcion) reply = `🎤 Escuché: “${transcripcion}”\n\n${reply}`
+    else if (reply && lectura) reply = `🧾 Leí: “${lectura}”\n\n${reply}`
 
     if (reply && whatsappConfigured()) {
       const destination = parsed.chat.isGroup ? parsed.chat.jid : parsed.chat.key

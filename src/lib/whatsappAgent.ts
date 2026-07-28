@@ -448,7 +448,10 @@ async function aplicarMovimiento(biz: WaBusiness, input: any): Promise<string> {
       amount: montoPorFila,
       date: toDateOnly(input?.fecha),
       payment_method: typeof input?.metodo_pago === 'string' && input.metodo_pago.trim() ? input.metodo_pago.trim() : 'cash',
-      attachments: [],
+      // El comprobante que mandó por foto queda adjunto al movimiento, igual que
+      // si lo hubiera subido desde la app. Sin esto la lectura sería una
+      // anotación sin respaldo.
+      attachments: input?.adjunto ? [input.adjunto] : [],
       source: ORIGEN,
     }))
   )
@@ -1335,7 +1338,7 @@ async function execConsultar(biz: WaBusiness, input: any): Promise<string> {
 // Herramientas expuestas al modelo (según los módulos del plan)
 // ---------------------------------------------------------------------------
 
-function buildTools(biz: WaBusiness, chatKey: string): AgentTool[] {
+function buildTools(biz: WaBusiness, chatKey: string, adjunto?: any): AgentTool[] {
   const tools: AgentTool[] = []
   const has = (m: ModuleKey) => hasModule(biz.planTier, m)
 
@@ -1399,8 +1402,10 @@ function buildTools(biz: WaBusiness, chatKey: string): AgentTool[] {
         biz,
         chatKey,
         'movimiento',
-        input,
-        `${esGasto ? 'gasto' : 'ingreso'} ${forma}${desc}${cuando}${obra}`
+        // El adjunto viaja dentro del payload de la pendiente: la escritura pasa
+        // al confirmar, y para entonces el mensaje con la foto ya quedó atrás.
+        adjunto ? { ...input, adjunto } : input,
+        `${esGasto ? 'gasto' : 'ingreso'} ${forma}${desc}${cuando}${obra}${adjunto ? ' (con comprobante)' : ''}`
       )
     },
   })
@@ -1697,12 +1702,12 @@ function systemPrompt(biz: WaBusiness, isGroup: boolean): string {
 // ---------------------------------------------------------------------------
 
 /** Corre el agente. Devuelve el texto de respuesta, o null si hay que callar (grupos). */
-async function runAgent(biz: WaBusiness, chat: WaChat, userText: string): Promise<string | null> {
+async function runAgent(biz: WaBusiness, chat: WaChat, userText: string, adjunto?: any): Promise<string | null> {
   const reply = await runToolConversation({
     system: systemPrompt(biz, chat.isGroup),
     history: await recentHistory(chat.key),
     userText,
-    tools: buildTools(biz, chat.key),
+    tools: buildTools(biz, chat.key, adjunto),
     maxIterations: MAX_TOOL_ITERATIONS,
   })
 
@@ -1729,7 +1734,12 @@ export interface InboundResult {
  * bitácora, intenta vincular por código, y si el chat está vinculado corre el
  * agente. Devuelve el texto de respuesta a enviar (o null si no hay que responder).
  */
-export async function handleInboundMessage(chat: WaChat, text: string): Promise<InboundResult> {
+export async function handleInboundMessage(
+  chat: WaChat,
+  text: string,
+  /** Comprobante que vino por foto, para adjuntarlo al movimiento que se registre. */
+  adjunto?: { path: string; name: string; type: string } | null
+): Promise<InboundResult> {
   const body = (text || '').trim()
   if (!chat.key || !body) return { reply: null, workspaceId: null, handled: false }
 
@@ -1884,7 +1894,7 @@ export async function handleInboundMessage(chat: WaChat, text: string): Promise<
   // 6) Correr el agente.
   let reply: string | null
   try {
-    reply = await runAgent(biz, chat, body)
+    reply = await runAgent(biz, chat, body, adjunto)
   } catch (error) {
     console.error('runAgent', error)
     reply = chat.isGroup ? null : 'Uy, tuve un problema para procesar eso. ¿Puedes repetirlo?'
