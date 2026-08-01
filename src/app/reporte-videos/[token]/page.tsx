@@ -47,6 +47,15 @@ export default function PublicVideoReportPage({ params }: { params: { token: str
   const [loading, setLoading] = useState(true)
   const [notFound, setNotFound] = useState(false)
 
+  // La factura es un documento: siempre en claro, sin importar el tema de la
+  // app (el cliente que la recibe no debe verla oscura). Restaura al salir.
+  useEffect(() => {
+    const root = document.documentElement
+    const prev = root.getAttribute('data-theme')
+    root.setAttribute('data-theme', 'light')
+    return () => { if (prev) root.setAttribute('data-theme', prev); else root.removeAttribute('data-theme') }
+  }, [])
+
   useEffect(() => {
     fetch(`/api/public/video-reports/${params.token}`)
       .then(r => (r.ok ? r.json() : Promise.reject()))
