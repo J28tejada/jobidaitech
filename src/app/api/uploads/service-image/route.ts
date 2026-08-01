@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 
 import { getSupabaseClient } from '@/lib/supabase'
-import { getWorkspaceContext, getWriteAccess, READ_ONLY_ERROR, MODULE_LOCKED_ERROR } from '@/lib/workspaces'
+import { getWorkspaceContext, getWriteAccess, READ_ONLY_ERROR } from '@/lib/workspaces'
 
 const BUCKET = 'service-images'
 const MAX_BYTES = 4 * 1024 * 1024 // 4 MB
@@ -19,7 +19,8 @@ export async function POST(request: NextRequest) {
   try {
     const ctx = await getWorkspaceContext()
     if (!ctx) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
-    if (!ctx.hasModule('agenda')) return NextResponse.json(MODULE_LOCKED_ERROR, { status: 403 })
+    // Subida de imágenes genérica (fotos de servicio/barbero, portadas y logos
+    // de facturación). No se ata a un módulo: basta con permiso de escritura.
     if (!ctx.canWrite) return NextResponse.json(READ_ONLY_ERROR, { status: 403 })
     if (!getWriteAccess(ctx.role).allowed) {
       return NextResponse.json({ error: 'No tienes permiso para subir imágenes' }, { status: 403 })
