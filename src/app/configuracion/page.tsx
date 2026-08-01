@@ -11,6 +11,7 @@ import LoyaltySettings from '@/components/LoyaltySettings';
 import WhatsAppConnect from '@/components/WhatsAppConnect';
 import WhatsAppNegocio from '@/components/WhatsAppNegocio';
 import DeleteBusiness from '@/components/DeleteBusiness';
+import InvoiceSettings from '@/components/InvoiceSettings';
 import { BusinessType } from '@/types';
 import { CURRENCIES } from '@/lib/format';
 import { useCurrency } from '@/components/CurrencyProvider';
@@ -169,6 +170,9 @@ export default function ConfigurationPage() {
             —recordatorios saliendo del número equivocado— no se ve. Solo en
             rubros con agenda: sin citas no hay a quién recordarle nada. */}
         {hasAgenda && <WhatsAppNegocio />}
+
+        {/* Datos de facturación (emisor): logo + datos para facturas/reportes */}
+        <InvoiceSettings />
 
         {/* Apariencia */}
         <AppearanceSettings />

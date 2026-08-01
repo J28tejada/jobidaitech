@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
-import { Plus, Search, MoreVertical, Users, Edit, Trash2, MessageCircle, Loader2, X, ClipboardList, Scissors, CalendarClock, Gift, HeartHandshake } from 'lucide-react'
+import { Plus, Search, MoreVertical, Users, Edit, Trash2, MessageCircle, Loader2, X, ClipboardList, Scissors, CalendarClock, Gift, HeartHandshake, Image as ImageIcon } from 'lucide-react'
 
 import ActionSheet from './ActionSheet'
 import { useCurrency } from './CurrencyProvider'
@@ -18,6 +18,7 @@ interface Client {
   taxId: string | null
   address: string | null
   notes: string | null
+  logoUrl: string | null
 }
 
 const waLink = (phone: string | null) => {
@@ -557,8 +558,28 @@ function ClientForm({ client, onClose, onSaved }: { client: Client | null; onClo
   const [taxId, setTaxId] = useState(client?.taxId ?? '')
   const [address, setAddress] = useState(client?.address ?? '')
   const [notes, setNotes] = useState(client?.notes ?? '')
+  const [logoUrl, setLogoUrl] = useState(client?.logoUrl ?? '')
+  const [uploading, setUploading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  const toast = useToast()
+  const uploadLogo = async (file: File) => {
+    if (uploading) return
+    setUploading(true)
+    try {
+      const fd = new FormData()
+      fd.append('file', file)
+      const res = await fetch('/api/uploads/service-image', { method: 'POST', credentials: 'include', body: fd })
+      const b = await res.json().catch(() => null)
+      if (!res.ok || !b?.url) throw new Error(b?.error || 'No se pudo subir el logo')
+      setLogoUrl(b.url)
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Error al subir el logo')
+    } finally {
+      setUploading(false)
+    }
+  }
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -566,7 +587,7 @@ function ClientForm({ client, onClose, onSaved }: { client: Client | null; onClo
     setSaving(true)
     setError(null)
     try {
-      const payload = { name, phone, email, taxId, address, notes }
+      const payload = { name, phone, email, taxId, address, notes, logoUrl: logoUrl || null }
       const res = client
         ? await fetch(`/api/clients/${client.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify(payload) })
         : await fetch('/api/clients', { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify(payload) })
@@ -594,6 +615,31 @@ function ClientForm({ client, onClose, onSaved }: { client: Client | null; onClo
           <div>
             <label className="label">Nombre *</label>
             <input value={name} onChange={e => setName(e.target.value)} required className="input" placeholder="Nombre del cliente" />
+          </div>
+          {/* Logo del cliente (aparece en sus facturas/reportes) */}
+          <div>
+            <label className="label">Logo del cliente</label>
+            <div className="flex items-center gap-3">
+              {logoUrl ? (
+                <div className="relative">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={logoUrl} alt="Logo" className="h-14 w-14 rounded-lg object-contain border border-gray-200 bg-white p-1" />
+                  <button type="button" onClick={() => setLogoUrl('')} className="absolute -top-1.5 -right-1.5 bg-white rounded-full border border-gray-200 p-0.5 text-gray-500 hover:text-red-600" aria-label="Quitar logo">
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              ) : (
+                <div className="h-14 w-14 rounded-lg border border-dashed border-gray-300 flex items-center justify-center text-gray-300">
+                  <ImageIcon className="h-5 w-5" />
+                </div>
+              )}
+              <label className="btn btn-secondary text-sm cursor-pointer inline-flex items-center gap-1.5">
+                {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImageIcon className="h-4 w-4" />}
+                {logoUrl ? 'Cambiar logo' : 'Subir logo'}
+                <input type="file" accept="image/*" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) uploadLogo(f); e.target.value = '' }} />
+              </label>
+            </div>
+            <p className="text-[11px] text-gray-400 mt-1">Aparece en las facturas/reportes que le envíes.</p>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>

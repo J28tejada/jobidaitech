@@ -55,6 +55,7 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
     if (body.taxId !== undefined) updates.tax_id = str(body.taxId)
     if (body.address !== undefined) updates.address = str(body.address)
     if (body.notes !== undefined) updates.notes = str(body.notes)
+    if (body.logoUrl !== undefined) updates.logo_url = str(body.logoUrl)
 
     if (Object.keys(updates).length === 0) {
       return NextResponse.json({ error: 'Nada que actualizar' }, { status: 400 })

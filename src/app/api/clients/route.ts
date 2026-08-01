@@ -61,6 +61,7 @@ export async function POST(request: NextRequest) {
       tax_id: str(body.taxId),
       address: str(body.address),
       notes: str(body.notes),
+      logo_url: str(body.logoUrl),
     }
     const { data, error } = await supabase.from('clients').insert(payload).select().single()
     if (error) throw error

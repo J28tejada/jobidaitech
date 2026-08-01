@@ -27,11 +27,23 @@ export async function GET(_request: NextRequest, { params }: { params: { token: 
     if (report.client_id) query.eq('client_id', report.client_id)
     const { data: videos } = await query
 
+    // select('*') para tolerar la migración 0043 (invoice_*) aún no corrida.
     const { data: ws } = await supabase
       .from('workspaces')
-      .select('name, currency, locale')
+      .select('*')
       .eq('id', report.workspace_id)
       .maybeSingle()
+
+    // Logo del cliente (si el reporte es para un cliente con ficha).
+    let clientLogoUrl: string | null = null
+    if (report.client_id) {
+      const { data: cli } = await supabase
+        .from('clients')
+        .select('logo_url')
+        .eq('id', report.client_id)
+        .maybeSingle()
+      clientLogoUrl = (cli as { logo_url?: string | null } | null)?.logo_url ?? null
+    }
 
     const items = (videos ?? []).map(mapVideoRow)
     const liveTotal = items.reduce((sum, v) => sum + v.price, 0)
@@ -55,6 +67,16 @@ export async function GET(_request: NextRequest, { params }: { params: { token: 
         })),
       },
       business: { name: ws?.name ?? 'Negocio' },
+      // Emisor de la factura (datos configurables en Ajustes).
+      issuer: {
+        name: ws?.invoice_name || ws?.name || 'Negocio',
+        logoUrl: ws?.invoice_logo_url ?? null,
+        taxId: ws?.invoice_tax_id ?? null,
+        phone: ws?.invoice_phone ?? null,
+        email: ws?.invoice_email ?? null,
+        address: ws?.invoice_address ?? null,
+      },
+      client: { name: report.client_name ?? null, logoUrl: clientLogoUrl },
       currency: ws?.currency ?? 'DOP',
       locale: ws?.locale ?? 'es-DO',
     })

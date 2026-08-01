@@ -13,6 +13,14 @@ interface ReportVideo {
   recorderName: string
   price: number
 }
+interface Issuer {
+  name: string
+  logoUrl: string | null
+  taxId: string | null
+  phone: string | null
+  email: string | null
+  address: string | null
+}
 interface ReportData {
   report: {
     title: string
@@ -25,11 +33,14 @@ interface ReportData {
     videos: ReportVideo[]
   }
   business: { name: string }
+  issuer?: Issuer
+  client?: { name: string | null; logoUrl: string | null }
   currency: string
   locale: string
 }
 
 const dmy = (s: string | null) => (s ? new Date(`${s}T00:00:00`).toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '')
+const dmyFull = (s: string | null) => (s ? new Date(s).toLocaleDateString('es-ES', { day: '2-digit', month: 'long', year: 'numeric' }) : '')
 
 export default function PublicVideoReportPage({ params }: { params: { token: string } }) {
   const [data, setData] = useState<ReportData | null>(null)
@@ -67,58 +78,82 @@ export default function PublicVideoReportPage({ params }: { params: { token: str
   }
 
   const r = data.report
+  const issuer: Issuer = data.issuer ?? { name: data.business.name, logoUrl: null, taxId: null, phone: null, email: null, address: null }
+  const client = data.client ?? { name: r.clientName, logoUrl: null }
+  const folio = params.token.slice(-6).toUpperCase()
 
   return (
     <div className="min-h-screen bg-gray-100 py-8 px-4 print:bg-white print:py-0">
       <div className="max-w-3xl mx-auto">
         <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden print:shadow-none print:border-0">
-          {/* Encabezado */}
-          <div className="bg-primary-600 text-white px-6 py-5 print:bg-white print:text-gray-900 print:border-b print:border-gray-300">
-            <div className="flex items-center justify-between gap-4">
-              <div>
-                <p className="text-xs uppercase tracking-wide opacity-80">Reporte de videos</p>
-                <h1 className="text-2xl font-bold">{data.business.name}</h1>
+          {/* Banda superior con color de acento */}
+          <div className="h-2 bg-primary-600 print:bg-primary-600" style={{ WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' } as React.CSSProperties} />
+
+          {/* Encabezado: emisor (izq) + FACTURA (der) */}
+          <div className="px-6 sm:px-8 pt-6 pb-5 flex items-start justify-between gap-4">
+            <div className="flex items-center gap-3 min-w-0">
+              {issuer.logoUrl && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={issuer.logoUrl} alt={issuer.name} className="h-14 w-14 rounded-lg object-contain border border-gray-100 bg-white flex-shrink-0" />
+              )}
+              <div className="min-w-0">
+                <p className="text-lg font-bold text-gray-900 leading-tight truncate">{issuer.name}</p>
+                <div className="text-xs text-gray-500 leading-snug mt-0.5">
+                  {issuer.taxId && <p>RNC/Céd: {issuer.taxId}</p>}
+                  {issuer.phone && <p>{issuer.phone}</p>}
+                  {issuer.email && <p className="truncate">{issuer.email}</p>}
+                  {issuer.address && <p className="truncate">{issuer.address}</p>}
+                </div>
               </div>
-              <div className="text-right text-sm">
-                <p className="opacity-80">Del {dmy(r.dateFrom)}</p>
-                <p className="opacity-80">al {dmy(r.dateTo)}</p>
-              </div>
+            </div>
+            <div className="text-right flex-shrink-0">
+              <p className="text-2xl font-extrabold text-primary-600 tracking-tight">FACTURA</p>
+              <p className="text-xs text-gray-500 mt-0.5">N.° {folio}</p>
+              <p className="text-xs text-gray-500">{dmyFull(r.createdAt)}</p>
             </div>
           </div>
 
-          <div className="p-6 space-y-5">
-            <div className="flex flex-wrap items-end justify-between gap-4">
-              <div>
-                {r.clientName && <p className="text-xs text-gray-500 uppercase tracking-wide">Para</p>}
-                {r.clientName && <p className="font-semibold text-gray-900">{r.clientName}</p>}
-                {r.title && <p className="text-sm text-gray-600 mt-1">{r.title}</p>}
-              </div>
-              <div className="text-right">
-                <p className="text-xs text-gray-500 uppercase tracking-wide">Videos entregados</p>
-                <p className="text-2xl font-bold text-gray-900">{r.videoCount}</p>
+          {/* Facturar a (con logo del cliente) + periodo */}
+          <div className="px-6 sm:px-8 pb-5 flex flex-wrap items-start justify-between gap-4 border-t border-gray-100 pt-5">
+            <div className="flex items-center gap-3 min-w-0">
+              {client.logoUrl && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={client.logoUrl} alt={client.name ?? 'Cliente'} className="h-12 w-12 rounded-lg object-contain border border-gray-100 bg-white flex-shrink-0" />
+              )}
+              <div className="min-w-0">
+                <p className="text-[11px] text-gray-400 uppercase tracking-wide">Facturar a</p>
+                <p className="font-semibold text-gray-900 truncate">{client.name || 'Cliente'}</p>
+                {r.title && <p className="text-sm text-gray-500 mt-0.5">{r.title}</p>}
               </div>
             </div>
+            <div className="text-right">
+              <p className="text-[11px] text-gray-400 uppercase tracking-wide">Periodo</p>
+              <p className="text-sm text-gray-700">{dmy(r.dateFrom)} – {dmy(r.dateTo)}</p>
+              <p className="text-xs text-gray-500 mt-0.5">{r.videoCount} video(s)</p>
+            </div>
+          </div>
 
-            {/* Tabla */}
+          {/* Tabla */}
+          <div className="px-6 sm:px-8 pb-5">
             <div className="overflow-x-auto">
               <table className="min-w-full text-sm">
                 <thead>
-                  <tr className="border-b border-gray-200 text-gray-500">
-                    <th className="text-left py-2 font-medium pr-2">#</th>
-                    <th className="text-left py-2 font-medium pr-2">Fecha</th>
-                    <th className="text-left py-2 font-medium pr-2">ID Video</th>
-                    <th className="text-left py-2 font-medium pr-2">Tema</th>
-                    <th className="text-right py-2 font-medium">Precio</th>
+                  <tr className="bg-primary-50 text-primary-800 print:bg-primary-50" style={{ WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' } as React.CSSProperties}>
+                    <th className="text-left py-2.5 px-3 font-semibold rounded-l-lg">#</th>
+                    <th className="text-left py-2.5 px-3 font-semibold">Fecha</th>
+                    <th className="text-left py-2.5 px-3 font-semibold">ID Video</th>
+                    <th className="text-left py-2.5 px-3 font-semibold">Tema</th>
+                    <th className="text-right py-2.5 px-3 font-semibold rounded-r-lg">Precio</th>
                   </tr>
                 </thead>
                 <tbody>
                   {r.videos.map(v => (
-                    <tr key={v.n} className="border-b border-gray-100 break-inside-avoid">
-                      <td className="py-2 pr-2 text-gray-500">{v.n}</td>
-                      <td className="py-2 pr-2 text-gray-600 whitespace-nowrap">{dmy(v.videoDate)}</td>
-                      <td className="py-2 pr-2 text-gray-600 whitespace-nowrap">{v.videoRef}</td>
-                      <td className="py-2 pr-2 text-gray-900">{v.topic}</td>
-                      <td className="py-2 text-right font-medium text-gray-900 whitespace-nowrap">{fmt(v.price)}</td>
+                    <tr key={v.n} className="border-b border-gray-100 break-inside-avoid odd:bg-white even:bg-gray-50 print:even:bg-gray-50" style={{ WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' } as React.CSSProperties}>
+                      <td className="py-2 px-3 text-gray-400">{v.n}</td>
+                      <td className="py-2 px-3 text-gray-600 whitespace-nowrap">{dmy(v.videoDate)}</td>
+                      <td className="py-2 px-3 text-gray-500 whitespace-nowrap font-mono text-xs">{v.videoRef}</td>
+                      <td className="py-2 px-3 text-gray-900">{v.topic}</td>
+                      <td className="py-2 px-3 text-right font-medium text-gray-900 whitespace-nowrap">{fmt(v.price)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -126,21 +161,27 @@ export default function PublicVideoReportPage({ params }: { params: { token: str
             </div>
 
             {/* Total */}
-            <div className="flex justify-end">
-              <div className="w-full sm:w-64 flex justify-between pt-2 border-t border-gray-200 text-base">
-                <span className="font-semibold text-gray-900">Total</span>
-                <span className="font-bold text-gray-900">{fmt(r.total)}</span>
+            <div className="flex justify-end mt-4">
+              <div className="w-full sm:w-72 rounded-xl bg-primary-600 text-white px-4 py-3 flex items-center justify-between print:bg-primary-600" style={{ WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' } as React.CSSProperties}>
+                <span className="font-semibold">Total</span>
+                <span className="text-xl font-bold">{fmt(r.total)}</span>
               </div>
             </div>
 
-            <div className="pt-2 print:hidden">
+            <div className="pt-5 print:hidden">
               <button onClick={() => window.print()} className="btn btn-secondary flex items-center justify-center gap-2 w-full sm:w-auto">
                 <Printer className="h-4 w-4" /> Imprimir / Guardar PDF
               </button>
             </div>
           </div>
+
+          {/* Pie: marca sutil de la plataforma */}
+          <div className="px-6 sm:px-8 py-4 border-t border-gray-100 flex items-center justify-center gap-1.5">
+            <span className="text-xs text-gray-400">Hecho con</span>
+            <span className="text-sm font-bold text-primary-600">Jobidai</span>
+            <span className="text-xs text-gray-400">Business</span>
+          </div>
         </div>
-        <p className="text-center text-xs text-gray-400 mt-4 print:hidden">Hecho con Jobidai</p>
       </div>
     </div>
   )
