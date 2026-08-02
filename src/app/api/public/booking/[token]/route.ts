@@ -145,12 +145,17 @@ export async function POST(request: NextRequest, { params }: { params: { token: 
       .select('id, service_ids')
       .eq('workspace_id', ws.id)
       .eq('active', true)
-    const eligible = (allStaff ?? []).filter(s => {
-      const ids = Array.isArray((s as { service_ids?: unknown }).service_ids) ? ((s as { service_ids: unknown[] }).service_ids).map(String) : []
-      return ids.length === 0 || (serviceId ? ids.includes(serviceId) : true)
-    })
-    const eligibleIds = new Set(eligible.map(s => s.id))
-    const capacity = Math.max(1, eligible.length)
+    const staffList = allStaff ?? []
+    const serviceIdsOf = (s: unknown) =>
+      Array.isArray((s as { service_ids?: unknown }).service_ids)
+        ? ((s as { service_ids: unknown[] }).service_ids).map(String)
+        : []
+    // Barberos que pueden atender un servicio dado (sin servicios marcados = todos).
+    const staffIdsForService = (sid: string | null) =>
+      staffList.filter(s => { const ids = serviceIdsOf(s); return ids.length === 0 || !sid || ids.includes(sid) }).map(s => s.id)
+
+    const eligibleIds = new Set(staffIdsForService(serviceId))
+    const capacity = Math.max(1, eligibleIds.size)
 
     const windowStart = new Date(starts.getTime() - 4 * 3600_000).toISOString()
     const windowEnd = new Date(starts.getTime() + 4 * 3600_000).toISOString()
@@ -168,11 +173,14 @@ export async function POST(request: NextRequest, { params }: { params: { token: 
       const e = s + Number(a.duration_min ?? 30) * 60_000
       return newStart < e && s < newEnd
     })
-    // Solo cuentan las citas que ocupan a un barbero que hace este servicio.
-    const relevant = overlapping.filter(a =>
-      (a.staff_id && eligibleIds.has(a.staff_id)) ||
-      (!a.staff_id && (!serviceId || a.service_id === serviceId))
-    )
+    // La disponibilidad depende del BARBERO, no del tipo de corte: una cita
+    // ocupa a su barbero para CUALQUIER servicio. El servicio elegido solo
+    // define qué barberos pueden atenderlo (la capacidad).
+    const relevant = overlapping.filter(a => {
+      if (a.staff_id) return eligibleIds.has(a.staff_id)
+      if (staffList.length === 0) return true // sin barberos: una sola silla
+      return staffIdsForService(a.service_id ?? null).some(id => eligibleIds.has(id))
+    })
     const full = relevant.length >= capacity || (staffId ? overlapping.some(a => a.staff_id === staffId) : false)
     if (full) return NextResponse.json({ error: 'Ese horario ya no está disponible. Elige otro.' }, { status: 409 })
 
