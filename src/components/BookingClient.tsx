@@ -90,13 +90,23 @@ export default function BookingClient({ id }: { id: string }) {
   const hasServices = (data?.services?.length ?? 0) > 0
   const selectedStaff = data?.staff?.find(s => s.id === staffId)
 
+  const staffList = useMemo(() => data?.staff ?? [], [data])
+  // Barberos que pueden hacer un servicio dado (los que no tienen servicios
+  // marcados hacen todos). Sin servicio, todos pueden.
+  const staffIdsForService = useMemo(
+    () => (sid: string | null) =>
+      staffList
+        .filter(s => !s.serviceIds || s.serviceIds.length === 0 || !sid || s.serviceIds.includes(sid))
+        .map(s => s.id),
+    [staffList]
+  )
+
   // Barberos que pueden hacer el servicio elegido (los que no tienen servicios
   // marcados hacen todos). Si aún no hay servicio elegido, se muestran todos.
   const eligibleStaff = useMemo(() => {
-    const all = data?.staff ?? []
-    if (!serviceId) return all
-    return all.filter(s => !s.serviceIds || s.serviceIds.length === 0 || s.serviceIds.includes(serviceId))
-  }, [data, serviceId])
+    if (!serviceId) return staffList
+    return staffList.filter(s => !s.serviceIds || s.serviceIds.length === 0 || s.serviceIds.includes(serviceId))
+  }, [staffList, serviceId])
   const hasStaff = eligibleStaff.length > 0
   const eligibleIds = useMemo(() => new Set(eligibleStaff.map(s => s.id)), [eligibleStaff])
   // Capacidad = nº de barberos que hacen ese servicio (mínimo 1 = "una silla").
@@ -156,20 +166,25 @@ export default function BookingClient({ id }: { id: string }) {
         const e = s + iv.durationMin * 60000
         return startMs < e && s < endMs
       })
-      // Solo cuentan contra la capacidad las citas que ocupan a un barbero que
-      // hace ESTE servicio: las de un barbero elegible, o las "Sin preferencia"
-      // (sin barbero) del mismo servicio (o cualquiera si no hay servicio).
-      const relevant = overlapping.filter(iv =>
-        (iv.staffId && eligibleIds.has(iv.staffId)) ||
-        (!iv.staffId && (!serviceId || iv.serviceId === serviceId))
-      )
-      // Lleno si hay tantas citas relevantes como barberos que hacen el
-      // servicio, o si el barbero elegido ya tiene una cita en ese rango.
+      // La disponibilidad depende del BARBERO, no del tipo de corte: una cita
+      // ocupa a su barbero para CUALQUIER servicio. El servicio elegido solo
+      // define QUÉ barberos pueden atenderlo (la capacidad).
+      const relevant = overlapping.filter(iv => {
+        // Cita con barbero asignado: ocupa a ese barbero.
+        if (iv.staffId) return eligibleIds.has(iv.staffId)
+        // "Sin preferencia": ocupa a alguno de los que pueden hacer ESE
+        // servicio. Si alguno de ellos también atiende el servicio elegido,
+        // consume capacidad.
+        if (staffList.length === 0) return true // sin barberos: una sola silla
+        return staffIdsForService(iv.serviceId).some(id => eligibleIds.has(id))
+      })
+      // Lleno si hay tantas citas como barberos que hacen el servicio, o si el
+      // barbero elegido ya tiene una cita en ese rango (de cualquier servicio).
       const full = relevant.length >= capacity || (!!staffId && overlapping.some(iv => iv.staffId === staffId))
       if (!full) out.push({ label: hm12(t), iso: start.toISOString(), hour: Math.floor(t / 60) })
     }
     return out
-  }, [data, service, hasServices, date, taken, durationFor, capacity, staffId, serviceId, eligibleIds])
+  }, [data, service, hasServices, date, taken, durationFor, capacity, staffId, eligibleIds, staffList, staffIdsForService])
 
   // Agrupar horarios por franja para lectura rápida.
   const slotGroups = useMemo(() => {
