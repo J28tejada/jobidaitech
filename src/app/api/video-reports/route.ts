@@ -71,7 +71,9 @@ export async function POST(request: NextRequest) {
       .eq('workspace_id', ctx.workspaceId)
       .gte('video_date', from)
       .lte('video_date', to)
-    if (clientId) videoQuery.eq('client_id', clientId)
+    // Incluye videos del cliente Y los sin cliente asignado (se consideran del
+    // cliente al que se factura). Debe coincidir con la consulta pública.
+    if (clientId) videoQuery.or(`client_id.eq.${clientId},client_id.is.null`)
     const { data: vids, error: vErr } = await videoQuery
     if (vErr) throw vErr
     const rows = vids ?? []

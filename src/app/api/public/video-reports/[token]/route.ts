@@ -24,7 +24,10 @@ export async function GET(_request: NextRequest, { params }: { params: { token: 
       .lte('video_date', report.date_to)
       .order('video_date', { ascending: true })
       .order('created_at', { ascending: true })
-    if (report.client_id) query.eq('client_id', report.client_id)
+    // Incluye los videos de ESE cliente Y los que no tienen cliente asignado
+    // (se consideran del cliente al que se factura). Así no se pierden videos
+    // sin etiquetar al generar la factura para un cliente.
+    if (report.client_id) query.or(`client_id.eq.${report.client_id},client_id.is.null`)
     const { data: videos } = await query
 
     // select('*') para tolerar la migración 0043 (invoice_*) aún no corrida.
