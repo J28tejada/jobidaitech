@@ -146,7 +146,13 @@ planes. `sales` y `crm` también. `receivables`, `inventory` → Negocio/Pro.
 - Build local (correr `npm ci` primero; sin `node_modules`, `npx` se baja
   Next 16 y el build falla por el workspace root de Turbopack):
   `NEXT_PUBLIC_SUPABASE_URL=https://placeholder.supabase.co NEXT_PUBLIC_SUPABASE_ANON_KEY=placeholder SUPABASE_SERVICE_ROLE_KEY=placeholder npx next build`
-- Nombre de la plataforma: **Jobidai Business**.
+- Nombre de la plataforma: en la UI es **"Jobidai"** a secas, consistente en
+  sidebar, login, onboarding, `title` de la PWA, pies públicos ("Hecho con
+  Jobidai"), WhatsApp y emails. "Jobidai Business" **no aparece en el código**
+  (el nombre definitivo todavía se está decidiendo). Lo demás son nombres de
+  infraestructura que el usuario nunca ve: repo y dominio `jobidaitech`,
+  proyecto Supabase `Contaller`, y `package.json` todavía con el viejo
+  `sistema-contabilidad-construccion`.
 
 ## 7. Otras ramas activas (no pisar)
 
