@@ -30,8 +30,22 @@ CREATE TABLE IF NOT EXISTS public.project_tasks (
 CREATE INDEX IF NOT EXISTS idx_project_tasks_project   ON public.project_tasks(project_id);
 CREATE INDEX IF NOT EXISTS idx_project_tasks_workspace ON public.project_tasks(workspace_id);
 
--- Usa la función genérica de 0001_init (no `update_updated_at_column`, que
--- no está definida en ninguna migración de este repo).
+-- OJO con la función de `updated_at`: el repo está partido en dos.
+-- `0001_init.sql` define `public.set_updated_at()`, pero diez migraciones
+-- posteriores llaman a `public.update_updated_at_column()`, que no está
+-- definida en ninguna migración. En la base real de producción pasa lo
+-- contrario a lo que dice el repo: existe `update_updated_at_column` y NO
+-- existe `set_updated_at`. Para no depender de cuál esté, esta migración se
+-- asegura ella misma de la que usa. No toca `update_updated_at_column`, de la
+-- que ya cuelgan los triggers de otras tablas.
+CREATE OR REPLACE FUNCTION public.set_updated_at()
+RETURNS trigger AS $$
+BEGIN
+  new.updated_at = now();
+  RETURN new;
+END;
+$$ LANGUAGE plpgsql;
+
 DROP TRIGGER IF EXISTS set_timestamp_project_tasks ON public.project_tasks;
 CREATE TRIGGER set_timestamp_project_tasks
   BEFORE UPDATE ON public.project_tasks

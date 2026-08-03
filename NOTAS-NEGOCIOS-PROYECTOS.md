@@ -122,11 +122,18 @@ planes. `sales` y `crm` también. `receivables`, `inventory` → Negocio/Pro.
   dueño las corre a mano en el SQL Editor. **Toma siempre el siguiente número
   libre** — hay varios chats trabajando en paralelo (ya hubo un choque en 0035).
   Último usado: **0044**.
-- ⚠️ En triggers de `updated_at` usar **`public.set_updated_at()`** (definida en
-  `0001_init.sql`). Varias migraciones (0004, 0010, 0011, 0014, 0015, 0016,
-  0018, 0019, 0035, 0038) llaman a `public.update_updated_at_column()`, que
-  **no está definida en ninguna migración del repo** — debió crearse a mano en
-  el SQL Editor. Copiar ese patrón sin pensar rompe una migración nueva.
+- ⚠️ **Trigger de `updated_at`: el repo y la base real no coinciden.**
+  `0001_init.sql` define `public.set_updated_at()`, pero diez migraciones
+  (0004, 0010, 0011, 0014, 0015, 0016, 0018, 0019, 0035, 0038) llaman a
+  `public.update_updated_at_column()`, que no está definida en ninguna
+  migración. Y en la base de producción (Contaller) pasa **lo contrario** a lo
+  que dice el repo: existe `update_updated_at_column` y **no** existe
+  `set_updated_at`. O sea que `0001_init.sql` nunca se corrió tal cual ahí.
+  → Una migración nueva **no debe asumir ninguna de las dos**: que se cree la
+  que use, con `CREATE OR REPLACE FUNCTION` (ver `0044_project_tasks.sql`).
+  Verificar antes con:
+  `select proname from pg_proc p join pg_namespace n on n.oid=p.pronamespace
+   where n.nspname='public' and proname like '%updated_at%';`
 - Endpoints tolerantes: usar `select('*')` donde una migración nueva podría no
   estar corrida todavía (patrón usado en booking/invoice). Para una **tabla**
   nueva, `isMissingRelation(error)` en `src/lib/projects.ts` detecta 42P01 /
@@ -158,6 +165,8 @@ abriendo el detalle uno por uno; y no había forma de saber *cómo va la obra*.
 **Backend**
 - `0044_project_tasks.sql` — etapas del proyecto (`title`, `done`, `due_date`,
   `position`, `done_at`), con RLS y `ON DELETE CASCADE` desde `projects`.
+  **Ya aplicada en el proyecto Supabase `Contaller` (`thxyfinqkzxjkjbrdbsp`)**;
+  si hay otras bases (p. ej. `Jobidai personal`), falta correrla ahí.
 - `GET/POST /api/projects/[id]/tasks` y `PUT/DELETE .../tasks/[taskId]`.
   Respetan `allowedProjectIds` y `ownOnly` igual que transacciones: el rol
   `member` ("crea y edita solo lo suyo") **no** puede tildar etapas ajenas —
