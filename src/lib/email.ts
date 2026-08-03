@@ -29,7 +29,7 @@ export async function sendInviteEmail(params: InviteEmailParams): Promise<boolea
   const html = `
     <div style="font-family: -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; max-width: 480px; margin: 0 auto; color: #1f2937;">
       <h2 style="color: #111827;">Te invitaron a ${escapeHtml(params.workspaceName)}</h2>
-      <p>${escapeHtml(inviter)} invitó a unirte a <strong>${escapeHtml(params.workspaceName)}</strong> como <strong>${escapeHtml(roleLabel)}</strong> en Jobidai.</p>
+      <p>${escapeHtml(inviter)} invitó a unirte a <strong>${escapeHtml(params.workspaceName)}</strong> como <strong>${escapeHtml(roleLabel)}</strong> en Jobidai Business.</p>
       <p style="margin: 24px 0;">
         <a href="${params.link}" style="background:#0c8f63;color:#fff;text-decoration:none;padding:12px 20px;border-radius:8px;display:inline-block;font-weight:600;">
           Aceptar invitación
@@ -75,11 +75,11 @@ export async function notifyNewUserRegistered(user: { email?: string | null; nam
     process.env.NOTIFY_EMAIL ||
     (process.env.ADMIN_EMAILS ?? '').split(',').map(e => e.trim()).filter(Boolean)[0] ||
     'josuetejadaromero@gmail.com'
-  const from = process.env.RESEND_FROM || 'Jobidai <onboarding@resend.dev>'
+  const from = process.env.RESEND_FROM || 'Jobidai Business <onboarding@resend.dev>'
 
   const html = `
     <div style="font-family: -apple-system, Segoe UI, Roboto, Arial, sans-serif; color:#1f2937;">
-      <h2 style="color:#111827;">Nuevo registro en Jobidai</h2>
+      <h2 style="color:#111827;">Nuevo registro en Jobidai Business</h2>
       <p><strong>${escapeHtml(user.name ?? 'Sin nombre')}</strong></p>
       <p>${escapeHtml(user.email ?? 'sin correo')}</p>
       <p style="color:#6b7280;font-size:13px;">Empezó su prueba de 30 días. Puedes gestionarlo en el panel /admin.</p>
@@ -112,7 +112,7 @@ export async function notifyBookingReceived(params: {
 }): Promise<void> {
   const apiKey = process.env.RESEND_API_KEY
   if (!apiKey || !params.to) return
-  const from = process.env.RESEND_FROM || 'Jobidai <onboarding@resend.dev>'
+  const from = process.env.RESEND_FROM || 'Jobidai Business <onboarding@resend.dev>'
 
   const rows = [
     ['Cliente', `${escapeHtml(params.clientName)}${params.clientPhone ? ` (${escapeHtml(params.clientPhone)})` : ''}`],
@@ -127,7 +127,7 @@ export async function notifyBookingReceived(params: {
       <table style="border-collapse:collapse; font-size:15px;">
         ${rows.map(([k, v]) => `<tr><td style="padding:4px 12px 4px 0; color:#6b7280;">${k}</td><td style="padding:4px 0; font-weight:600;">${v}</td></tr>`).join('')}
       </table>
-      <p style="color:#6b7280; font-size:13px; margin-top:16px;">La cita ya está en tu agenda de Jobidai.</p>
+      <p style="color:#6b7280; font-size:13px; margin-top:16px;">La cita ya está en tu agenda de Jobidai Business.</p>
     </div>
   `
 
@@ -160,7 +160,7 @@ export async function notifyServiceLead(lead: {
     process.env.NOTIFY_EMAIL ||
     (process.env.ADMIN_EMAILS ?? '').split(',').map(e => e.trim()).filter(Boolean)[0] ||
     'josuetejadaromero@gmail.com'
-  const from = process.env.RESEND_FROM || 'Jobidai <onboarding@resend.dev>'
+  const from = process.env.RESEND_FROM || 'Jobidai Business <onboarding@resend.dev>'
 
   const html = `
     <div style="font-family: -apple-system, Segoe UI, Roboto, Arial, sans-serif; color:#1f2937;">

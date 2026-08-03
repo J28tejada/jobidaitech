@@ -6,6 +6,7 @@ import { Check, Loader2, MessageCircle, X, CheckCircle2, LayoutDashboard, LogIn 
 import { PLANS_DISPLAY, ANNUAL_MONTHS_PAID, type PaidTier } from '@/lib/plans'
 import { formatCurrency } from '@/lib/format'
 import { SUPPORT } from '@/lib/support'
+import { BRAND } from '@/lib/brand'
 
 const fmt = (n: number) => formatCurrency(n, { currency: 'DOP', locale: 'es-DO' })
 
@@ -41,7 +42,7 @@ export default function PlanesPage() {
             <div className="h-9 w-9 flex items-center justify-center bg-primary-600 rounded-xl">
               <span className="text-lg font-bold text-white">J</span>
             </div>
-            <span className="text-lg font-bold text-gray-900">Jobidai</span>
+            <span className="text-lg font-bold text-gray-900">{BRAND.short}<span className="font-normal text-gray-500 ml-1">{BRAND.suffix}</span></span>
           </a>
           <a href={loggedIn ? '/' : '/login'} className="btn btn-primary text-sm inline-flex items-center gap-1.5">
             {loggedIn ? (
@@ -173,7 +174,7 @@ function RequestModal({ plan, cycle, onClose }: { plan: PaidTier; cycle: 'monthl
   }
 
   const waNumber = (SUPPORT.whatsapp || '').replace(/\D/g, '')
-  const waMsg = `Hola, quiero el plan ${planInfo.name} (${cycle === 'annual' ? 'anual' : 'mensual'}) de Jobidai.`
+  const waMsg = `Hola, quiero el plan ${planInfo.name} (${cycle === 'annual' ? 'anual' : 'mensual'}) de ${BRAND.name}.`
   const waLink = waNumber ? `https://wa.me/${waNumber}?text=${encodeURIComponent(waMsg)}` : null
 
   return (

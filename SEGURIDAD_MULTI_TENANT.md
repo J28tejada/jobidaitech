@@ -1,6 +1,6 @@
 # 🔒 Seguridad Multi-Tenant (SaaS)
 
-Este documento explica cómo está configurado el aislamiento de datos entre usuarios en ContaTaller.
+Este documento explica cómo está configurado el aislamiento de datos entre usuarios en Jobidai Business.
 
 ## ✅ Confirmación: Sistema Multi-Tenant Funcional
 

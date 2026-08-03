@@ -13,6 +13,7 @@ import {
   applyMode,
   type ThemeMode,
 } from '@/lib/themes'
+import { readPref, writePref } from '@/lib/brand'
 
 // Ajustes de apariencia (tema claro/oscuro + color de acento). Se guarda en
 // este dispositivo y se aplica al instante.
@@ -21,8 +22,10 @@ export default function AppearanceSettings() {
   const [mode, setMode] = useState<ThemeMode>(DEFAULT_MODE)
 
   useEffect(() => {
-    const savedAccent = (typeof window !== 'undefined' && localStorage.getItem(ACCENT_STORAGE_KEY)) || DEFAULT_ACCENT
-    const savedMode = ((typeof window !== 'undefined' && localStorage.getItem(THEME_MODE_KEY)) as ThemeMode) || DEFAULT_MODE
+    // readPref cae a la clave anterior (marca vieja) si aún no se ha migrado,
+    // para que nadie pierda su tema/color al cambiar el nombre de la app.
+    const savedAccent = readPref(ACCENT_STORAGE_KEY) || DEFAULT_ACCENT
+    const savedMode = (readPref(THEME_MODE_KEY) as ThemeMode) || DEFAULT_MODE
     setAccent(savedAccent)
     setMode(savedMode === 'light' ? 'light' : 'dark')
   }, [])
@@ -30,21 +33,13 @@ export default function AppearanceSettings() {
   const chooseAccent = (key: string) => {
     setAccent(key)
     applyAccent(key)
-    try {
-      localStorage.setItem(ACCENT_STORAGE_KEY, key)
-    } catch {
-      /* ignore */
-    }
+    writePref(ACCENT_STORAGE_KEY, key)
   }
 
   const chooseMode = (m: ThemeMode) => {
     setMode(m)
     applyMode(m)
-    try {
-      localStorage.setItem(THEME_MODE_KEY, m)
-    } catch {
-      /* ignore */
-    }
+    writePref(THEME_MODE_KEY, m)
   }
 
   return (

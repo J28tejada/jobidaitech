@@ -7,6 +7,8 @@ import {
 } from 'lucide-react';
 
 import { archetypeFor } from '@/lib/moduleProfiles';
+import { BRAND, STORAGE } from '@/lib/brand';
+import { readPref, writePref } from '@/lib/brand';
 
 interface OnboardingProps {
   onComplete: () => void;
@@ -14,7 +16,7 @@ interface OnboardingProps {
   businessType?: string | null;
 }
 
-const ONBOARDING_STORAGE_KEY = 'contataller_onboarding_completed';
+const ONBOARDING_STORAGE_KEY = STORAGE.onboardingDone;
 
 type Icon = typeof Sparkles;
 interface Step { id: number; title: string; icon: Icon; content: React.ReactNode; }
@@ -101,7 +103,7 @@ function buildSteps(businessType?: string | null): Step[] {
   return [
     {
       id: 1,
-      title: '¡Bienvenido a Jobidai!',
+      title: `¡Bienvenido a ${BRAND.name}!`,
       icon: Sparkles,
       content: (
         <div className="space-y-4">
@@ -109,7 +111,7 @@ function buildSteps(businessType?: string | null): Step[] {
             <div className="p-4 bg-primary-100 rounded-full"><Sparkles className="h-12 w-12 text-primary-600" /></div>
           </div>
           <p className="text-gray-700 text-center">
-            Jobidai es la app para gestionar <strong>todo tu negocio</strong> en un solo lugar: agenda, clientes,
+            {BRAND.name} es la app para <strong>gestionar tu negocio</strong>: agenda, clientes,
             cobros, inventario y reportes. Y lo mejor: <strong>se adapta a tu tipo de negocio</strong>.
           </p>
           <div className="bg-primary-50 rounded-lg p-4 mt-4">
@@ -223,7 +225,7 @@ function buildSteps(businessType?: string | null): Step[] {
             <div className="p-4 bg-success-100 rounded-full"><CheckCircle className="h-12 w-12 text-success-600" /></div>
           </div>
           <p className="text-gray-700 text-center">
-            Ya conoces lo esencial de Jobidai. ¡Es hora de gestionar tu negocio como un profesional!
+            Ya conoces lo esencial de {BRAND.name}. ¡Es hora de gestionar tu negocio como un profesional!
           </p>
           <div className="bg-gradient-to-r from-primary-50 to-primary-100 rounded-lg p-4 mt-6">
             <h4 className="font-semibold text-primary-900 mb-2">Próximos pasos recomendados:</h4>
@@ -250,16 +252,16 @@ export default function Onboarding({ onComplete, hasProjects, businessType }: On
 
   useEffect(() => {
     // Verificar si hay una señal explícita para mostrar el onboarding
-    const shouldShow = localStorage.getItem('contataller_show_onboarding') === 'true';
+    const shouldShow = localStorage.getItem(STORAGE.onboardingShow) === 'true';
 
     if (shouldShow) {
-      localStorage.removeItem('contataller_show_onboarding');
+      localStorage.removeItem(STORAGE.onboardingShow);
       setShowOnboarding(true);
       return;
     }
 
     // Si es un usuario nuevo (sin datos) y no ha completado el onboarding, mostrar
-    const completed = localStorage.getItem(ONBOARDING_STORAGE_KEY);
+    const completed = readPref(ONBOARDING_STORAGE_KEY);
     if (!hasProjects && !completed) {
       setShowOnboarding(true);
     }
@@ -280,7 +282,7 @@ export default function Onboarding({ onComplete, hasProjects, businessType }: On
   const handleSkip = () => handleComplete();
 
   const handleComplete = () => {
-    localStorage.setItem(ONBOARDING_STORAGE_KEY, 'true');
+    writePref(ONBOARDING_STORAGE_KEY, 'true');
     setShowOnboarding(false);
     onComplete();
   };

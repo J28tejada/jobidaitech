@@ -1,179 +1,110 @@
-# ContaTaller – Control financiero para talleres artesanales
+# Jobidai Business
 
-Aplicación web enfocada en talleres de carpintería/ebanistería (y oficios similares) para llevar el control de proyectos, registrar ingresos y egresos, y conocer la rentabilidad de cada trabajo.
+**La app para gestionar tu negocio.** Plataforma modular para micro y pequeños
+negocios de LATAM (arrancando en República Dominicana): la app se adapta al
+**tipo de negocio** y muestra solo los módulos que ese rubro realmente usa.
 
-## 🚀 Funcionalidades principales
+> El repositorio nació como "ContaTaller" (control financiero para talleres).
+> Hoy el producto es **Jobidai Business**; el nombre viejo solo sobrevive en
+> claves de almacenamiento locales, que se leen como respaldo para no perder
+> las preferencias de quien ya usaba la app.
 
-- **Autenticación con Google**: acceso seguro para cada taller sin gestionar contraseñas propias (NextAuth).
-- **Persistencia en Supabase**: base de datos PostgreSQL con esquema diseñado para múltiples talleres.
-- **Gestión de proyectos**: seguimiento de clientes, presupuestos, estados y fechas clave.
-- **Transacciones inteligentes**: registro de ingresos y gastos con clasificación por categoría y subcategoría.
-- **Categorías personalizables**: plantilla inicial para carpintería/ebanistería y gestor para crear tus propias etiquetas.
-- **Dashboard en tiempo real**: indicadores de ingresos, egresos, margen y actividad reciente.
-- **Reportes visuales**: gráficos mensuales de flujo de efectivo y comparativas de utilidad.
-- **Flujo móvil rápido**: página optimizada para capturar gastos/ingresos desde el taller con el teléfono.
-- **Experiencia responsive**: navegación con sidebar (desktop) y barra inferior + botón flotante (móvil).
+## 🧩 Módulos
+
+| Módulo | Para qué |
+|---|---|
+| **Agenda** | Citas, barberos/personal, comisiones, propinas, walk-ins. |
+| **Reservas online** | Página pública para que el cliente reserve 24/7 (enlace corto de marca). |
+| **Finanzas** | Ingresos (citas atendidas + sueltos) y gastos simples, con balance. |
+| **Proyectos + Transacciones** | Ingresos/gastos por trabajo → ganancia y margen por proyecto. |
+| **Clientes** | Libreta con contacto, RNC/cédula, logo, historial y fidelidad. |
+| **Cotizaciones** | Presupuestos con enlace público y conversión a proyecto. |
+| **Cobros** | Fiado, abonos, saldos, vencidos y recordatorio por WhatsApp. |
+| **Inventario** | Productos, stock, movimientos y alerta de bajo stock. |
+| **Oportunidades (CRM)** | Embudo de ventas y seguimientos. |
+| **Videos** | Registro por video, tarifa por camarógrafo y **factura al cliente**. |
+| **Reportes** | Rango de fechas, desglose por categoría/proyecto y exportación. |
+| **WhatsApp + IA** | Asistente que anota ventas, gastos y citas desde WhatsApp. |
+
+La app decide qué mostrar con `src/lib/moduleProfiles.ts` (arquetipos:
+`appointments`, `retail`, `food`, `projects`, `creative`, `general`) y el plan
+del espacio con `src/lib/modules.ts`.
 
 ## 🛠️ Tecnologías
 
-- Next.js 14 (App Router)
-- TypeScript
+- Next.js 14 (App Router) + TypeScript (target **es5**)
 - Tailwind CSS
-- Supabase Auth (Google OAuth)
-- Supabase Database (PostgreSQL + storage)
-- Recharts
-- date-fns
+- Supabase (Auth con Google OAuth, PostgreSQL, Storage)
+- Recharts · date-fns · Web Push (VAPID) · Resend (correo)
+- PWA (manifest + service worker con auto-update)
 
 ## 📦 Instalación
 
-1. **Clonar el repositorio**
+1. **Clonar e instalar**
    ```bash
    git clone <url-del-repositorio>
    cd jobidaitech
-   ```
-
-2. **Instalar dependencias**
-   ```bash
    npm install
    ```
 
-3. **Configurar variables de entorno**
-   Crea un archivo `.env.local` en la raíz con los valores de Google y Supabase:
+2. **Variables de entorno** — crea `.env.local`:
    ```env
    NEXT_PUBLIC_SUPABASE_URL=<url-del-proyecto-supabase>
    NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon-key>
    SUPABASE_URL=<url-del-proyecto-supabase>
    SUPABASE_SERVICE_ROLE_KEY=<service-role-key>
    ```
-   > Para obtener las credenciales de Supabase, crea un proyecto en [Supabase](https://supabase.com/).
-   > El `SERVICE_ROLE_KEY` es solo para uso en el backend (API Routes / Server Components). **NUNCA** lo expongas en clientes públicos.
+   > El `SERVICE_ROLE_KEY` es **solo backend** (API Routes / Server Components).
+   > **Nunca** lo expongas en el cliente.
 
-4. **Inicializar la base de datos Supabase**
-   - Crea un proyecto en [Supabase](https://supabase.com/).
-   - Ejecuta las migraciones SQL en orden en el editor SQL de Supabase:
-     1. `supabase/migrations/0001_init.sql` - Esquema inicial
-     2. `supabase/migrations/0002_add_initial_payment_to_projects.sql` - Campo abono inicial
-     3. `supabase/migrations/0003_add_rls_policies.sql` - Políticas de seguridad
-   - Cada usuario que inicie sesión por primera vez recibirá las categorías base y datos de ejemplo para carpintería.
+   Opcionales según el módulo: `RESEND_API_KEY` y `RESEND_FROM` (correo),
+   `VAPID_*` (push), `BOOKING_NOTIFY_WEBHOOK_URL` (aviso de reservas vía n8n),
+   `EVOLUTION_*` y la llave de IA (asistente de WhatsApp).
 
-5. **Ejecutar en desarrollo**
+3. **Base de datos** — ejecuta las migraciones **en orden numérico** desde el
+   SQL Editor de Supabase: `supabase/migrations/0001_init.sql` en adelante.
+   Todas son **idempotentes** (seguras de re-ejecutar).
+
+4. **Desarrollo**
    ```bash
    npm run dev
    ```
-   La aplicación se iniciará en [http://localhost:3000](http://localhost:3000) (si el puerto está ocupado brincará al 3001).
+
+5. **Verificar build**
+   ```bash
+   NEXT_PUBLIC_SUPABASE_URL=https://placeholder.supabase.co \
+   NEXT_PUBLIC_SUPABASE_ANON_KEY=placeholder \
+   SUPABASE_SERVICE_ROLE_KEY=placeholder \
+   npx next build
+   ```
 
 ## 📱 Uso rápido
 
-- **Inicia sesión** con tu cuenta Google.
-- **Dashboard**: revisa métricas generales y usa las acciones rápidas para registrar movimientos.
-- **Proyectos**: administra cada trabajo, registra nuevos ingresos/gastos desde la tarjeta del proyecto.
-- **Transacciones**: visualiza todos los movimientos, filtra por tipo o proyecto y edita/borra cuando sea necesario.
-- **Reportes**: analiza ingresos, egresos y utilidad mensual con gráficos comparativos.
-- **Configuración**:
-  - Selecciona la plantilla de negocio (actual: Carpintería/Ebanistería).
-  - Gestiona categorías personalizadas (ingresos/gastos, subcategorías y color).
-  - Accede al módulo móvil "Registro rápido" para anclarlo en tu smartphone.
+1. **Inicia sesión** con Google.
+2. **Crea tu negocio** y elige su **tipo** — el menú se adapta solo.
+3. Según el rubro: configura tu **agenda y reservas**, tu **catálogo**, o tus
+   **proyectos**.
+4. En **Configuración** ajustas tipo de negocio, moneda, apariencia, datos de
+   **facturación** (logo del emisor) y WhatsApp.
 
-## 📂 Estructura destacada
+## 🎨 Marca
 
-```
-src/
-├── app/
-│   ├── api/
-│   │   ├── auth/[...nextauth]/
-│   │   ├── categories/
-│   │   ├── dashboard/
-│   │   ├── projects/
-│   │   ├── settings/business-type/
-│   │   └── transactions/
-│   ├── login/
-│   ├── configuracion/
-│   ├── movil/registro/
-│   ├── page.tsx (dashboard)
-│   └── layout.tsx
-├── components/
-│   ├── CategoryManager.tsx
-│   ├── Dashboard.tsx
-│   ├── Layout.tsx / Sidebar.tsx / TopBar.tsx / MobileNavBar.tsx
-│   ├── ProjectForm.tsx / ProjectsList.tsx
-│   ├── TransactionForm.tsx / TransactionsList.tsx
-│   └── Providers.tsx
-├── lib/
-│   ├── supabase.ts (cliente admin)
-│   ├── supabase-route.ts (cliente autenticado para API routes)
-│   ├── users.ts / projects.ts / transactions.ts / categories.ts (helpers Supabase)
-│   └── statistics.ts (cálculos de KPIs)
-├── supabase/
-│   └── migrations/
-│       ├── 0001_init.sql (esquema SQL inicial)
-│       ├── 0002_add_initial_payment_to_projects.sql
-│       └── 0003_add_rls_policies.sql (políticas de seguridad)
-└── types/
-    └── index.ts (tipos y plantillas de categorías)
-```
+El nombre vive en un solo lugar: **`src/lib/brand.ts`** (`BRAND.name`,
+`BRAND.short`, `BRAND.suffix`, `BRAND.tagline`, `BRAND.madeWith`). Si cambia el
+nombre, se cambia ahí — no repartido por la app. Los archivos que no pueden
+importar TS (`public/manifest.json`, `public/sw.js`) se actualizan a mano.
 
-## 🧱 Plantilla de categorías (Carpintería/Ebanistería)
+## 📄 Documentos relacionados
 
-### Ingresos
-- Anticipo
-- Pago por avance
-- Pago final
-- Trabajo especial
-- Venta de productos
+- `SEGURIDAD_MULTI_TENANT.md` — aislamiento de datos entre negocios.
+- `CONFIGURACION_PRODUCCION.md` — despliegue.
+- `CAMBIAR_URL_LOGIN_SUPABASE.md` — dominio propio en el login.
+- `NOTAS-WHATSAPP-IA.md` — mapa del vertical WhatsApp + IA.
+- `NOTAS-NEGOCIOS-PROYECTOS.md` — mapa del vertical de negocios por proyecto.
 
-### Gastos
-- **Materias primas**: Madera, tableros, chapas.
-- **Herrajes y accesorios**: Bisagras, correderas, tornillería.
-- **Acabados**: Barnices, selladores, tintes.
-- **Mano de obra**: Carpinteros, barnizadores, instaladores.
-- **Herramientas y mantenimiento**: eléctricas, manuales, repuestos.
-- **Transporte y logística**: fletes, gasolina, entregas.
-- **Suministros**: lijas, pegamentos, masillas.
-- **Servicios externos**: tapicería, vidrio, metal, grabados.
-- **Administración y ventas**: oficina, publicidad, software, seguros.
+## 🤝 Convenciones
 
-Puedes eliminar, editar o crear nuevas categorías desde la sección de Configuración.
-
-## 🚀 Despliegue a Producción
-
-Para información detallada sobre cómo desplegar a producción, consulta [DEPLOY_PRODUCTION.md](./DEPLOY_PRODUCTION.md).
-
-### Opciones recomendadas (Gratuitas):
-- **Hosting:** Vercel (creadores de Next.js) - ¡100% gratis!
-- **Base de datos:** Supabase - Plan gratuito generoso
-- **Costo estimado:** $0/mes para empezar
-
-## 🔒 Seguridad
-
-Para información sobre la arquitectura multi-tenant y seguridad implementada, consulta [SEGURIDAD_MULTI_TENANT.md](./SEGURIDAD_MULTI_TENANT.md).
-
-## 📈 Características
-
-### ✅ Implementadas
-- Autenticación con Google OAuth
-- Gestión completa de proyectos
-- Registro de ingresos y gastos
-- Dashboard con estadísticas en tiempo real
-- Reportes mensuales con gráficos
-- Sistema multi-usuario con aislamiento de datos
-- Diseño responsive (desktop y móvil)
-- Abono inicial automático en proyectos
-
-### 🔄 Pendientes
-- Exportación de reportes (PDF/CSV/Excel)
-- Recordatorios y alertas de presupuesto
-- Integración con facturación o sistemas contables externos
-- Backup automático de datos
-
-## 💬 Soporte y contribución
-
-1. Fork al repositorio
-2. Crea una rama (`git checkout -b feature/mi-mejora`)
-3. Realiza commits descriptivos
-4. Envía un PR con los cambios
-
-¿Dudas o sugerencias? Abre un issue y con gusto te apoyo.
-
----
-
-**Hecho con cariño para los talleres que construyen cada detalle a mano.** 🛠️
+- Migraciones idempotentes numeradas; **toma siempre el siguiente número libre**
+  (hay varias ramas trabajando en paralelo).
+- Endpoints tolerantes a migraciones sin correr (`select('*')`).
+- Menús de opciones: usa el componente compartido `src/components/ActionSheet.tsx`.

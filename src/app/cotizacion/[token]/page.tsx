@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { CheckCircle2, FileText, Loader2, Printer } from 'lucide-react'
 
 import { formatCurrency } from '@/lib/format'
+import { BRAND } from '@/lib/brand'
 
 interface Item {
   description: string
@@ -183,7 +184,7 @@ export default function PublicQuotePage({ params }: { params: { token: string } 
             </div>
           </div>
         </div>
-        <p className="text-center text-xs text-gray-400 mt-4 print:hidden">Hecho con Jobidai</p>
+        <p className="text-center text-xs text-gray-400 mt-4 print:hidden">{BRAND.madeWith}</p>
       </div>
     </div>
   )

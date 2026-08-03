@@ -15,6 +15,7 @@ import InvoiceSettings from '@/components/InvoiceSettings';
 import { BusinessType } from '@/types';
 import { CURRENCIES } from '@/lib/format';
 import { useCurrency } from '@/components/CurrencyProvider';
+import { BRAND, STORAGE } from '@/lib/brand';
 
 export default function ConfigurationPage() {
   const router = useRouter();
@@ -30,7 +31,7 @@ export default function ConfigurationPage() {
 
   const handleShowOnboarding = () => {
     // Establecer una señal para que se muestre el onboarding
-    localStorage.setItem('contataller_show_onboarding', 'true');
+    localStorage.setItem(STORAGE.onboardingShow, 'true');
     // Redirigir al dashboard donde se mostrará el onboarding
     router.push('/');
   };
@@ -221,7 +222,7 @@ export default function ConfigurationPage() {
             <h2 className="text-lg font-semibold text-gray-900">Ayuda y Tutorial</h2>
           </div>
           <p className="text-gray-600 mb-4">
-            Vuelve a ver el tutorial interactivo que explica cómo usar todas las funcionalidades de Jobidai.
+            Vuelve a ver el tutorial interactivo que explica cómo usar todas las funcionalidades de {BRAND.name}.
           </p>
           <button
             onClick={handleShowOnboarding}

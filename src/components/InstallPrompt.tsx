@@ -3,12 +3,15 @@
 import { useEffect, useState } from 'react'
 import { Download, X } from 'lucide-react'
 
+import { BRAND, STORAGE } from '@/lib/brand'
+import { readPref, writePref } from '@/lib/brand'
+
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>
   userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>
 }
 
-const DISMISS_KEY = 'contataller_install_dismissed'
+const DISMISS_KEY = STORAGE.installDismissed
 
 export default function InstallPrompt() {
   const [deferred, setDeferred] = useState<BeforeInstallPromptEvent | null>(null)
@@ -20,7 +23,7 @@ export default function InstallPrompt() {
       window.matchMedia?.('(display-mode: standalone)').matches ||
       (navigator as unknown as { standalone?: boolean }).standalone === true
     if (standalone) return
-    if (localStorage.getItem(DISMISS_KEY) === '1') return
+    if (readPref(DISMISS_KEY) === '1') return
 
     const onPrompt = (e: Event) => {
       e.preventDefault()
@@ -48,7 +51,7 @@ export default function InstallPrompt() {
   }
 
   const dismiss = () => {
-    localStorage.setItem(DISMISS_KEY, '1')
+    writePref(DISMISS_KEY, '1')
     setVisible(false)
   }
 
@@ -60,7 +63,7 @@ export default function InstallPrompt() {
         <Download className="h-5 w-5 text-white" />
       </div>
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-semibold text-gray-900">Instala Jobidai en tu teléfono</p>
+        <p className="text-sm font-semibold text-gray-900">Instala {BRAND.name} en tu teléfono</p>
         <p className="text-xs text-gray-600">Ábrela como una app, a pantalla completa y con un toque.</p>
       </div>
       <button onClick={install} className="btn btn-primary text-sm flex-shrink-0">

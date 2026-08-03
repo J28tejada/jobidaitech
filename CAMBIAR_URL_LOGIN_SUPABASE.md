@@ -9,7 +9,7 @@ Cuando los usuarios inician sesión con Google, ven la URL de Supabase (`fsqqspr
 1. Ve al dashboard de Supabase: https://supabase.com/dashboard
 2. Selecciona tu proyecto: **fsqqspreiopzwecwknvu**
 3. Ve a **Settings** → **General** → **Custom Domain**
-4. Configura un dominio personalizado para tu proyecto (por ejemplo: `auth.contataller.com`)
+4. Configura un dominio personalizado para tu proyecto (por ejemplo: `auth.jobidai.com`)
 5. Sigue las instrucciones para configurar los DNS
 
 **Nota:** Esto requiere tener un dominio propio y acceso para configurar registros DNS.
@@ -24,7 +24,7 @@ Sin embargo, puedes cambiar el nombre que aparece en la pantalla de login de Goo
 2. Selecciona tu proyecto OAuth
 3. Ve a **APIs & Services** → **Credentials**
 4. Edita tu **OAuth 2.0 Client ID**
-5. Cambia el campo **Application name** (por ejemplo: "ContaTaller" o "ContaTaller - Sistema de Contabilidad")
+5. Cambia el campo **Application name** (por ejemplo: "Jobidai Business" o "Jobidai Business")
 6. Guarda los cambios
 
 Esto cambiará el nombre que aparece cuando Google muestra "para ir a [URL]", pero la URL seguirá siendo `fsqqspreiopzwecwknvu.supabase.co`
@@ -63,7 +63,7 @@ Tu aplicación usa las siguientes variables de entorno configuradas en Vercel:
 
 **¿Cuándo necesitas actualizarlas?**
 
-- **Si configuras un dominio personalizado (Opción 1):** SÍ necesitas actualizar `NEXT_PUBLIC_SUPABASE_URL` y `SUPABASE_URL` con tu nuevo dominio personalizado (ej: `https://auth.contataller.com`)
+- **Si configuras un dominio personalizado (Opción 1):** SÍ necesitas actualizar `NEXT_PUBLIC_SUPABASE_URL` y `SUPABASE_URL` con tu nuevo dominio personalizado (ej: `https://auth.jobidai.com`)
 
 - **Si solo cambias el Application name en Google (Opción 2):** NO necesitas cambiar las variables de entorno
 
@@ -74,7 +74,7 @@ La mejor solución a largo plazo es usar la **Opción 1** (dominio personalizado
 - Mejora la confianza del usuario
 - Es más fácil de recordar
 - Permite branding consistente
-- Cambia completamente la URL visible (`auth.contataller.com` en lugar de `fsqqspreiopzwecwknvu.supabase.co`)
+- Cambia completamente la URL visible (`auth.jobidai.com` en lugar de `fsqqspreiopzwecwknvu.supabase.co`)
 
 **Si usas la Opción 1, necesitarás actualizar las variables de entorno:**
 
@@ -82,8 +82,8 @@ La mejor solución a largo plazo es usar la **Opción 1** (dominio personalizado
 2. Selecciona tu proyecto `jobidaitech`
 3. Ve a **Settings** → **Environment Variables**
 4. Actualiza:
-   - `NEXT_PUBLIC_SUPABASE_URL` → tu nuevo dominio personalizado (ej: `https://auth.contataller.com`)
-   - `SUPABASE_URL` → tu nuevo dominio personalizado (ej: `https://auth.contataller.com`)
+   - `NEXT_PUBLIC_SUPABASE_URL` → tu nuevo dominio personalizado (ej: `https://auth.jobidai.com`)
+   - `SUPABASE_URL` → tu nuevo dominio personalizado (ej: `https://auth.jobidai.com`)
 5. Haz un nuevo deploy
 
 Si no tienes un dominio propio, la **Opción 2** (cambiar Application name en Google) es la más simple y NO requiere cambiar variables de entorno. Solo cambia el texto visible, pero la URL seguirá siendo `fsqqspreiopzwecwknvu.supabase.co`.

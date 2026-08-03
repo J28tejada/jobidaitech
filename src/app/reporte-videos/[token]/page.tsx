@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { Film, Loader2, Printer } from 'lucide-react'
 
 import { formatCurrency } from '@/lib/format'
+import { BRAND } from '@/lib/brand'
 
 interface ReportVideo {
   n: number
@@ -209,8 +210,8 @@ export default function PublicVideoReportPage({ params }: { params: { token: str
           {/* Pie: marca sutil de la plataforma */}
           <div className="px-4 sm:px-6 lg:px-8 py-4 border-t border-gray-100 flex items-center justify-center gap-1.5">
             <span className="text-xs text-gray-400">Hecho con</span>
-            <span className="text-sm font-bold text-primary-600">Jobidai</span>
-            <span className="text-xs text-gray-400">Business</span>
+            <span className="text-sm font-bold text-primary-600">{BRAND.short}</span>
+            <span className="text-xs text-gray-400">{BRAND.suffix}</span>
           </div>
         </div>
       </div>

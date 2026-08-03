@@ -1768,7 +1768,7 @@ export async function handleInboundMessage(
       if (!chat.isGroup && bizNuevo && archetypeFor(bizNuevo.businessType) === 'appointments') {
         const yaTiene = await instanciaDelNegocio(bizNuevo.workspaceId)
         if (!yaTiene) {
-          reply += `\n\n📲 ¿Quieres mandarle recordatorios a tus clientes? Conecta el WhatsApp de tu negocio en la aplicación de Jobidai → Ajustes → WhatsApp del negocio, y los mensajes les van a llegar desde TU número.`
+          reply += `\n\n📲 ¿Quieres mandarle recordatorios a tus clientes? Conecta el WhatsApp de tu negocio en la aplicación de Jobidai Business → Ajustes → WhatsApp del negocio, y los mensajes les van a llegar desde TU número.`
         }
       }
     }
@@ -1785,7 +1785,7 @@ export async function handleInboundMessage(
     // En un grupo no vinculado, callamos para no hacer ruido.
     if (chat.isGroup) return { reply: null, workspaceId: null, handled: true }
     const reply =
-      'Hola 👋 Este es el asistente de Jobidai. Para empezar a usar tu WhatsApp para anotar ventas y gastos, abre la app, ve a "Conectar WhatsApp" y envíame el código que te muestra.'
+      'Hola 👋 Este es el asistente de Jobidai Business. Para empezar a usar tu WhatsApp para anotar ventas y gastos, abre la app, ve a "Conectar WhatsApp" y envíame el código que te muestra.'
     await logMessage({ workspaceId: null, chatKey: chat.key, direction: 'out', body: reply })
     return { reply, workspaceId: null, handled: true }
   }

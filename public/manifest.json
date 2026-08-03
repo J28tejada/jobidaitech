@@ -1,7 +1,7 @@
 {
-  "name": "Jobidai",
+  "name": "Jobidai Business",
   "short_name": "Jobidai",
-  "description": "Todo tu negocio en una sola app. Agenda, clientes, cobros e inventario.",
+  "description": "La app para gestionar tu negocio. Agenda, clientes, cobros, finanzas e inventario.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

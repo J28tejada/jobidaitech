@@ -24,6 +24,7 @@ import {
 } from 'lucide-react'
 
 import { SUPPORT } from '@/lib/support'
+import { BRAND } from '@/lib/brand'
 import { useCurrency } from './CurrencyProvider'
 import { useToast } from './Toaster'
 import { useConfirm } from './ConfirmDialog'
@@ -634,7 +635,7 @@ function HistorySheet({ product, onClose }: { product: Product; onClose: () => v
 function Paywall() {
   const waNumber = (SUPPORT.whatsapp || '').replace(/\D/g, '')
   const waLink = waNumber
-    ? `https://wa.me/${waNumber}?text=${encodeURIComponent('Hola, quiero activar el módulo de Inventario en Jobidai.')}`
+    ? `https://wa.me/${waNumber}?text=${encodeURIComponent(`Hola, quiero activar el módulo de Inventario en ${BRAND.name}.`)}`
     : null
   return (
     <div className="max-w-2xl mx-auto text-center py-10 space-y-6">

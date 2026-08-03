@@ -6,6 +6,7 @@ import { useSessionContext } from '@supabase/auth-helpers-react'
 import { TrendingUp, DollarSign, BarChart3 } from 'lucide-react'
 
 import LoginButton from '@/components/LoginButton'
+import { BRAND } from '@/lib/brand'
 
 export default function LoginPage() {
   const { session, isLoading } = useSessionContext()
@@ -38,10 +39,12 @@ export default function LoginPage() {
               <div className="h-14 w-14 flex items-center justify-center bg-primary-600 rounded-xl shadow-lg">
                 <span className="text-3xl font-bold text-white">J</span>
               </div>
-              <h1 className="text-4xl font-bold text-gray-900">Jobidai</h1>
+              <h1 className="text-4xl font-bold text-gray-900">
+                {BRAND.short}<span className="font-normal text-gray-500 ml-2">{BRAND.suffix}</span>
+              </h1>
             </div>
             <p className="text-xl text-gray-900 font-semibold leading-relaxed">
-              Todo tu negocio en una sola app.
+              {BRAND.tagline}.
             </p>
             <p className="text-lg text-gray-600 leading-relaxed">
               Agenda, clientes, cobros e inventario — adaptado a tu tipo de negocio.
@@ -96,10 +99,12 @@ export default function LoginPage() {
                 <div className="h-12 w-12 flex items-center justify-center bg-primary-600 rounded-xl shadow-lg">
                   <span className="text-2xl font-bold text-white">J</span>
                 </div>
-                <h1 className="text-3xl font-bold text-gray-900">Jobidai</h1>
+                <h1 className="text-3xl font-bold text-gray-900">
+                  {BRAND.short}<span className="font-normal text-gray-500 ml-1.5">{BRAND.suffix}</span>
+                </h1>
               </div>
               <p className="text-gray-600">
-                Todo tu negocio en una sola app
+                {BRAND.tagline}
               </p>
             </div>
 

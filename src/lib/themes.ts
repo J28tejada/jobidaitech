@@ -1,3 +1,5 @@
+import { STORAGE, LEGACY_STORAGE } from './brand'
+
 // Paletas de acento intercambiables en vivo (selector de colores).
 // Cada preset define la escala completa `--p-*` (usada por Tailwind vía
 // tailwind.config.js) más variables auxiliares que usa globals.css para los
@@ -70,12 +72,15 @@ export const ACCENTS: Accent[] = [
 ]
 
 export const DEFAULT_ACCENT = 'emerald'
-export const ACCENT_STORAGE_KEY = 'contataller_accent'
+export const ACCENT_STORAGE_KEY = STORAGE.accent
+/** Clave anterior (marca vieja): se lee de respaldo para no perder el ajuste. */
+export const ACCENT_STORAGE_KEY_LEGACY = LEGACY_STORAGE[STORAGE.accent]
 
 // Modo claro / oscuro.
 export type ThemeMode = 'light' | 'dark'
 export const DEFAULT_MODE: ThemeMode = 'dark'
-export const THEME_MODE_KEY = 'contataller_theme'
+export const THEME_MODE_KEY = STORAGE.theme
+export const THEME_MODE_KEY_LEGACY = LEGACY_STORAGE[STORAGE.theme]
 
 export function applyMode(mode: ThemeMode) {
   document.documentElement.setAttribute('data-theme', mode)

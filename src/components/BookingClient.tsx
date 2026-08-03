@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Loader2, Scissors, CalendarCheck, CheckCircle2, Clock, Check, CalendarPlus, MapPin, ChevronRight } from 'lucide-react'
 
 import { formatCurrency } from '@/lib/format'
+import { BRAND } from '@/lib/brand'
 import type { BookingHours } from '@/lib/booking'
 
 interface Service { id: string; name: string; durationMin: number; price: number; imageUrl?: string | null }
@@ -258,7 +259,7 @@ export default function BookingClient({ id }: { id: string }) {
     const start = new Date(done.iso)
     const end = new Date(start.getTime() + done.durationMin * 60000)
     const fmtCal = (d: Date) => d.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '')
-    const gcal = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(`${done.serviceName} · ${data.business.name}`)}&dates=${fmtCal(start)}/${fmtCal(end)}&details=${encodeURIComponent('Reserva hecha con Jobidai')}`
+    const gcal = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(`${done.serviceName} · ${data.business.name}`)}&dates=${fmtCal(start)}/${fmtCal(end)}&details=${encodeURIComponent(`Reserva hecha con ${BRAND.name}`)}`
     return (
       <div className="min-h-screen bg-neutral-950 flex items-center justify-center p-4" style={{ ['--bk' as string]: data.business.accent || '#10b981' } as React.CSSProperties}>
         <div className="w-full max-w-md">
@@ -295,7 +296,7 @@ export default function BookingClient({ id }: { id: string }) {
               <CalendarPlus className="h-4 w-4" /> Agregar a mi calendario
             </a>
           </div>
-          <p className="text-center text-xs text-neutral-600 mt-4">Hecho con Jobidai</p>
+          <p className="text-center text-xs text-neutral-600 mt-4">{BRAND.madeWith}</p>
         </div>
       </div>
     )
@@ -476,7 +477,7 @@ export default function BookingClient({ id }: { id: string }) {
 
           {error && <p className="text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl p-3">{error}</p>}
 
-          <p className="text-center text-xs text-neutral-600 pt-2">Hecho con Jobidai</p>
+          <p className="text-center text-xs text-neutral-600 pt-2">{BRAND.madeWith}</p>
         </div>
       </div>
 

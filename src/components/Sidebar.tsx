@@ -32,6 +32,7 @@ import {
 import { useSessionContext, useSupabaseClient } from '@supabase/auth-helpers-react'
 
 import { ORGANIZABLE_HREFS, relevantHrefsForBusiness, hiddenNavHrefsForBusiness } from '@/lib/moduleProfiles'
+import { BRAND } from '@/lib/brand'
 
 type NavItem = { name: string; href: string; icon: typeof Home; moduleKey?: string }
 
@@ -116,7 +117,9 @@ export default function Sidebar() {
         lg:translate-x-0 flex flex-col`}
       >
         <div className="flex items-center justify-center h-16 bg-primary-600">
-          <h1 className="text-xl font-bold text-white">Jobidai</h1>
+          <h1 className="text-xl font-bold text-white">
+            {BRAND.short}<span className="font-normal text-white/80 ml-1.5">{BRAND.suffix}</span>
+          </h1>
         </div>
 
         <nav className="mt-6 lg:mt-8 px-4 flex-1 overflow-y-auto">

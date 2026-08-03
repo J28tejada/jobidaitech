@@ -1,4 +1,4 @@
-// Service worker de Jobidai (PWA).
+// Service worker de Jobidai Business (PWA).
 // Estrategia: network-first para páginas y estáticos (siempre fresco online,
 // con respaldo desde caché si no hay conexión). Las rutas /api NO se cachean
 // (datos privados y siempre en vivo).
@@ -26,7 +26,7 @@ self.addEventListener('activate', event => {
 self.addEventListener('push', event => {
   let data = {};
   try { data = event.data ? event.data.json() : {}; } catch (e) { data = {}; }
-  const title = data.title || 'Jobidai';
+  const title = data.title || 'Jobidai Business';
   const options = {
     body: data.body || '',
     icon: '/icon-192.png',

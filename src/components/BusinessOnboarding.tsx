@@ -17,6 +17,7 @@ import {
 import { BUSINESS_TYPES } from '@/lib/businessTypes'
 import { archetypeFor } from '@/lib/moduleProfiles'
 import BusinessTypePicker from './BusinessTypePicker'
+import { BRAND } from '@/lib/brand'
 
 // Grupos del quiz (coinciden con los arquetipos de moduleProfiles).
 const GROUPS: { key: string; label: string; desc: string; icon: typeof Store }[] = [
@@ -84,7 +85,7 @@ export default function BusinessOnboarding() {
             <div className="h-9 w-9 flex items-center justify-center bg-primary-600 rounded-xl">
               <span className="text-lg font-bold text-white">J</span>
             </div>
-            <span className="text-lg font-bold text-gray-900">Jobidai</span>
+            <span className="text-lg font-bold text-gray-900">{BRAND.short}<span className="font-normal text-gray-500 ml-1">{BRAND.suffix}</span></span>
           </div>
 
           {view === 'main' ? (

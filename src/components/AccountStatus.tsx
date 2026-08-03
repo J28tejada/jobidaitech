@@ -4,6 +4,8 @@ import { useEffect, useState } from 'react'
 import { Lock, Clock, X, Sparkles, Mail, Phone, MessageCircle } from 'lucide-react'
 
 import { SUPPORT, hasSupportContact, whatsappLink } from '@/lib/support'
+import { BRAND, STORAGE } from '@/lib/brand'
+import { readPref, writePref } from '@/lib/brand'
 
 interface SubData {
   canWrite: boolean
@@ -16,13 +18,13 @@ interface SubData {
   accessEnabled: boolean
 }
 
-const WELCOME_KEY = 'contataller_welcome_seen'
+const WELCOME_KEY = STORAGE.welcomeSeen
 
 function ContactLines() {
   if (!hasSupportContact()) {
     return <p className="text-sm text-gray-500">Contáctanos para adquirir tu suscripción.</p>
   }
-  const wa = whatsappLink('Hola, quiero información sobre la suscripción de Jobidai.')
+  const wa = whatsappLink(`Hola, quiero información sobre la suscripción de ${BRAND.name}.`)
   return (
     <div className="space-y-1.5 text-sm">
       {wa && (
@@ -56,7 +58,7 @@ export default function AccountStatus() {
         if (!active || !data) return
         setSub(data)
         // Mostrar bienvenida una vez a usuarios en prueba
-        if (data.isTrial && typeof window !== 'undefined' && !localStorage.getItem(WELCOME_KEY)) {
+        if (data.isTrial && typeof window !== 'undefined' && !readPref(WELCOME_KEY)) {
           setShowWelcome(true)
         }
       })
@@ -67,7 +69,7 @@ export default function AccountStatus() {
   }, [])
 
   const dismissWelcome = () => {
-    localStorage.setItem(WELCOME_KEY, '1')
+    writePref(WELCOME_KEY, '1')
     setShowWelcome(false)
   }
 
@@ -118,7 +120,7 @@ export default function AccountStatus() {
               <div className="p-2 bg-primary-100 rounded-lg">
                 <Sparkles className="h-5 w-5 text-primary-600" />
               </div>
-              <h3 className="text-lg font-semibold text-gray-900">¡Bienvenido a Jobidai!</h3>
+              <h3 className="text-lg font-semibold text-gray-900">¡Bienvenido a {BRAND.name}!</h3>
             </div>
             <p className="text-gray-700 mb-2">
               Tienes <strong>30 días de prueba</strong> con acceso completo a todas las funciones.

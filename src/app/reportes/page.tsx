@@ -24,7 +24,8 @@ import {
 import { TrendingUp, TrendingDown, DollarSign, BarChart3, Calendar, Download, FileSpreadsheet, Printer, PieChart as PieIcon, FolderOpen, Lock, Rocket } from 'lucide-react';
 import { useCurrency } from '@/components/CurrencyProvider';
 import { downloadCSV, downloadXLSX } from '@/lib/export';
-import { SUPPORT } from '@/lib/support';
+import { SUPPORT } from '@/lib/support'
+import { BRAND } from '@/lib/brand';
 
 interface CategoryRow {
   category: string;
@@ -244,7 +245,7 @@ function ReportsContent() {
   if (locked) {
     const waNumber = (SUPPORT.whatsapp || '').replace(/\D/g, '');
     const waLink = waNumber
-      ? `https://wa.me/${waNumber}?text=${encodeURIComponent('Hola, quiero activar los Reportes avanzados en Jobidai.')}`
+      ? `https://wa.me/${waNumber}?text=${encodeURIComponent(`Hola, quiero activar los Reportes avanzados en ${BRAND.name}.`)}`
       : null;
     return (
       <div className="max-w-2xl mx-auto text-center py-10 space-y-6">
