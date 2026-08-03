@@ -22,8 +22,11 @@ import {
   Plus,
   MoreVertical,
   Paperclip,
+  AlertTriangle,
 } from 'lucide-react';
+import { budgetStatusFor } from '@/lib/projects';
 import ProjectForm from './ProjectForm';
+import ProjectTasks from './ProjectTasks';
 import TransactionForm from './TransactionForm';
 import { useCurrency } from './CurrencyProvider';
 import { useToast } from './Toaster';
@@ -73,10 +76,26 @@ export default function ProjectDetail({ projectId }: ProjectDetailProps) {
 
       setProject(projectData);
       setTransactions(txItems);
+      return { project: projectData as Project, transactions: txItems as Transaction[] };
     } catch (error) {
       console.error('Error fetching project data:', error);
+      return null;
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Aviso al vuelo cuando un gasto recién registrado revienta el presupuesto.
+  // El dato ya existía (projects.budget); lo que faltaba era que avisara.
+  const warnIfOverBudget = (fresh: { project: Project; transactions: Transaction[] } | null) => {
+    if (!fresh || !fresh.project || fresh.project.budget <= 0) return;
+    const spent = fresh.transactions
+      .filter((t) => t.type === 'expense')
+      .reduce((sum, t) => sum + t.amount, 0);
+    if (spent > fresh.project.budget) {
+      toast.error(
+        `Los gastos superan el presupuesto en ${formatCurrency(spent - fresh.project.budget)}`
+      );
     }
   };
 
@@ -113,11 +132,12 @@ export default function ProjectDetail({ projectId }: ProjectDetailProps) {
         });
 
         if (response.ok) {
-          await fetchProjectData();
+          const fresh = await fetchProjectData();
           setEditingTransaction(null);
           setShowIncomeForm(false);
           setShowExpenseForm(false);
           toast.success('Transacción actualizada');
+          if (transactionData.type === 'expense') warnIfOverBudget(fresh);
         } else {
           toast.error('No se pudo actualizar la transacción');
         }
@@ -130,10 +150,11 @@ export default function ProjectDetail({ projectId }: ProjectDetailProps) {
         });
 
         if (response.ok) {
-          await fetchProjectData();
+          const fresh = await fetchProjectData();
           setShowIncomeForm(false);
           setShowExpenseForm(false);
           toast.success('Transacción registrada');
+          if (transactionData.type === 'expense') warnIfOverBudget(fresh);
         } else {
           toast.error('No se pudo registrar la transacción');
         }
@@ -281,6 +302,7 @@ export default function ProjectDetail({ projectId }: ProjectDetailProps) {
   const profit = totalIncome - totalExpenses;
   const profitMargin = totalIncome > 0 ? (profit / totalIncome) * 100 : 0;
   const budgetUsed = project.budget > 0 ? ((totalExpenses / project.budget) * 100) : 0;
+  const budgetStatus = budgetStatusFor(project.budget, totalExpenses);
 
   const statusConfig = getStatusConfig(project.status);
   const StatusIcon = statusConfig.icon;
@@ -324,6 +346,44 @@ export default function ProjectDetail({ projectId }: ProjectDetailProps) {
           </button>
         </div>
       </div>
+
+      {/* Alerta de presupuesto: el gasto real contra lo presupuestado */}
+      {(budgetStatus === 'over' || budgetStatus === 'warning') && (
+        <div
+          className={`rounded-lg border p-4 flex items-start gap-3 ${
+            budgetStatus === 'over'
+              ? 'bg-danger-50 border-danger-200'
+              : 'bg-yellow-50 border-yellow-200'
+          }`}
+        >
+          <AlertTriangle
+            className={`h-5 w-5 flex-shrink-0 mt-0.5 ${
+              budgetStatus === 'over' ? 'text-danger-600' : 'text-yellow-600'
+            }`}
+          />
+          <div className="min-w-0">
+            <p
+              className={`font-semibold ${
+                budgetStatus === 'over' ? 'text-danger-800' : 'text-yellow-800'
+              }`}
+            >
+              {budgetStatus === 'over'
+                ? `Presupuesto sobrepasado por ${formatCurrency(totalExpenses - project.budget)}`
+                : `Vas por el ${budgetUsed.toFixed(0)}% del presupuesto`}
+            </p>
+            <p
+              className={`text-sm mt-0.5 ${
+                budgetStatus === 'over' ? 'text-danger-700' : 'text-yellow-700'
+              }`}
+            >
+              Gastado {formatCurrency(totalExpenses)} de {formatCurrency(project.budget)}
+              {budgetStatus === 'over'
+                ? '. Revisá el presupuesto o cobrá los trabajos extras.'
+                : `. Te quedan ${formatCurrency(project.budget - totalExpenses)}.`}
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Project Info & Stats */}
       <div className="grid grid-cols-1 xl:grid-cols-4 gap-6">
@@ -402,6 +462,9 @@ export default function ProjectDetail({ projectId }: ProjectDetailProps) {
               )}
             </div>
           </div>
+
+          {/* Avance de obra */}
+          <ProjectTasks projectId={projectId} />
 
           {/* Transactions */}
           <div className="card">

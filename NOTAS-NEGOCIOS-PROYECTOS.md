@@ -91,11 +91,18 @@ planes. `sales` y `crm` también. `receivables`, `inventory` → Negocio/Pro.
 
 ## 5. Qué NO existe / candidatos de trabajo
 
-- ❌ **Etapas o avance de obra** (% completado, hitos, checklist de tareas).
+- ✅ **Etapas o avance de obra** — HECHO. `0044_project_tasks.sql` +
+  `/api/projects/[id]/tasks[/taskId]` + `src/components/ProjectTasks.tsx`
+  (checklist en el detalle). El % de avance se **deriva** de hechas/totales:
+  no hay columna de porcentaje manual, a propósito, para no tener dos fuentes
+  de verdad. Ver §8.
+- ✅ **Presupuesto vs. real con alerta** — HECHO. `budgetStatusFor` en
+  `src/lib/projects.ts` (`none|ok|warning|over`, warning a partir del 80%);
+  banner en el detalle, badge y filtro en la lista, y aviso al registrar un
+  gasto que revienta el presupuesto.
 - ❌ **Órdenes de trabajo / partidas** dentro del proyecto (materiales vs. mano
-  de obra como líneas, más allá de categorías de transacción).
-- ❌ **Presupuesto vs. real con alerta** (avisar cuando los gastos superan el
-  budget del proyecto). El dato existe (`projects.budget`), falta la alerta.
+  de obra como líneas, más allá de categorías de transacción). Ojo: si esto se
+  hace, evaluar si son las mismas `project_tasks` con monto o una tabla aparte.
 - ❌ **Facturación del proyecto**: ya hay factura con marca para *videos*
   (`/reporte-videos/[token]`, migración `0043_invoice_branding.sql` con
   `workspaces.invoice_*` y `clients.logo_url`). **Reusar ese diseño para una
@@ -114,15 +121,23 @@ planes. `sales` y `crm` también. `receivables`, `inventory` → Negocio/Pro.
 - Migraciones **idempotentes** numeradas `supabase/migrations/00XX_*.sql`; el
   dueño las corre a mano en el SQL Editor. **Toma siempre el siguiente número
   libre** — hay varios chats trabajando en paralelo (ya hubo un choque en 0035).
-  Último usado al crear esta rama: **0043**.
+  Último usado: **0044**.
+- ⚠️ En triggers de `updated_at` usar **`public.set_updated_at()`** (definida en
+  `0001_init.sql`). Varias migraciones (0004, 0010, 0011, 0014, 0015, 0016,
+  0018, 0019, 0035, 0038) llaman a `public.update_updated_at_column()`, que
+  **no está definida en ninguna migración del repo** — debió crearse a mano en
+  el SQL Editor. Copiar ese patrón sin pensar rompe una migración nueva.
 - Endpoints tolerantes: usar `select('*')` donde una migración nueva podría no
-  estar corrida todavía (patrón usado en booking/invoice).
+  estar corrida todavía (patrón usado en booking/invoice). Para una **tabla**
+  nueva, `isMissingRelation(error)` en `src/lib/projects.ts` detecta 42P01 /
+  PGRST205 y permite degradar en vez de tirar 500.
 - Menús ⋮: usar el componente compartido **`src/components/ActionSheet.tsx`**
   (hoja inferior), no menús flotantes.
 - Al publicar: commit en esta rama → push → reconciliar con `main`
   (`git fetch origin main && git checkout main && git merge origin/main --no-edit
   && git merge <rama> --no-edit && git push origin main && git checkout <rama>`).
-- Build local:
+- Build local (correr `npm ci` primero; sin `node_modules`, `npx` se baja
+  Next 16 y el build falla por el workspace root de Turbopack):
   `NEXT_PUBLIC_SUPABASE_URL=https://placeholder.supabase.co NEXT_PUBLIC_SUPABASE_ANON_KEY=placeholder SUPABASE_SERVICE_ROLE_KEY=placeholder npx next build`
 - Nombre de la plataforma: **Jobidai Business**.
 
@@ -131,3 +146,36 @@ planes. `sales` y `crm` también. `receivables`, `inventory` → Negocio/Pro.
 - `claude/supabase-data-recovery-5ujsbg` — vertical **barbería/citas** (agenda,
   reservas, finanzas, factura de videos).
 - `claude/whatsapp-ia-integraciones` — **WhatsApp + IA** (ver `NOTAS-WHATSAPP-IA.md`).
+
+---
+
+## 8. Avance de obra + rentabilidad en la lista (esta rama)
+
+**El problema:** el rubro tenía el dato pero no la respuesta. `projects.budget`
+existía y nadie avisaba al pasarse; la ganancia por proyecto solo se veía
+abriendo el detalle uno por uno; y no había forma de saber *cómo va la obra*.
+
+**Backend**
+- `0044_project_tasks.sql` — etapas del proyecto (`title`, `done`, `due_date`,
+  `position`, `done_at`), con RLS y `ON DELETE CASCADE` desde `projects`.
+- `GET/POST /api/projects/[id]/tasks` y `PUT/DELETE .../tasks/[taskId]`.
+  Respetan `allowedProjectIds` y `ownOnly` igual que transacciones: el rol
+  `member` ("crea y edita solo lo suyo") **no** puede tildar etapas ajenas —
+  si la cuadrilla debe actualizar el checklist completo, va como `editor`.
+- `GET /api/projects?totals=1` — opt-in; devuelve `totals` por proyecto
+  (ingresos, gastos, ganancia, margen, `budgetUsed`, `budgetStatus`,
+  tareas hechas/totales, `progress`). Es opt-in a propósito: los selectores de
+  proyecto de otros formularios no necesitan el cálculo.
+
+**Frontend**
+- `ProjectTasks.tsx` — checklist con barra de avance, fecha límite opcional y
+  marcado optimista. Vencidas en rojo.
+- `ProjectsList.tsx` — cada tarjeta muestra ganancia, margen, cobrado/gastado,
+  barra de presupuesto y barra de avance. Orden nuevo ("los que más dejan" /
+  "los que menos dejan") y barra de aviso clickeable que filtra los proyectos
+  sobrepasados.
+- `ProjectDetail.tsx` — banner de presupuesto (≥80% amarillo, >100% rojo) y
+  toast al guardar un gasto que se pasa del presupuesto.
+
+**Compartido:** `computeProjectTotals` / `budgetStatusFor` viven en
+`src/lib/projects.ts` para que API y UI no calculen el margen distinto.

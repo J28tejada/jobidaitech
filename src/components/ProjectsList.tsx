@@ -4,8 +4,9 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSearchParams } from 'next/navigation';
 import { Project, Transaction } from '@/types';
-import { 
-  Plus, 
+import type { ProjectTotals } from '@/lib/projects';
+import {
+  Plus,
   Search,
   Calendar,
   DollarSign,
@@ -19,6 +20,8 @@ import {
   ArrowRightLeft,
   Send,
   FolderOpen,
+  AlertTriangle,
+  ListChecks,
 } from 'lucide-react';
 import ActionSheet from './ActionSheet';
 import ProjectForm from './ProjectForm';
@@ -29,16 +32,25 @@ import { useCurrency } from './CurrencyProvider';
 import { useToast } from './Toaster';
 import { useConfirm } from './ConfirmDialog';
 
+// La lista trae la rentabilidad y el avance calculados por la API
+// (`/api/projects?totals=1`), para no tener que abrir proyecto por proyecto
+// solo para saber cuál está dando ganancia.
+type ProjectWithTotals = Project & { totals?: ProjectTotals };
+
+type SortKey = 'recent' | 'profit_desc' | 'profit_asc' | 'budget_desc';
+
 export default function ProjectsList() {
   const router = useRouter();
   const { format: formatCurrency } = useCurrency();
   const toast = useToast();
   const confirm = useConfirm();
   const searchParams = useSearchParams();
-  const [projects, setProjects] = useState<Project[]>([]);
+  const [projects, setProjects] = useState<ProjectWithTotals[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [sortBy, setSortBy] = useState<SortKey>('recent');
+  const [onlyOverBudget, setOnlyOverBudget] = useState(false);
   const [showProjectForm, setShowProjectForm] = useState(false);
   const [editingProject, setEditingProject] = useState<Project | null>(null);
   const [showIncomeForm, setShowIncomeForm] = useState(false);
@@ -64,7 +76,7 @@ export default function ProjectsList() {
 
   const fetchProjects = async () => {
     try {
-      const response = await fetch('/api/projects', { credentials: 'include' });
+      const response = await fetch('/api/projects?totals=1', { credentials: 'include' });
       const data = await response.json();
       if (!Array.isArray(data)) {
         console.error('Respuesta inesperada de /api/projects', data);
@@ -204,12 +216,22 @@ export default function ProjectsList() {
     );
   };
 
-  const filteredProjects = projects.filter(project => {
-    const matchesSearch = project.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         project.client.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesStatus = statusFilter === 'all' || project.status === statusFilter;
-    return matchesSearch && matchesStatus;
-  });
+  const overBudgetCount = projects.filter((p) => p.totals?.budgetStatus === 'over').length;
+
+  const filteredProjects = projects
+    .filter(project => {
+      const matchesSearch = project.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                           project.client.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesStatus = statusFilter === 'all' || project.status === statusFilter;
+      const matchesBudget = !onlyOverBudget || project.totals?.budgetStatus === 'over';
+      return matchesSearch && matchesStatus && matchesBudget;
+    })
+    .sort((a, b) => {
+      if (sortBy === 'profit_desc') return (b.totals?.profit ?? 0) - (a.totals?.profit ?? 0);
+      if (sortBy === 'profit_asc') return (a.totals?.profit ?? 0) - (b.totals?.profit ?? 0);
+      if (sortBy === 'budget_desc') return b.budget - a.budget;
+      return 0; // 'recent': la API ya los devuelve por fecha de creación
+    });
 
   if (loading) {
     return (
@@ -268,8 +290,44 @@ export default function ProjectsList() {
               <option value="cancelled">Cancelado</option>
             </select>
           </div>
+          <div className="md:w-56">
+            <select
+              className="input"
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value as SortKey)}
+            >
+              <option value="recent">Más recientes</option>
+              <option value="profit_desc">Los que más dejan</option>
+              <option value="profit_asc">Los que menos dejan</option>
+              <option value="budget_desc">Mayor presupuesto</option>
+            </select>
+          </div>
         </div>
       </div>
+
+      {/* Aviso de presupuestos reventados: el dato existía, ahora avisa */}
+      {overBudgetCount > 0 && (
+        <button
+          onClick={() => setOnlyOverBudget(!onlyOverBudget)}
+          className={`w-full flex items-center gap-3 rounded-lg border p-4 text-left transition-colors ${
+            onlyOverBudget
+              ? 'bg-danger-100 border-danger-300'
+              : 'bg-danger-50 border-danger-200 hover:bg-danger-100'
+          }`}
+        >
+          <AlertTriangle className="h-5 w-5 text-danger-600 flex-shrink-0" />
+          <span className="flex-1 min-w-0">
+            <span className="block font-semibold text-danger-800">
+              {overBudgetCount === 1
+                ? '1 proyecto se pasó del presupuesto'
+                : `${overBudgetCount} proyectos se pasaron del presupuesto`}
+            </span>
+            <span className="block text-sm text-danger-700">
+              {onlyOverBudget ? 'Mostrando solo esos. Tocá para ver todos.' : 'Tocá para verlos.'}
+            </span>
+          </span>
+        </button>
+      )}
 
       {/* Projects Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-6">
@@ -302,24 +360,112 @@ export default function ProjectsList() {
                 <User className="h-4 w-4 mr-2" />
                 <span>{project.client}</span>
               </div>
-              
+
               <div className="flex items-center text-sm text-gray-600">
                 <Calendar className="h-4 w-4 mr-2" />
                 <span>Inicio: {formatDate(project.startDate)}</span>
               </div>
-              
+
               {project.endDate && (
                 <div className="flex items-center text-sm text-gray-600">
                   <Calendar className="h-4 w-4 mr-2" />
                   <span>Fin: {formatDate(project.endDate)}</span>
                 </div>
               )}
-              
-              <div className="flex items-center text-sm text-gray-600">
+            </div>
+
+            {project.totals ? (
+              <div
+                onClick={() => router.push(`/proyectos/${project.id}`)}
+                className="mt-4 pt-4 border-t border-gray-100 space-y-3"
+              >
+                <div className="flex items-end justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="text-xs text-gray-500">Ganancia</p>
+                    <p
+                      className={`text-xl font-bold truncate ${
+                        project.totals.profit >= 0 ? 'text-success-600' : 'text-danger-600'
+                      }`}
+                    >
+                      {formatCurrency(project.totals.profit)}
+                    </p>
+                  </div>
+                  {project.totals.income > 0 && (
+                    <span className="text-xs text-gray-500 flex-shrink-0 pb-1">
+                      {project.totals.margin.toFixed(0)}% margen
+                    </span>
+                  )}
+                </div>
+
+                <div className="flex justify-between text-xs text-gray-500">
+                  <span>Cobrado {formatCurrency(project.totals.income)}</span>
+                  <span>Gastado {formatCurrency(project.totals.expenses)}</span>
+                </div>
+
+                {project.budget > 0 && (
+                  <div>
+                    <div className="flex justify-between text-xs mb-1">
+                      <span className="text-gray-500">
+                        Presupuesto {formatCurrency(project.budget)}
+                      </span>
+                      <span
+                        className={
+                          project.totals.budgetStatus === 'over'
+                            ? 'font-semibold text-danger-600'
+                            : project.totals.budgetStatus === 'warning'
+                            ? 'font-semibold text-yellow-600'
+                            : 'text-gray-500'
+                        }
+                      >
+                        {project.totals.budgetStatus === 'over'
+                          ? 'Sobrepasado'
+                          : `${project.totals.budgetUsed.toFixed(0)}%`}
+                      </span>
+                    </div>
+                    <div className="w-full bg-gray-200 rounded-full h-1.5">
+                      <div
+                        className={`h-1.5 rounded-full ${
+                          project.totals.budgetStatus === 'over'
+                            ? 'bg-danger-600'
+                            : project.totals.budgetStatus === 'warning'
+                            ? 'bg-yellow-500'
+                            : 'bg-primary-600'
+                        }`}
+                        style={{ width: `${Math.min(project.totals.budgetUsed, 100)}%` }}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {project.totals.progress !== null && (
+                  <div>
+                    <div className="flex justify-between text-xs mb-1">
+                      <span className="text-gray-500 flex items-center gap-1">
+                        <ListChecks className="h-3.5 w-3.5" />
+                        Avance de obra
+                      </span>
+                      <span className="text-gray-500">
+                        {project.totals.tasksDone}/{project.totals.tasksTotal} ·{' '}
+                        {project.totals.progress.toFixed(0)}%
+                      </span>
+                    </div>
+                    <div className="w-full bg-gray-200 rounded-full h-1.5">
+                      <div
+                        className={`h-1.5 rounded-full ${
+                          project.totals.progress >= 100 ? 'bg-success-600' : 'bg-primary-600'
+                        }`}
+                        style={{ width: `${project.totals.progress}%` }}
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="mt-4 flex items-center text-sm text-gray-600">
                 <DollarSign className="h-4 w-4 mr-2" />
                 <span>Presupuesto: {formatCurrency(project.budget)}</span>
               </div>
-            </div>
+            )}
 
             <div className="mt-4 grid grid-cols-2 gap-2">
               <button
@@ -365,7 +511,7 @@ export default function ProjectsList() {
             No se encontraron proyectos
           </h3>
           <p className="text-gray-500">
-            {searchTerm || statusFilter !== 'all' 
+            {searchTerm || statusFilter !== 'all' || onlyOverBudget
               ? 'Intenta ajustar los filtros de búsqueda'
               : 'Comienza creando tu primer proyecto'
             }
