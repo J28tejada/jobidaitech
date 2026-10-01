@@ -12,6 +12,7 @@ import WhatsAppConnect from '@/components/WhatsAppConnect';
 import WhatsAppNegocio from '@/components/WhatsAppNegocio';
 import DeleteBusiness from '@/components/DeleteBusiness';
 import InvoiceSettings from '@/components/InvoiceSettings';
+import ClientVideoRates from '@/components/ClientVideoRates';
 import { BusinessType } from '@/types';
 import { CURRENCIES } from '@/lib/format';
 import { useCurrency } from '@/components/CurrencyProvider';
@@ -28,6 +29,7 @@ export default function ConfigurationPage() {
   const [savingCurrency, setSavingCurrency] = useState(false);
   const [currencyFeedback, setCurrencyFeedback] = useState<string | null>(null);
   const [hasAgenda, setHasAgenda] = useState(false);
+  const [hasVideos, setHasVideos] = useState(false);
 
   const handleShowOnboarding = () => {
     // Establecer una señal para que se muestre el onboarding
@@ -62,7 +64,12 @@ export default function ConfigurationPage() {
     fetchSettings();
     fetch('/api/subscription', { credentials: 'include' })
       .then(r => (r.ok ? r.json() : null))
-      .then(d => { if (d && Array.isArray(d.modules)) setHasAgenda(d.modules.includes('agenda')); })
+      .then(d => {
+        if (d && Array.isArray(d.modules)) {
+          setHasAgenda(d.modules.includes('agenda'));
+          setHasVideos(d.modules.includes('videos'));
+        }
+      })
       .catch(() => {});
   }, []);
 
@@ -171,6 +178,17 @@ export default function ConfigurationPage() {
             —recordatorios saliendo del número equivocado— no se ve. Solo en
             rubros con agenda: sin citas no hay a quién recordarle nada. */}
         {hasAgenda && <WhatsAppNegocio />}
+
+        {/* Precio por video de cada cliente (negocios de contenido / redes) */}
+        {hasVideos && (
+          <div className="card">
+            <h2 className="text-lg font-semibold text-gray-900 mb-1">Precio de videos por cliente</h2>
+            <p className="text-gray-600 text-sm mb-4">
+              Lo que le cobras a cada cliente por video. Al registrar un video para ese cliente, el precio se pone solo. Déjalo vacío para usar la tarifa del camarógrafo.
+            </p>
+            <ClientVideoRates />
+          </div>
+        )}
 
         {/* Datos de facturación (emisor): logo + datos para facturas/reportes */}
         <InvoiceSettings />

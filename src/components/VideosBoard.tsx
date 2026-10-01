@@ -21,6 +21,7 @@ import {
   Copy,
   ExternalLink,
   Check,
+  Tag,
 } from 'lucide-react'
 
 import { useToast } from './Toaster'
@@ -28,6 +29,7 @@ import { useConfirm } from './ConfirmDialog'
 import { useCurrency } from './CurrencyProvider'
 import { downloadCSV } from '@/lib/export'
 import VideoImport from './VideoImport'
+import ClientVideoRates from './ClientVideoRates'
 
 interface Recorder {
   id: string
@@ -50,6 +52,7 @@ interface ClientOption {
   id: string
   name: string
   phone: string | null
+  videoRate: number | null
 }
 interface Report {
   id: string
@@ -97,6 +100,7 @@ export default function VideosBoard() {
   const [showForm, setShowForm] = useState(false)
   const [editing, setEditing] = useState<Video | null>(null)
   const [showRecorders, setShowRecorders] = useState(false)
+  const [showRates, setShowRates] = useState(false)
   const [showReport, setShowReport] = useState(false)
   const [showImport, setShowImport] = useState(false)
 
@@ -121,7 +125,7 @@ export default function VideosBoard() {
       fetch('/api/clients', { credentials: 'include' }).then(x => (x.ok ? x.json() : [])),
     ])
     setRecorders(Array.isArray(r) ? r : [])
-    setClients(Array.isArray(c) ? c.map((x: any) => ({ id: x.id, name: x.name, phone: x.phone })) : [])
+    setClients(Array.isArray(c) ? c.map((x: any) => ({ id: x.id, name: x.name, phone: x.phone, videoRate: x.videoRate ?? null })) : [])
     loadReports()
   }
 
@@ -235,6 +239,9 @@ export default function VideosBoard() {
           </button>
           <button onClick={() => setShowRecorders(true)} className="btn btn-secondary flex items-center justify-center">
             <Users className="h-4 w-4 sm:mr-1.5" /> <span className="hidden sm:inline">Camarógrafos</span>
+          </button>
+          <button onClick={() => setShowRates(true)} className="btn btn-secondary flex items-center justify-center" title="Precio por video de cada cliente">
+            <Tag className="h-4 w-4 sm:mr-1.5" /> <span className="hidden sm:inline">Precios</span>
           </button>
           <button onClick={() => { setEditing(null); setShowForm(true) }} className="btn btn-primary flex items-center justify-center flex-1 sm:flex-none">
             <Plus className="h-4 w-4 mr-1.5" /> Nuevo video
@@ -451,6 +458,15 @@ export default function VideosBoard() {
         />
       )}
 
+      {showRates && (
+        <Sheet title="Precio por cliente" onClose={() => setShowRates(false)}>
+          <p className="text-sm text-gray-600 mb-4">
+            Lo que le cobras a cada cliente por video. Al registrar un video para ese cliente, el precio se pone solo. Déjalo vacío para usar la tarifa del camarógrafo.
+          </p>
+          <ClientVideoRates onChanged={loadStatic} />
+        </Sheet>
+      )}
+
       {showReport && (
         <ReportForm
           clients={clients}
@@ -556,10 +572,28 @@ function VideoForm({ video, recorders, clients, defaultDate, onClose, onSaved }:
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  // El precio del cliente manda; la tarifa del camarógrafo es el respaldo.
+  const clientRate = (id: string) => {
+    const c = clients.find(x => x.id === id)
+    return c && c.videoRate !== null ? c.videoRate : null
+  }
+
   const pickRecorder = (id: string) => {
     setRecorderId(id)
+    if (clientRate(clientId) !== null) return
     const r = recorders.find(x => x.id === id)
     if (r) setPrice(String(r.rate))
+  }
+
+  const pickClient = (id: string) => {
+    setClientId(id)
+    const rate = clientRate(id)
+    if (rate !== null) {
+      setPrice(String(rate))
+    } else {
+      const r = recorders.find(x => x.id === recorderId)
+      if (r) setPrice(String(r.rate))
+    }
   }
 
   const submit = async (e: React.FormEvent) => {
@@ -612,6 +646,16 @@ function VideoForm({ video, recorders, clients, defaultDate, onClose, onSaved }:
           <input value={topic} onChange={e => setTopic(e.target.value)} className="input" placeholder="Ej. Oferta ConforTime" />
         </div>
 
+        {clients.length > 0 && (
+          <div>
+            <label className="label">Cliente (opcional)</label>
+            <select className="input" value={clientId} onChange={e => pickClient(e.target.value)}>
+              <option value="">— Sin cliente —</option>
+              {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          </div>
+        )}
+
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className="label">Grabó</label>
@@ -629,16 +673,6 @@ function VideoForm({ video, recorders, clients, defaultDate, onClose, onSaved }:
             <input value={price} onChange={e => setPrice(e.target.value)} type="number" step="0.01" min="0" className="input" placeholder="0.00" />
           </div>
         </div>
-
-        {clients.length > 0 && (
-          <div>
-            <label className="label">Cliente (opcional)</label>
-            <select className="input" value={clientId} onChange={e => setClientId(e.target.value)}>
-              <option value="">— Sin cliente —</option>
-              {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </select>
-          </div>
-        )}
 
         <div>
           <label className="label">Notas</label>

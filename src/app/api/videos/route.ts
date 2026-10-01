@@ -69,6 +69,7 @@ export async function POST(request: NextRequest) {
     let recorderId: string | null = null
     let recorderName = typeof body.recorderName === 'string' ? body.recorderName.trim() : ''
     let price = Number(body.price)
+    let recorderRate: number | null = null
     if (body.recorderId) {
       const { data: rec } = await supabase
         .from('video_recorders')
@@ -79,22 +80,29 @@ export async function POST(request: NextRequest) {
       if (rec) {
         recorderId = rec.id
         recorderName = rec.name
-        if (!Number.isFinite(price)) price = Number(rec.rate)
+        recorderRate = Number(rec.rate)
       }
     }
-    if (!Number.isFinite(price)) price = 0
 
-    // Cliente (opcional)
+    // Cliente (opcional). Su precio por video tiene prioridad sobre la tarifa
+    // del camarógrafo cuando no mandan un precio explícito.
     let clientId: string | null = null
+    let clientRate: number | null = null
     if (body.clientId) {
       const { data: client } = await supabase
         .from('clients')
-        .select('id')
+        .select('*')
         .eq('id', body.clientId)
         .eq('workspace_id', ctx.workspaceId)
         .maybeSingle()
-      if (client) clientId = client.id
+      if (client) {
+        clientId = client.id
+        if (client.video_rate !== null && client.video_rate !== undefined) clientRate = Number(client.video_rate)
+      }
     }
+    if (!Number.isFinite(price) && clientRate !== null) price = clientRate
+    if (!Number.isFinite(price) && recorderRate !== null) price = recorderRate
+    if (!Number.isFinite(price)) price = 0
 
     const { data, error } = await supabase
       .from('videos')

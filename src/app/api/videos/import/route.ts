@@ -43,15 +43,20 @@ export async function POST(request: NextRequest) {
     const supabase = getSupabaseClient()
 
     // Cliente opcional (se aplica a todas las filas).
+    // Si el cliente tiene precio por video, se usa en las filas sin precio.
     let clientId: string | null = null
+    let clientRate: number | null = null
     if (body.clientId) {
       const { data: client } = await supabase
         .from('clients')
-        .select('id')
+        .select('*')
         .eq('id', body.clientId)
         .eq('workspace_id', ctx.workspaceId)
         .maybeSingle()
-      if (client) clientId = client.id
+      if (client) {
+        clientId = client.id
+        if (client.video_rate !== null && client.video_rate !== undefined) clientRate = Number(client.video_rate)
+      }
     }
 
     // Camarógrafos existentes: mapa nombre(normalizado) -> {id, rate}.
@@ -75,7 +80,7 @@ export async function POST(request: NextRequest) {
 
       const matched = recorderName ? recorderMap.get(recorderName.toLowerCase()) : undefined
       let price = Number(row.price)
-      if (!Number.isFinite(price)) price = matched ? matched.rate : 0
+      if (!Number.isFinite(price)) price = clientRate !== null ? clientRate : matched ? matched.rate : 0
 
       payload.push({
         workspace_id: ctx.workspaceId,
