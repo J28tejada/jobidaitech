@@ -184,7 +184,7 @@ export default function ConfigurationPage() {
           <div className="card">
             <h2 className="text-lg font-semibold text-gray-900 mb-1">Precio de videos por cliente</h2>
             <p className="text-gray-600 text-sm mb-4">
-              Lo que le cobras a cada cliente por video. Al registrar un video para ese cliente, el precio se pone solo. Déjalo vacío para usar la tarifa del camarógrafo.
+              Lo que le cobras a cada cliente por video. Puedes poner varios por cliente (ej. Reel, Video largo) y elegir uno al registrar el video. Sin precios, se usa la tarifa del camarógrafo.
             </p>
             <ClientVideoRates />
           </div>

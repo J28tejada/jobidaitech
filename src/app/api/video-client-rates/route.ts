@@ -7,14 +7,12 @@ import {
   READ_ONLY_ERROR,
   MODULE_LOCKED_ERROR,
 } from '@/lib/workspaces'
+import { mapClientRateRow, isMissingSchema } from '@/lib/videos'
 
-// Precio por video de cada cliente (módulo Videos). NULL = sin precio propio.
-const mapRate = (row: any) => ({
-  clientId: row.id,
-  name: row.name ?? '',
-  rate: row.video_rate === null || row.video_rate === undefined ? null : Number(row.video_rate),
-})
+const MIGRATION_ERROR = { error: 'Falta correr la migración 0045 en Supabase' }
 
+// Precios de video por cliente (módulo Videos). Cada cliente puede tener
+// varios (ej. "Reel" 750, "Video largo" 1,500).
 export async function GET() {
   try {
     const ctx = await getWorkspaceContext()
@@ -22,20 +20,35 @@ export async function GET() {
     if (!ctx.hasModule('videos')) return NextResponse.json(MODULE_LOCKED_ERROR, { status: 403 })
 
     const supabase = getSupabaseClient()
-    const { data, error } = await supabase
-      .from('clients')
-      .select('*')
-      .eq('workspace_id', ctx.workspaceId)
-      .order('name', { ascending: true })
+    const [{ data: clients, error }, { data: rates, error: ratesError }] = await Promise.all([
+      supabase.from('clients').select('id, name').eq('workspace_id', ctx.workspaceId).order('name', { ascending: true }),
+      supabase
+        .from('client_video_rates')
+        .select('*')
+        .eq('workspace_id', ctx.workspaceId)
+        .order('created_at', { ascending: true }),
+    ])
     if (error) throw error
-    return NextResponse.json((data ?? []).map(mapRate))
+    if (ratesError && !isMissingSchema(ratesError)) throw ratesError
+
+    const byClient = new Map<string, ReturnType<typeof mapClientRateRow>[]>()
+    ;(rates ?? []).forEach((r: any) => {
+      const row = mapClientRateRow(r)
+      const list = byClient.get(row.clientId) ?? []
+      list.push(row)
+      byClient.set(row.clientId, list)
+    })
+
+    return NextResponse.json(
+      (clients ?? []).map((c: any) => ({ clientId: c.id, name: c.name ?? '', rates: byClient.get(c.id) ?? [] })),
+    )
   } catch (error) {
     console.error('GET /api/video-client-rates', error)
     return NextResponse.json({ error: 'Error al obtener los precios' }, { status: 500 })
   }
 }
 
-export async function PUT(request: NextRequest) {
+export async function POST(request: NextRequest) {
   try {
     const ctx = await getWorkspaceContext()
     if (!ctx) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
@@ -48,32 +61,33 @@ export async function PUT(request: NextRequest) {
     const body = await request.json()
     const clientId = typeof body.clientId === 'string' ? body.clientId : ''
     if (!clientId) return NextResponse.json({ error: 'Falta el cliente' }, { status: 400 })
-
-    let rate: number | null = null
-    if (body.rate !== null && body.rate !== undefined && body.rate !== '') {
-      const n = Number(body.rate)
-      if (!Number.isFinite(n) || n < 0) return NextResponse.json({ error: 'Precio inválido' }, { status: 400 })
-      rate = n
+    const rate = Number(body.rate)
+    if (body.rate === '' || body.rate === null || !Number.isFinite(rate) || rate < 0) {
+      return NextResponse.json({ error: 'Indica un precio válido' }, { status: 400 })
     }
+    const label = typeof body.label === 'string' ? body.label.trim() : ''
 
     const supabase = getSupabaseClient()
-    const { data, error } = await supabase
+    const { data: client } = await supabase
       .from('clients')
-      .update({ video_rate: rate })
+      .select('id')
       .eq('id', clientId)
       .eq('workspace_id', ctx.workspaceId)
-      .select()
       .maybeSingle()
+    if (!client) return NextResponse.json({ error: 'Cliente no encontrado' }, { status: 404 })
+
+    const { data, error } = await supabase
+      .from('client_video_rates')
+      .insert({ workspace_id: ctx.workspaceId, client_id: clientId, label, rate })
+      .select()
+      .single()
     if (error) {
-      if (error.code === '42703' || /video_rate/.test(error.message ?? '')) {
-        return NextResponse.json({ error: 'Falta correr la migración 0044 en Supabase' }, { status: 500 })
-      }
+      if (isMissingSchema(error)) return NextResponse.json(MIGRATION_ERROR, { status: 500 })
       throw error
     }
-    if (!data) return NextResponse.json({ error: 'Cliente no encontrado' }, { status: 404 })
-    return NextResponse.json(mapRate(data))
+    return NextResponse.json(mapClientRateRow(data), { status: 201 })
   } catch (error) {
-    console.error('PUT /api/video-client-rates', error)
+    console.error('POST /api/video-client-rates', error)
     return NextResponse.json({ error: 'Error al guardar el precio' }, { status: 500 })
   }
 }

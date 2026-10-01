@@ -52,7 +52,12 @@ interface ClientOption {
   id: string
   name: string
   phone: string | null
-  videoRate: number | null
+  rates: ClientRate[]
+}
+interface ClientRate {
+  id: string
+  label: string
+  rate: number
 }
 interface Report {
   id: string
@@ -120,12 +125,16 @@ export default function VideosBoard() {
   }, [from, to, clientFilter])
 
   const loadStatic = async () => {
-    const [r, c] = await Promise.all([
+    const [r, c, cr] = await Promise.all([
       fetch('/api/video-recorders', { credentials: 'include' }).then(x => (x.ok ? x.json() : [])),
       fetch('/api/clients', { credentials: 'include' }).then(x => (x.ok ? x.json() : [])),
+      fetch('/api/video-client-rates', { credentials: 'include' }).then(x => (x.ok ? x.json() : [])),
     ])
     setRecorders(Array.isArray(r) ? r : [])
-    setClients(Array.isArray(c) ? c.map((x: any) => ({ id: x.id, name: x.name, phone: x.phone, videoRate: x.videoRate ?? null })) : [])
+    // Precios de video de cada cliente (puede tener varios).
+    const ratesByClient: Record<string, ClientRate[]> = {}
+    if (Array.isArray(cr)) cr.forEach((x: any) => { ratesByClient[x.clientId] = Array.isArray(x.rates) ? x.rates : [] })
+    setClients(Array.isArray(c) ? c.map((x: any) => ({ id: x.id, name: x.name, phone: x.phone, rates: ratesByClient[x.id] ?? [] })) : [])
     loadReports()
   }
 
@@ -461,7 +470,7 @@ export default function VideosBoard() {
       {showRates && (
         <Sheet title="Precio por cliente" onClose={() => setShowRates(false)}>
           <p className="text-sm text-gray-600 mb-4">
-            Lo que le cobras a cada cliente por video. Al registrar un video para ese cliente, el precio se pone solo. Déjalo vacío para usar la tarifa del camarógrafo.
+            Lo que le cobras a cada cliente por video. Puedes poner varios por cliente (ej. Reel, Video largo) y elegir uno al registrar el video. Sin precios, se usa la tarifa del camarógrafo.
           </p>
           <ClientVideoRates onChanged={loadStatic} />
         </Sheet>
@@ -562,6 +571,7 @@ function Sheet({ title, onClose, children }: { title: string; onClose: () => voi
 }
 
 function VideoForm({ video, recorders, clients, defaultDate, onClose, onSaved }: { video: Video | null; recorders: Recorder[]; clients: ClientOption[]; defaultDate: string; onClose: () => void; onSaved: () => void }) {
+  const { format } = useCurrency()
   const [videoDate, setVideoDate] = useState(video?.videoDate ?? defaultDate)
   const [videoRef, setVideoRef] = useState(video?.videoRef ?? '')
   const [topic, setTopic] = useState(video?.topic ?? '')
@@ -572,24 +582,22 @@ function VideoForm({ video, recorders, clients, defaultDate, onClose, onSaved }:
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  // El precio del cliente manda; la tarifa del camarógrafo es el respaldo.
-  const clientRate = (id: string) => {
-    const c = clients.find(x => x.id === id)
-    return c && c.videoRate !== null ? c.videoRate : null
-  }
+  // Los precios del cliente mandan; la tarifa del camarógrafo es el respaldo.
+  const ratesOf = (id: string) => clients.find(x => x.id === id)?.rates ?? []
+  const clientRates = ratesOf(clientId)
 
   const pickRecorder = (id: string) => {
     setRecorderId(id)
-    if (clientRate(clientId) !== null) return
+    if (clientRates.length > 0) return
     const r = recorders.find(x => x.id === id)
     if (r) setPrice(String(r.rate))
   }
 
   const pickClient = (id: string) => {
     setClientId(id)
-    const rate = clientRate(id)
-    if (rate !== null) {
-      setPrice(String(rate))
+    const rates = ratesOf(id)
+    if (rates.length > 0) {
+      setPrice(String(rates[0].rate))
     } else {
       const r = recorders.find(x => x.id === recorderId)
       if (r) setPrice(String(r.rate))
@@ -673,6 +681,27 @@ function VideoForm({ video, recorders, clients, defaultDate, onClose, onSaved }:
             <input value={price} onChange={e => setPrice(e.target.value)} type="number" step="0.01" min="0" className="input" placeholder="0.00" />
           </div>
         </div>
+
+        {clientRates.length > 0 && (
+          <div>
+            <label className="label">Precios de este cliente</label>
+            <div className="flex flex-wrap gap-2">
+              {clientRates.map(r => {
+                const active = price !== '' && Number(price) === r.rate
+                return (
+                  <button
+                    key={r.id}
+                    type="button"
+                    onClick={() => setPrice(String(r.rate))}
+                    className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${active ? 'bg-primary-600 border-primary-600 text-white' : 'bg-white border-gray-300 text-gray-700 hover:border-primary-400'}`}
+                  >
+                    {r.label ? `${r.label} · ` : ''}{format(r.rate)}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        )}
 
         <div>
           <label className="label">Notas</label>

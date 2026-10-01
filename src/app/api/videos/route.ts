@@ -7,7 +7,7 @@ import {
   READ_ONLY_ERROR,
   MODULE_LOCKED_ERROR,
 } from '@/lib/workspaces'
-import { mapVideoRow } from '@/lib/videos'
+import { mapVideoRow, firstClientRate } from '@/lib/videos'
 import { track } from '@/lib/analytics'
 
 const pad = (n: number) => String(n).padStart(2, '0')
@@ -91,13 +91,13 @@ export async function POST(request: NextRequest) {
     if (body.clientId) {
       const { data: client } = await supabase
         .from('clients')
-        .select('*')
+        .select('id')
         .eq('id', body.clientId)
         .eq('workspace_id', ctx.workspaceId)
         .maybeSingle()
       if (client) {
         clientId = client.id
-        if (client.video_rate !== null && client.video_rate !== undefined) clientRate = Number(client.video_rate)
+        clientRate = await firstClientRate(supabase, ctx.workspaceId, client.id)
       }
     }
     if (!Number.isFinite(price) && clientRate !== null) price = clientRate

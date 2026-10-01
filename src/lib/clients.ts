@@ -10,7 +10,6 @@ export const mapClientRow = (row: any) => ({
   address: row.address ?? null,
   notes: row.notes ?? null,
   logoUrl: row.logo_url ?? null,
-  videoRate: row.video_rate === null || row.video_rate === undefined ? null : Number(row.video_rate),
   createdAt: row.created_at ?? null,
   updatedAt: row.updated_at ?? null,
 })
